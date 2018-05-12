@@ -129,7 +129,7 @@ func GetArchiveTasks(ctx context.Context, db *sqlx.DB, org DBOrg, archiveType Ar
 }
 
 const lookupMsgs = `
-select row_to_json(rec) FROM (
+select rec.visibility, row_to_json(rec) FROM (
 	select
 	  mm.id,
 	  broadcast_id as broadcast,
@@ -176,8 +176,8 @@ select row_to_json(rec) FROM (
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
 	
 	
-	  WHERE mm.org_id = $1 AND mm.visibility != 'D' AND mm.modified_on >= $2 AND mm.modified_on < $3
-	order by modified_on ASC) rec; 
+	  WHERE mm.org_id = $1 AND mm.modified_on >= $2 AND mm.modified_on < $3
+	order by modified_on ASC, id ASC) rec; 
 `
 
 func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error {
@@ -211,11 +211,16 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 	recordCount := 0
 	writer.WriteString("[")
 	delim := ""
-	msg := ""
+	var msg, visibility string
 	for rows.Next() {
-		err = rows.Scan(&msg)
+		err = rows.Scan(&visibility, &msg)
 		if err != nil {
 			return err
+		}
+
+		// skip over deleted rows
+		if visibility == "deleted" {
+			continue
 		}
 
 		writer.WriteString(delim)
