@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	aws_s3 "github.com/aws/aws-sdk-go/service/s3"
 	"github.com/evalphobia/logrus_sentry"
@@ -62,6 +63,9 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatal("error creating s3 client")
 	}
+	s3Session.Handlers.Send.PushFront(func(r *request.Request) {
+		log.WithField("headers", r.HTTPRequest.Header).WithField("service", r.ClientInfo.ServiceName).WithField("operation", r.Operation).WithField("params", r.Params).Debug("making aws request")
+	})
 
 	s3Client := aws_s3.New(s3Session)
 
