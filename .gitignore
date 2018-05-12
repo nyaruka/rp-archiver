@@ -6,6 +6,9 @@
 *.dylib
 *~
 
+*.py
+*.pyc
+
 # Test binary, build with `go test -c`
 *.test
 
