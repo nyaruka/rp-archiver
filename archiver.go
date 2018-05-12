@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
+	"crypto/md5"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -195,12 +197,12 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 	if err != nil {
 		return err
 	}
-	hash := sha256.New()
+	hash := md5.New()
 	gzWriter := gzip.NewWriter(io.MultiWriter(file, hash))
 	writer := bufio.NewWriter(gzWriter)
 	defer file.Close()
 
-	log.WithField("filename", file.Name()).Info("creating new archive file")
+	log.WithField("filename", file.Name()).Debug("creating new archive file")
 
 	rows, err := db.QueryxContext(ctx, lookupMsgs, task.Org.ID, task.StartDate, task.EndDate)
 	if err != nil {
@@ -229,7 +231,7 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 		recordCount++
 
 		if recordCount%100000 == 0 {
-			log.WithField("filename", file.Name()).WithField("record_count", recordCount).WithField("elapsed", time.Now().Sub(task.BuildStart)).Info("writing archive file")
+			log.WithField("filename", file.Name()).WithField("record_count", recordCount).WithField("elapsed", time.Now().Sub(task.BuildStart)).Debug("writing archive file")
 		}
 	}
 
@@ -260,11 +262,15 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 		"file_size":    task.FileSize,
 		"file_hash":    task.FileHash,
 		"elapsed":      time.Now().Sub(task.BuildStart),
-	}).Info("completed writing archive file")
+	}).Debug("completed writing archive file")
 	return nil
 }
 
 func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, task *ArchiveTask) error {
+	// s3 wants a base64 encoded hash instead of our hex encoded
+	hashBytes, _ := hex.DecodeString(task.FileHash)
+	hashBase64 := base64.StdEncoding.EncodeToString(hashBytes)
+
 	url, err := s3.PutS3File(
 		s3Client,
 		bucket,
@@ -272,8 +278,21 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, t
 		"application/json",
 		"gzip",
 		task.Filename,
+		hashBase64,
 	)
-	task.URL = url
+
+	if err == nil {
+		task.URL = url
+		logrus.WithFields(logrus.Fields{
+			"org_id":       task.Org.ID,
+			"archive_type": task.ArchiveType,
+			"start_date":   task.StartDate,
+			"end_date":     task.EndDate,
+			"url":          task.URL,
+			"file_size":    task.FileSize,
+			"file_hash":    task.FileHash,
+		}).Debug("completed uploading archive file")
+	}
 	return err
 }
 

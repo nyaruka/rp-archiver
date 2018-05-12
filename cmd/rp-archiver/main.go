@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -80,7 +81,8 @@ func main() {
 
 	for _, org := range orgs {
 		log := log.WithField("org", org.Name).WithField("org_id", org.ID)
-		log.Info("checking for archives")
+		orgStart := time.Now()
+		orgRecords := 0
 
 		tasks, err := archiver.GetArchiveTasks(ctx, db, org, archiver.MessageType)
 		if err != nil {
@@ -90,7 +92,7 @@ func main() {
 
 		for _, task := range tasks {
 			log = log.WithField("start_date", task.StartDate).WithField("end_date", task.EndDate).WithField("archive_type", task.ArchiveType)
-			log.Info("creating archive")
+			log.Info("starting archive")
 			err := archiver.CreateMsgArchive(ctx, db, &task)
 			if err != nil {
 				log.WithError(err).Error("error writing archive file")
@@ -101,14 +103,20 @@ func main() {
 				log.WithError(err).Error("error writing archive to s3")
 				continue
 			}
-			log.WithField("url", task.URL).Info("archive uploaded")
-
 			err = archiver.WriteArchiveToDB(ctx, db, &task)
 			if err != nil {
 				log.WithError(err).Error("error writing record to db")
 				continue
 			}
-			log.WithField("id", task.ID).Info("archive db record created")
+
+			log.WithField("id", task.ID).WithField("record_count", task.RecordCount).WithField("elapsed", time.Now().Sub(task.BuildStart)).Info("archive complete")
+			orgRecords += task.RecordCount
+		}
+
+		if len(tasks) > 0 {
+			elapsed := time.Now().Sub(orgStart)
+			rate := float32(orgRecords) / (float32(elapsed) / float32(time.Second))
+			log.WithField("elapsed", elapsed).WithField("records_per_second", int(rate)).Info("completed archival for org")
 		}
 	}
 }
