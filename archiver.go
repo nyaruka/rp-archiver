@@ -11,10 +11,10 @@ import (
 	"io/ioutil"
 	"time"
 
-	logrus "github.com/apex/log"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/rp-archiver/s3"
+	"github.com/sirupsen/logrus"
 )
 
 type ArchiveType string
