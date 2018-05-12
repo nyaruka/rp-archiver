@@ -7,7 +7,7 @@ type Config struct {
 
 	S3Endpoint       string `help:"the S3 endpoint we will write archives to"`
 	S3Region         string `help:"the S3 region we will write archives to"`
-	S3ArchiveBucket  string `help:"the S3 bucket we will write archives to"`
+	S3Bucket         string `help:"the S3 bucket we will write archives to"`
 	S3DisableSSL     bool   `help:"whether we disable SSL when accessing S3. Should always be set to False unless you're hosting an S3 compatible service within a secure internal network"`
 	S3ForcePathStyle bool   `help:"whether we force S3 path style. Should generally need to default to False unless you're hosting an S3 compatible service"`
 
@@ -22,7 +22,7 @@ func NewConfig() *Config {
 
 		S3Endpoint:       "https://s3.amazonaws.com",
 		S3Region:         "us-east-1",
-		S3ArchiveBucket:  "dl-temba-archives",
+		S3Bucket:         "dl-temba-archives",
 		S3DisableSSL:     false,
 		S3ForcePathStyle: false,
 
