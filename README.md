@@ -20,7 +20,7 @@ Usage of archiver:
     	print usage information
   -log-level string
     	the log level, one of error, warn, info, debug (default "info")
-  -s3-archive-bucket string
+  -s3-bucket string
     	the S3 bucket we will write archives to (default "dl-temba-archives")
   -s3-disable-ssl
     	whether we disable SSL when accessing S3. Should always be set to False unless you're hosting an S3 compatible service within a secure internal network
@@ -38,7 +38,7 @@ Environment variables:
               ARCHIVER_AWS_SECRET_ACCESS_KEY - string
                                  ARCHIVER_DB - string
                           ARCHIVER_LOG_LEVEL - string
-                  ARCHIVER_S3_ARCHIVE_BUCKET - string
+                          ARCHIVER_S3_BUCKET - string
                      ARCHIVER_S3_DISABLE_SSL - bool
                         ARCHIVER_S3_ENDPOINT - string
                 ARCHIVER_S3_FORCE_PATH_STYLE - bool
