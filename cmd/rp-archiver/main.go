@@ -97,7 +97,7 @@ func main() {
 		for _, task := range tasks {
 			log = log.WithField("start_date", task.StartDate).WithField("end_date", task.EndDate).WithField("archive_type", task.ArchiveType)
 			log.Info("starting archive")
-			err := archiver.CreateMsgArchive(ctx, db, &task)
+			err := archiver.CreateMsgArchive(ctx, db, &task, config.ArchiveTempDirectory)
 			if err != nil {
 				log.WithError(err).Error("error writing archive file")
 				continue
@@ -111,6 +111,14 @@ func main() {
 			if err != nil {
 				log.WithError(err).Error("error writing record to db")
 				continue
+			}
+
+			if config.DeleteAfterUpload == true {
+				err := archiver.DeleteTemporaryArchive(&task)
+				if err != nil {
+					log.WithError(err).Error("error deleting temporary file")
+					continue
+				}
 			}
 
 			log.WithField("id", task.ID).WithField("record_count", task.RecordCount).WithField("elapsed", time.Now().Sub(task.BuildStart)).Info("archive complete")

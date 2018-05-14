@@ -218,10 +218,15 @@ func ensureTempArchiveDirectory(ctx context.Context, path string) error {
 	return nil
 }
 
-func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error {
+func GenerateArchiveFilename(task *ArchiveTask) string {
+	filename := fmt.Sprintf("%s_%d_%d%02d_%d%02d_", task.ArchiveType, task.Org.ID, task.StartDate.Year(), task.StartDate.Month(), task.EndDate.Year(), task.EndDate.Month())
+
+	return filename
+}
+
+func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archive_path string) error {
 	task.BuildStart = time.Now()
 
-	filename := fmt.Sprintf("%s_%d_%d%02d_%d%02d_", task.ArchiveType, task.Org.ID, task.StartDate.Year(), task.StartDate.Month(), task.EndDate.Year(), task.EndDate.Month())
 	log := logrus.WithFields(logrus.Fields{
 		"org_id":       task.Org.ID,
 		"archive_type": task.ArchiveType,
@@ -229,13 +234,12 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 		"end_date":     task.EndDate,
 	})
 
-	var archive_path string = "/tmp/archiver"
 	err := ensureTempArchiveDirectory(ctx, archive_path)
-
 	if err != nil {
 		return err
 	}
 
+	filename := GenerateArchiveFilename(task)
 	file, err := ioutil.TempFile(archive_path, filename)
 	if err != nil {
 		return err
@@ -372,5 +376,23 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 		return err
 	}
 
+	return nil
+}
+
+func DeleteTemporaryArchive(task *ArchiveTask) error {
+	err := os.Remove(task.Filename)
+
+	if err != nil {
+		return err
+	}
+
+	log := logrus.WithFields(logrus.Fields{
+		"org_id":        task.Org.ID,
+		"archive_type":  task.ArchiveType,
+		"start_date":    task.StartDate,
+		"end_date":      task.EndDate,
+		"db_archive_id": task.ID,
+	})
+	log.WithField("filename", task.Filename).Debug("Deleted temporary archive file")
 	return nil
 }
