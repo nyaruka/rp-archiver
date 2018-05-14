@@ -13,10 +13,12 @@ import (
 	"io/ioutil"
 	"time"
 
+	"errors"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/rp-archiver/s3"
 	"github.com/sirupsen/logrus"
+	"os"
 )
 
 type ArchiveType string
@@ -181,6 +183,41 @@ select rec.visibility, row_to_json(rec) FROM (
 	order by created_on ASC, id ASC) rec; 
 `
 
+func ensureTempArchiveDirectory(ctx context.Context, path string) error {
+	if len(path) == 0 {
+		return errors.New("Path cannot be empty")
+	}
+
+	// check if path is a directory we can write to
+	fileinfo, err := os.Stat(path)
+
+	if os.IsNotExist(err) {
+		// try to create the directory
+		err := os.MkdirAll(path, 0700)
+
+		if err != nil {
+			return err
+		}
+		// created the directory
+		return nil
+
+	} else if err != nil {
+		return err
+	}
+
+	// is path a directory
+	if !fileinfo.IsDir() {
+		return errors.New("Path is not a directory")
+	}
+
+	// Check if the user bit is enabled in file permission
+	if fileinfo.Mode().Perm()&(1<<(uint(7))) == 0 {
+		return errors.New("Directory is not writable for the user")
+	}
+
+	return nil
+}
+
 func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error {
 	task.BuildStart = time.Now()
 
@@ -192,7 +229,14 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 		"end_date":     task.EndDate,
 	})
 
-	file, err := ioutil.TempFile("/tmp/archiver", filename)
+	var archive_path string = "/tmp/archiver"
+	err := ensureTempArchiveDirectory(ctx, archive_path)
+
+	if err != nil {
+		return err
+	}
+
+	file, err := ioutil.TempFile(archive_path, filename)
 	if err != nil {
 		return err
 	}
