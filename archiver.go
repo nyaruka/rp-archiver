@@ -211,8 +211,6 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 	defer rows.Close()
 
 	recordCount := 0
-	writer.WriteString("[")
-	delim := ""
 	var msg, visibility string
 	for rows.Next() {
 		err = rows.Scan(&visibility, &msg)
@@ -225,9 +223,8 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 			continue
 		}
 
-		writer.WriteString(delim)
 		writer.WriteString(msg)
-		delim = ","
+		writer.WriteString("\n")
 		recordCount++
 
 		if recordCount%100000 == 0 {
@@ -235,7 +232,6 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 		}
 	}
 
-	writer.WriteString("]")
 	task.Filename = file.Name()
 	err = writer.Flush()
 	if err != nil {
@@ -274,7 +270,7 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, t
 	url, err := s3.PutS3File(
 		s3Client,
 		bucket,
-		fmt.Sprintf("/%d/%s_%d_%02d_%s.json.gz", task.Org.ID, task.ArchiveType, task.StartDate.Year(), task.StartDate.Month(), task.FileHash),
+		fmt.Sprintf("/%d/%s_%d_%02d_%s.jsonl.gz", task.Org.ID, task.ArchiveType, task.StartDate.Year(), task.StartDate.Month(), task.FileHash),
 		"application/json",
 		"gzip",
 		task.Filename,
