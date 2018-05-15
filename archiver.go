@@ -184,6 +184,45 @@ select rec.visibility, row_to_json(rec) FROM (
 	order by created_on ASC, id ASC) rec; 
 `
 
+const lookupFlowRuns = `
+select row_to_json(rec)
+FROM (
+   select
+     fr.id,
+     row_to_json(flow_struct) as flow,
+     row_to_json(contact_struct) as contact,
+     fr.responded,
+     (select jsonb_agg(path_data) from (
+          select path_row ->> 'node_uuid'  as node, path_row ->> 'arrived_on' as time
+          from jsonb_array_elements(fr.path :: jsonb) as path_row) as path_data
+     ) as path,
+     (select jsonb_agg(values_data.tmp_values) from (
+          select json_build_object(key, jsonb_build_object('name', value -> 'name', 'time', value -> 'created_on', 'category', value -> 'category', 'node', value -> 'node_uuid')) as tmp_values
+          FROM jsonb_each(fr.results :: jsonb)) as values_data
+     ) as values,
+     fr.created_on,
+     fr.modified_on,
+     fr.exited_on,
+     CASE
+        WHEN exit_type = 'C'
+          THEN 'completed'
+        WHEN exit_type = 'I'
+          THEN 'interrupted'
+        WHEN exit_type = 'E'
+          THEN 'expired'
+        ELSE
+          null
+     END as exit_type
+
+   FROM flows_flowrun fr
+     JOIN LATERAL (SELECT uuid, name from flows_flow where flows_flow.id = fr.flow_id) as flow_struct ON True
+     JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = fr.contact_id) as contact_struct ON True
+   
+   WHERE fr.org_id = $1 AND fr.created_on >= $2 AND fr.created_on < $3
+   ORDER BY fr.created_on ASC, id ASC
+) as rec;
+`
+
 func EnsureTempArchiveDirectory(ctx context.Context, path string) error {
 	if len(path) == 0 {
 		return errors.New("Path argument cannot be empty")
