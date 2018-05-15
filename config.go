@@ -14,8 +14,8 @@ type Config struct {
 	AWSAccessKeyID     string `help:"the access key id to use when authenticating S3"`
 	AWSSecretAccessKey string `help:"the secret access key id to use when authenticating S3"`
 
-	ArchiveTempDirectory string `help:"directory where temporary archive files are written"`
-	DeleteAfterUpload    bool   `help:"whether we should delete temporary archive file, defaults to true"`
+	TempDir           string `help:"directory where temporary archive files are written"`
+	DeleteAfterUpload bool   `help:"whether we should delete temporary archive file, defaults to true"`
 }
 
 func NewConfig() *Config {
@@ -32,8 +32,8 @@ func NewConfig() *Config {
 		AWSAccessKeyID:     "missing_aws_access_key_id",
 		AWSSecretAccessKey: "missing_aws_secret_access_key",
 
-		ArchiveTempDirectory: "/tmp/archiver",
-		DeleteAfterUpload:    true,
+		TempDir:           "/tmp/archiver",
+		DeleteAfterUpload: true,
 	}
 
 	return &config

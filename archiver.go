@@ -19,6 +19,7 @@ import (
 	"github.com/nyaruka/rp-archiver/s3"
 	"github.com/sirupsen/logrus"
 	"os"
+	"path/filepath"
 )
 
 type ArchiveType string
@@ -183,9 +184,9 @@ select rec.visibility, row_to_json(rec) FROM (
 	order by created_on ASC, id ASC) rec; 
 `
 
-func ensureTempArchiveDirectory(ctx context.Context, path string) error {
+func EnsureTempArchiveDirectory(ctx context.Context, path string) error {
 	if len(path) == 0 {
-		return errors.New("Path cannot be empty")
+		return errors.New("Path argument cannot be empty")
 	}
 
 	// check if path is a directory we can write to
@@ -207,18 +208,27 @@ func ensureTempArchiveDirectory(ctx context.Context, path string) error {
 
 	// is path a directory
 	if !fileinfo.IsDir() {
-		return errors.New("Path is not a directory")
+		return errors.New(fmt.Sprintf("Path '%s' is not a directory", path))
 	}
 
-	// Check if the user bit is enabled in file permission
-	if fileinfo.Mode().Perm()&(1<<(uint(7))) == 0 {
-		return errors.New("Directory is not writable for the user")
+	var test_file_path string = filepath.Join(path, ".test_file")
+	test_file, err := os.Create(test_file_path)
+	defer test_file.Close()
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("Directory '%s' is not writable for the user", path))
+	}
+
+	err = os.Remove(test_file_path)
+
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func GenerateArchiveFilename(task *ArchiveTask) string {
+func generateArchiveFilename(task *ArchiveTask) string {
 	filename := fmt.Sprintf("%s_%d_%d%02d_%d%02d_", task.ArchiveType, task.Org.ID, task.StartDate.Year(), task.StartDate.Month(), task.EndDate.Year(), task.EndDate.Month())
 
 	return filename
@@ -234,12 +244,7 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archi
 		"end_date":     task.EndDate,
 	})
 
-	err := ensureTempArchiveDirectory(ctx, archive_path)
-	if err != nil {
-		return err
-	}
-
-	filename := GenerateArchiveFilename(task)
+	filename := generateArchiveFilename(task)
 	file, err := ioutil.TempFile(archive_path, filename)
 	if err != nil {
 		return err

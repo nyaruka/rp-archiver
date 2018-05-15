@@ -83,6 +83,12 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// ensure that we can actually write to the temp directory
+	dir_err := archiver.EnsureTempArchiveDirectory(ctx, config.TempDir)
+	if dir_err != nil {
+		log.Fatal(dir_err)
+	}
+
 	for _, org := range orgs {
 		log := log.WithField("org", org.Name).WithField("org_id", org.ID)
 		orgStart := time.Now()
@@ -97,7 +103,7 @@ func main() {
 		for _, task := range tasks {
 			log = log.WithField("start_date", task.StartDate).WithField("end_date", task.EndDate).WithField("archive_type", task.ArchiveType)
 			log.Info("starting archive")
-			err := archiver.CreateMsgArchive(ctx, db, &task, config.ArchiveTempDirectory)
+			err := archiver.CreateMsgArchive(ctx, db, &task, config.TempDir)
 			if err != nil {
 				log.WithError(err).Error("error writing archive file")
 				continue
