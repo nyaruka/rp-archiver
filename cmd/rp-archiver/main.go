@@ -69,12 +69,14 @@ func main() {
 
 	s3Client := aws_s3.New(s3Session)
 
-	// test out our S3 credentials
-	err = s3.TestS3(s3Client, config.S3Bucket)
-	if err != nil {
-		log.WithError(err).Fatal("s3 bucket not reachable")
-	} else {
-		log.Info("s3 bucket ok")
+	if config.UploadToS3 {
+		// test out our S3 credentials
+		err = s3.TestS3(s3Client, config.S3Bucket)
+		if err != nil {
+			log.WithError(err).Fatal("s3 bucket not reachable")
+		} else {
+			log.Info("s3 bucket ok")
+		}
 	}
 
 	ctx := context.Background()
@@ -108,11 +110,15 @@ func main() {
 				log.WithError(err).Error("error writing archive file")
 				continue
 			}
-			err = archiver.UploadArchive(ctx, s3Client, config.S3Bucket, &task)
-			if err != nil {
-				log.WithError(err).Error("error writing archive to s3")
-				continue
+
+			if config.UploadToS3 {
+				err = archiver.UploadArchive(ctx, s3Client, config.S3Bucket, &task)
+				if err != nil {
+					log.WithError(err).Error("error writing archive to s3")
+					continue
+				}
 			}
+
 			err = archiver.WriteArchiveToDB(ctx, db, &task)
 			if err != nil {
 				log.WithError(err).Error("error writing record to db")
