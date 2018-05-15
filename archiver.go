@@ -139,7 +139,7 @@ select rec.visibility, row_to_json(rec) FROM (
 	  mm.id,
 	  broadcast_id as broadcast,
 	  row_to_json(contact) as contact,
-	  ccu.identity as urn,
+	  CASE WHEN oo.is_anon = False THEN ccu.identity ELSE null END as urn,
 	  row_to_json(channel) as channel,
 	  CASE WHEN direction = 'I' THEN 'in'
 		WHEN direction = 'O' THEN 'out'
@@ -171,11 +171,11 @@ select rec.visibility, row_to_json(rec) FROM (
 		ELSE NULL
 		END as visibility,
 	  text,
-	  (select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?);(.*)$') attachment FROM msgs_msg where id = 8) as attach_data) as attach_row) as attachments,
+	  (select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?);(.*)$') attachment) as attach_data) as attach_row) as attachments,
 	  labels_agg.data as labels,
-	  created_on,
+	  mm.created_on,
 	  sent_on
-	from msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id
+	from msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
 	  JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
