@@ -17,6 +17,9 @@ type Config struct {
 	TempDir           string `help:"directory where temporary archive files are written"`
 	DeleteAfterUpload bool   `help:"whether we should delete temporary archive file"`
 	UploadToS3        bool   `help:"whether we should upload archive to S3"`
+
+	ArchiveMessages bool `help:"whether we should archive messages"`
+	ArchiveRuns     bool `help:"whether we should archive runs"`
 }
 
 func NewConfig() *Config {
@@ -36,6 +39,9 @@ func NewConfig() *Config {
 		TempDir:           "/tmp/archiver",
 		DeleteAfterUpload: true,
 		UploadToS3:        true,
+
+		ArchiveMessages: true,
+		ArchiveRuns:     true,
 	}
 
 	return &config

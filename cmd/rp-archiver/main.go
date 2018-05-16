@@ -16,7 +16,7 @@ import (
 	"github.com/nyaruka/ezconf"
 	archiver "github.com/nyaruka/rp-archiver"
 	"github.com/nyaruka/rp-archiver/s3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -25,35 +25,35 @@ func main() {
 	loader.MustLoad()
 
 	if config.DeleteAfterUpload && !config.UploadToS3 {
-		log.Fatal("cannot delete archives and also not upload to s3")
+		logrus.Fatal("cannot delete archives and also not upload to s3")
 	}
 
 	// configure our logger
-	log.SetOutput(os.Stdout)
-	log.SetFormatter(&log.TextFormatter{})
+	logrus.SetOutput(os.Stdout)
+	logrus.SetFormatter(&logrus.TextFormatter{})
 
-	level, err := log.ParseLevel(config.LogLevel)
+	level, err := logrus.ParseLevel(config.LogLevel)
 	if err != nil {
-		log.Fatalf("Invalid log level '%s'", level)
+		logrus.Fatalf("Invalid log level '%s'", level)
 	}
-	log.SetLevel(level)
+	logrus.SetLevel(level)
 
 	// if we have a DSN entry, try to initialize it
 	if config.SentryDSN != "" {
-		hook, err := logrus_sentry.NewSentryHook(config.SentryDSN, []log.Level{log.PanicLevel, log.FatalLevel, log.ErrorLevel})
+		hook, err := logrus_sentry.NewSentryHook(config.SentryDSN, []logrus.Level{logrus.PanicLevel, logrus.FatalLevel, logrus.ErrorLevel})
 		hook.Timeout = 0
 		hook.StacktraceConfiguration.Enable = true
 		hook.StacktraceConfiguration.Skip = 4
 		hook.StacktraceConfiguration.Context = 5
 		if err != nil {
-			log.Fatalf("Invalid sentry DSN: '%s': %s", config.SentryDSN, err)
+			logrus.Fatalf("Invalid sentry DSN: '%s': %s", config.SentryDSN, err)
 		}
-		log.StandardLogger().Hooks.Add(hook)
+		logrus.StandardLogger().Hooks.Add(hook)
 	}
 
 	db, err := sqlx.Open("postgres", config.DB)
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 
 	// create our s3 client
@@ -65,10 +65,10 @@ func main() {
 		S3ForcePathStyle: aws.Bool(config.S3ForcePathStyle),
 	})
 	if err != nil {
-		log.WithError(err).Fatal("error creating s3 client")
+		logrus.WithError(err).Fatal("error creating s3 client")
 	}
 	s3Session.Handlers.Send.PushFront(func(r *request.Request) {
-		log.WithField("headers", r.HTTPRequest.Header).WithField("service", r.ClientInfo.ServiceName).WithField("operation", r.Operation).WithField("params", r.Params).Debug("making aws request")
+		logrus.WithField("headers", r.HTTPRequest.Header).WithField("service", r.ClientInfo.ServiceName).WithField("operation", r.Operation).WithField("params", r.Params).Debug("making aws request")
 	})
 
 	s3Client := aws_s3.New(s3Session)
@@ -77,75 +77,39 @@ func main() {
 		// test out our S3 credentials
 		err = s3.TestS3(s3Client, config.S3Bucket)
 		if err != nil {
-			log.WithError(err).Fatal("s3 bucket not reachable")
+			logrus.WithError(err).Fatal("s3 bucket not reachable")
 		} else {
-			log.Info("s3 bucket ok")
+			logrus.Info("s3 bucket ok")
 		}
-	}
-
-	ctx := context.Background()
-	orgs, err := archiver.GetActiveOrgs(ctx, db)
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	// ensure that we can actually write to the temp directory
-	dir_err := archiver.EnsureTempArchiveDirectory(ctx, config.TempDir)
-	if dir_err != nil {
-		log.Fatal(dir_err)
+	ctx := context.Background()
+	err = archiver.EnsureTempArchiveDirectory(config.TempDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("cannot write to temp directory")
 	}
 
-	now := time.Now()
+	// get our active orgs
+	orgs, err := archiver.GetActiveOrgs(ctx, db)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
+	// for each org, do our export
 	for _, org := range orgs {
-		log := log.WithField("org", org.Name).WithField("org_id", org.ID)
-		orgStart := time.Now()
-		orgRecords := 0
-
-		tasks, err := archiver.GetArchiveTasks(ctx, db, now, org, archiver.MessageType)
-		if err != nil {
-			log.WithError(err).Error("error calculating message tasks")
-			continue
-		}
-
-		for _, task := range tasks {
-			log = log.WithField("start_date", task.StartDate).WithField("period", task.Period).WithField("archive_type", task.ArchiveType)
-			log.Info("starting archive")
-			err := archiver.CreateArchiveFile(ctx, db, &task, config.TempDir)
+		log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
+		if config.ArchiveMessages {
+			_, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.MessageType)
 			if err != nil {
-				log.WithError(err).Error("error writing archive file")
-				continue
+				log.WithError(err).Error()
 			}
-
-			if config.UploadToS3 {
-				err = archiver.UploadArchive(ctx, s3Client, config.S3Bucket, &task)
-				if err != nil {
-					log.WithError(err).Error("error writing archive to s3")
-					continue
-				}
-			}
-
-			err = archiver.WriteArchiveToDB(ctx, db, &task)
-			if err != nil {
-				log.WithError(err).Error("error writing record to db")
-				continue
-			}
-
-			if config.DeleteAfterUpload {
-				err := archiver.DeleteArchiveFile(&task)
-				if err != nil {
-					log.WithError(err).Error("error deleting temporary file")
-					continue
-				}
-			}
-
-			log.WithField("id", task.ID).WithField("record_count", task.RecordCount).WithField("elapsed", task.BuildTime).Info("archive complete")
-			orgRecords += task.RecordCount
 		}
-
-		if len(tasks) > 0 {
-			elapsed := time.Now().Sub(orgStart)
-			rate := float32(orgRecords) / (float32(elapsed) / float32(time.Second))
-			log.WithField("elapsed", elapsed).WithField("records_per_second", int(rate)).Info("completed archival for org")
+		if config.ArchiveRuns {
+			_, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.RunType)
+			if err != nil {
+				log.WithError(err).Error()
+			}
 		}
 	}
 }

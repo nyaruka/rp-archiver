@@ -25,7 +25,7 @@ import (
 type ArchiveType string
 
 const (
-	FlowRunType = ArchiveType("flowrun")
+	RunType     = ArchiveType("run")
 	MessageType = ArchiveType("message")
 	SessionType = ArchiveType("session")
 )
@@ -91,10 +91,10 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 
 const lookupOrgArchives = `SELECT start_date, archive_type FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND period = 'D' ORDER BY start_date asc`
 
-// GetArchiveTasks calculates what archives need to be generated for the passed in org this is calculated per day
-func GetArchiveTasks(ctx context.Context, db *sqlx.DB, now time.Time, org Org, archiveType ArchiveType) ([]Archive, error) {
-	archives := []Archive{}
-	err := db.SelectContext(ctx, &archives, lookupOrgArchives, org.ID, archiveType)
+// GetMissingArchives calculates what archives need to be generated for the passed in org this is calculated per day
+func GetMissingArchives(ctx context.Context, db *sqlx.DB, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	existingArchives := []*Archive{}
+	err := db.SelectContext(ctx, &existingArchives, lookupOrgArchives, org.ID, archiveType)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func GetArchiveTasks(ctx context.Context, db *sqlx.DB, now time.Time, org Org, a
 	orgUTC := org.CreatedOn.In(time.UTC)
 	startDate := time.Date(orgUTC.Year(), orgUTC.Month(), orgUTC.Day(), 0, 0, 0, 0, time.UTC)
 
-	tasks := make([]Archive, 0, 1)
+	missingArchives := make([]*Archive, 0, 1)
 	currentArchiveIdx := 0
 
 	// walk forwards until we are after our end date
@@ -112,12 +112,12 @@ func GetArchiveTasks(ctx context.Context, db *sqlx.DB, now time.Time, org Org, a
 		existing := false
 
 		// advance our current archive idx until we are on our start date or later
-		for currentArchiveIdx < len(archives) && archives[currentArchiveIdx].StartDate.Before(startDate) {
+		for currentArchiveIdx < len(existingArchives) && existingArchives[currentArchiveIdx].StartDate.Before(startDate) {
 			currentArchiveIdx++
 		}
 
 		// do we already have this archive?
-		if currentArchiveIdx < len(archives) && archives[currentArchiveIdx].StartDate.Equal(startDate) {
+		if currentArchiveIdx < len(existingArchives) && existingArchives[currentArchiveIdx].StartDate.Equal(startDate) {
 			existing = true
 		}
 
@@ -130,13 +130,13 @@ func GetArchiveTasks(ctx context.Context, db *sqlx.DB, now time.Time, org Org, a
 				ArchiveType: archiveType,
 				Period:      Day,
 			}
-			tasks = append(tasks, archive)
+			missingArchives = append(missingArchives, &archive)
 		}
 
 		startDate = startDate.Add(time.Hour * 24)
 	}
 
-	return tasks, nil
+	return missingArchives, nil
 }
 
 const lookupMsgs = `
@@ -230,7 +230,7 @@ FROM (
 `
 
 // EnsureTempArchiveDirectory checks that we can write to our archive directory, creating it first if needbe
-func EnsureTempArchiveDirectory(ctx context.Context, path string) error {
+func EnsureTempArchiveDirectory(path string) error {
 	if len(path) == 0 {
 		return fmt.Errorf("path argument cannot be empty")
 	}
@@ -287,7 +287,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	var rows *sqlx.Rows
 	if archive.ArchiveType == MessageType {
 		rows, err = db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, endDate)
-	} else if archive.ArchiveType == FlowRunType {
+	} else if archive.ArchiveType == RunType {
 		rows, err = db.QueryxContext(ctx, lookupFlowRuns, archive.Org.ID, archive.StartDate, endDate)
 	}
 	if err != nil {
@@ -313,7 +313,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 			if visibility == "deleted" {
 				continue
 			}
-		} else if archive.ArchiveType == FlowRunType {
+		} else if archive.ArchiveType == RunType {
 			err = rows.Scan(&record)
 			if err != nil {
 				return err
@@ -360,16 +360,31 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	return nil
 }
 
-// UploadArchive upload file to S3
+// UploadArchive uploads the passed archive file to S3
 func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, archive *Archive) error {
 	// s3 wants a base64 encoded hash instead of our hex encoded
 	hashBytes, _ := hex.DecodeString(archive.ArchiveHash)
 	hashBase64 := base64.StdEncoding.EncodeToString(hashBytes)
 
+	archivePath := ""
+	if archive.Period == Day {
+		archivePath = fmt.Sprintf(
+			"/%d/%s_%s%d%02d%02d_%s.jsonl.gz",
+			archive.Org.ID, archive.ArchiveType, archive.Period,
+			archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day(),
+			archive.ArchiveHash)
+	} else {
+		archivePath = fmt.Sprintf(
+			"/%d/%s_%s%d%02d_%s.jsonl.gz",
+			archive.Org.ID, archive.ArchiveType, archive.Period,
+			archive.StartDate.Year(), archive.StartDate.Month(),
+			archive.ArchiveHash)
+	}
+
 	url, err := s3.PutS3File(
 		s3Client,
 		bucket,
-		fmt.Sprintf("/%d/%s_%d_%02d_%s.jsonl.gz", archive.Org.ID, archive.ArchiveType, archive.StartDate.Year(), archive.StartDate.Month(), archive.ArchiveHash),
+		archivePath,
 		"application/json",
 		"gzip",
 		archive.ArchiveFile,
@@ -435,4 +450,60 @@ func DeleteArchiveFile(archive *Archive) error {
 	})
 	log.WithField("filename", archive.ArchiveFile).Debug("deleted temporary archive file")
 	return nil
+}
+
+// ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
+func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
+	records := 0
+
+	archives, err := GetMissingArchives(ctx, db, now, org, archiveType)
+	if err != nil {
+		return nil, fmt.Errorf("error calculating tasks for type '%s'", archiveType)
+	}
+
+	for _, archive := range archives {
+		log = log.WithField("start_date", archive.StartDate).WithField("period", archive.Period).WithField("archive_type", archive.ArchiveType)
+		log.Info("starting archive")
+		err := CreateArchiveFile(ctx, db, archive, config.TempDir)
+		if err != nil {
+			log.WithError(err).Error("error writing archive file")
+			continue
+		}
+
+		if config.UploadToS3 {
+			err = UploadArchive(ctx, s3Client, config.S3Bucket, archive)
+			if err != nil {
+				log.WithError(err).Error("error writing archive to s3")
+				continue
+			}
+		}
+
+		err = WriteArchiveToDB(ctx, db, archive)
+		if err != nil {
+			log.WithError(err).Error("error writing record to db")
+			continue
+		}
+
+		// purge records that were archived
+
+		if config.DeleteAfterUpload == true {
+			err := DeleteArchiveFile(archive)
+			if err != nil {
+				log.WithError(err).Error("error deleting temporary file")
+				continue
+			}
+		}
+
+		log.WithField("id", archive.ID).WithField("record_count", archive.RecordCount).WithField("elapsed", archive.BuildTime).Info("archive complete")
+		records += archive.RecordCount
+	}
+
+	if len(archives) > 0 {
+		elapsed := time.Now().Sub(now)
+		rate := float32(records) / (float32(elapsed) / float32(time.Second))
+		log.WithField("elapsed", elapsed).WithField("records_per_second", int(rate)).Info("completed archival for org")
+	}
+
+	return archives, nil
 }
