@@ -69,18 +69,26 @@ func main() {
 
 	s3Client := aws_s3.New(s3Session)
 
-	// test out our S3 credentials
-	err = s3.TestS3(s3Client, config.S3Bucket)
-	if err != nil {
-		log.WithError(err).Fatal("s3 bucket not reachable")
-	} else {
-		log.Info("s3 bucket ok")
+	if config.UploadToS3 {
+		// test out our S3 credentials
+		err = s3.TestS3(s3Client, config.S3Bucket)
+		if err != nil {
+			log.WithError(err).Fatal("s3 bucket not reachable")
+		} else {
+			log.Info("s3 bucket ok")
+		}
 	}
 
 	ctx := context.Background()
 	orgs, err := archiver.GetActiveOrgs(ctx, db)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// ensure that we can actually write to the temp directory
+	dir_err := archiver.EnsureTempArchiveDirectory(ctx, config.TempDir)
+	if dir_err != nil {
+		log.Fatal(dir_err)
 	}
 
 	for _, org := range orgs {
@@ -97,20 +105,32 @@ func main() {
 		for _, task := range tasks {
 			log = log.WithField("start_date", task.StartDate).WithField("end_date", task.EndDate).WithField("archive_type", task.ArchiveType)
 			log.Info("starting archive")
-			err := archiver.CreateMsgArchive(ctx, db, &task)
+			err := archiver.CreateMsgArchive(ctx, db, &task, config.TempDir)
 			if err != nil {
 				log.WithError(err).Error("error writing archive file")
 				continue
 			}
-			err = archiver.UploadArchive(ctx, s3Client, config.S3Bucket, &task)
-			if err != nil {
-				log.WithError(err).Error("error writing archive to s3")
-				continue
+
+			if config.UploadToS3 {
+				err = archiver.UploadArchive(ctx, s3Client, config.S3Bucket, &task)
+				if err != nil {
+					log.WithError(err).Error("error writing archive to s3")
+					continue
+				}
 			}
+
 			err = archiver.WriteArchiveToDB(ctx, db, &task)
 			if err != nil {
 				log.WithError(err).Error("error writing record to db")
 				continue
+			}
+
+			if config.DeleteAfterUpload == true {
+				err := archiver.DeleteTemporaryArchive(&task)
+				if err != nil {
+					log.WithError(err).Error("error deleting temporary file")
+					continue
+				}
 			}
 
 			log.WithField("id", task.ID).WithField("record_count", task.RecordCount).WithField("elapsed", time.Now().Sub(task.BuildStart)).Info("archive complete")

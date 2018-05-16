@@ -13,10 +13,13 @@ import (
 	"io/ioutil"
 	"time"
 
+	"errors"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/rp-archiver/s3"
 	"github.com/sirupsen/logrus"
+	"os"
+	"path/filepath"
 )
 
 type ArchiveType string
@@ -136,7 +139,7 @@ select rec.visibility, row_to_json(rec) FROM (
 	  mm.id,
 	  broadcast_id as broadcast,
 	  row_to_json(contact) as contact,
-	  ccu.identity as urn,
+	  CASE WHEN oo.is_anon = False THEN ccu.identity ELSE null END as urn,
 	  row_to_json(channel) as channel,
 	  CASE WHEN direction = 'I' THEN 'in'
 		WHEN direction = 'O' THEN 'out'
@@ -168,24 +171,111 @@ select rec.visibility, row_to_json(rec) FROM (
 		ELSE NULL
 		END as visibility,
 	  text,
-	  (select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?);(.*)$') attachment FROM msgs_msg where id = 8) as attach_data) as attach_row) as attachments,
+	  (select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?);(.*)$') attachment) as attach_data) as attach_row) as attachments,
 	  labels_agg.data as labels,
-	  created_on,
+	  mm.created_on,
 	  sent_on
-	from msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id
+	from msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
 	  JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
-	
-	
-	  WHERE mm.org_id = $1 AND mm.modified_on >= $2 AND mm.modified_on < $3
-	order by modified_on ASC, id ASC) rec; 
+
+	  WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
+	order by created_on ASC, id ASC) rec; 
 `
 
-func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error {
+const lookupFlowRuns = `
+select row_to_json(rec)
+FROM (
+   select
+     fr.id,
+     row_to_json(flow_struct) as flow,
+     row_to_json(contact_struct) as contact,
+     fr.responded,
+     (select jsonb_agg(path_data) from (
+          select path_row ->> 'node_uuid'  as node, path_row ->> 'arrived_on' as time
+          from jsonb_array_elements(fr.path :: jsonb) as path_row) as path_data
+     ) as path,
+     (select jsonb_agg(values_data.tmp_values) from (
+          select json_build_object(key, jsonb_build_object('name', value -> 'name', 'time', value -> 'created_on', 'category', value -> 'category', 'node', value -> 'node_uuid')) as tmp_values
+          FROM jsonb_each(fr.results :: jsonb)) as values_data
+     ) as values,
+     fr.created_on,
+     fr.modified_on,
+     fr.exited_on,
+     CASE
+        WHEN exit_type = 'C'
+          THEN 'completed'
+        WHEN exit_type = 'I'
+          THEN 'interrupted'
+        WHEN exit_type = 'E'
+          THEN 'expired'
+        ELSE
+          null
+     END as exit_type
+
+   FROM flows_flowrun fr
+     JOIN LATERAL (SELECT uuid, name from flows_flow where flows_flow.id = fr.flow_id) as flow_struct ON True
+     JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = fr.contact_id) as contact_struct ON True
+   
+   WHERE fr.org_id = $1 AND fr.created_on >= $2 AND fr.created_on < $3
+   ORDER BY fr.created_on ASC, id ASC
+) as rec;
+`
+
+func EnsureTempArchiveDirectory(ctx context.Context, path string) error {
+	if len(path) == 0 {
+		return errors.New("Path argument cannot be empty")
+	}
+
+	// check if path is a directory we can write to
+	fileinfo, err := os.Stat(path)
+
+	if os.IsNotExist(err) {
+		// try to create the directory
+		err := os.MkdirAll(path, 0700)
+
+		if err != nil {
+			return err
+		}
+		// created the directory
+		return nil
+
+	} else if err != nil {
+		return err
+	}
+
+	// is path a directory
+	if !fileinfo.IsDir() {
+		return errors.New(fmt.Sprintf("Path '%s' is not a directory", path))
+	}
+
+	var test_file_path string = filepath.Join(path, ".test_file")
+	test_file, err := os.Create(test_file_path)
+	defer test_file.Close()
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("Directory '%s' is not writable for the user", path))
+	}
+
+	err = os.Remove(test_file_path)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func generateArchiveFilename(task *ArchiveTask) string {
+	filename := fmt.Sprintf("%s_%d_%d%02d_%d%02d_", task.ArchiveType, task.Org.ID, task.StartDate.Year(), task.StartDate.Month(), task.EndDate.Year(), task.EndDate.Month())
+
+	return filename
+}
+
+func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archive_path string) error {
 	task.BuildStart = time.Now()
 
-	filename := fmt.Sprintf("%s_%d_%d%02d_%d%02d_", task.ArchiveType, task.Org.ID, task.StartDate.Year(), task.StartDate.Month(), task.EndDate.Year(), task.EndDate.Month())
 	log := logrus.WithFields(logrus.Fields{
 		"org_id":       task.Org.ID,
 		"archive_type": task.ArchiveType,
@@ -193,7 +283,8 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 		"end_date":     task.EndDate,
 	})
 
-	file, err := ioutil.TempFile("/tmp/archiver", filename)
+	filename := generateArchiveFilename(task)
+	file, err := ioutil.TempFile(archive_path, filename)
 	if err != nil {
 		return err
 	}
@@ -211,8 +302,6 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 	defer rows.Close()
 
 	recordCount := 0
-	writer.WriteString("[")
-	delim := ""
 	var msg, visibility string
 	for rows.Next() {
 		err = rows.Scan(&visibility, &msg)
@@ -225,9 +314,8 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 			continue
 		}
 
-		writer.WriteString(delim)
 		writer.WriteString(msg)
-		delim = ","
+		writer.WriteString("\n")
 		recordCount++
 
 		if recordCount%100000 == 0 {
@@ -235,7 +323,6 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 		}
 	}
 
-	writer.WriteString("]")
 	task.Filename = file.Name()
 	err = writer.Flush()
 	if err != nil {
@@ -274,7 +361,7 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, t
 	url, err := s3.PutS3File(
 		s3Client,
 		bucket,
-		fmt.Sprintf("/%d/%s_%d_%02d_%s.json.gz", task.Org.ID, task.ArchiveType, task.StartDate.Year(), task.StartDate.Month(), task.FileHash),
+		fmt.Sprintf("/%d/%s_%d_%02d_%s.jsonl.gz", task.Org.ID, task.ArchiveType, task.StartDate.Year(), task.StartDate.Month(), task.FileHash),
 		"application/json",
 		"gzip",
 		task.Filename,
@@ -333,5 +420,23 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 		return err
 	}
 
+	return nil
+}
+
+func DeleteTemporaryArchive(task *ArchiveTask) error {
+	err := os.Remove(task.Filename)
+
+	if err != nil {
+		return err
+	}
+
+	log := logrus.WithFields(logrus.Fields{
+		"org_id":        task.Org.ID,
+		"archive_type":  task.ArchiveType,
+		"start_date":    task.StartDate,
+		"end_date":      task.EndDate,
+		"db_archive_id": task.ID,
+	})
+	log.WithField("filename", task.Filename).Debug("Deleted temporary archive file")
 	return nil
 }
