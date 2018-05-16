@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
-	"time"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -14,9 +11,10 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
-	archiver "github.com/nyaruka/rp-archiver"
+	"github.com/nyaruka/rp-archiver"
 	"github.com/nyaruka/rp-archiver/s3"
 	log "github.com/sirupsen/logrus"
+	"os"
 )
 
 func main() {
@@ -93,54 +91,24 @@ func main() {
 
 	for _, org := range orgs {
 		log := log.WithField("org", org.Name).WithField("org_id", org.ID)
-		orgStart := time.Now()
-		orgRecords := 0
 
-		tasks, err := archiver.GetArchiveTasks(ctx, db, org, archiver.MessageType)
-		if err != nil {
-			log.WithError(err).Error("error calculating message tasks")
-			continue
-		}
+		if config.ArchiveMessage {
+			_, err := archiver.ExecuteArchiving(ctx, config, db, s3Client, org, archiver.MessageType)
 
-		for _, task := range tasks {
-			log = log.WithField("start_date", task.StartDate).WithField("end_date", task.EndDate).WithField("archive_type", task.ArchiveType)
-			log.Info("starting archive")
-			err := archiver.CreateMsgArchive(ctx, db, &task, config.TempDir)
 			if err != nil {
-				log.WithError(err).Error("error writing archive file")
+				log.WithError(err)
 				continue
 			}
+		}
 
-			if config.UploadToS3 {
-				err = archiver.UploadArchive(ctx, s3Client, config.S3Bucket, &task)
-				if err != nil {
-					log.WithError(err).Error("error writing archive to s3")
-					continue
-				}
-			}
+		if config.ArchiveFlowrun {
+			_, err := archiver.ExecuteArchiving(ctx, config, db, s3Client, org, archiver.FlowRunType)
 
-			err = archiver.WriteArchiveToDB(ctx, db, &task)
 			if err != nil {
-				log.WithError(err).Error("error writing record to db")
+				log.WithError(err)
 				continue
 			}
-
-			if config.DeleteAfterUpload == true {
-				err := archiver.DeleteTemporaryArchive(&task)
-				if err != nil {
-					log.WithError(err).Error("error deleting temporary file")
-					continue
-				}
-			}
-
-			log.WithField("id", task.ID).WithField("record_count", task.RecordCount).WithField("elapsed", time.Now().Sub(task.BuildStart)).Info("archive complete")
-			orgRecords += task.RecordCount
 		}
 
-		if len(tasks) > 0 {
-			elapsed := time.Now().Sub(orgStart)
-			rate := float32(orgRecords) / (float32(elapsed) / float32(time.Second))
-			log.WithField("elapsed", elapsed).WithField("records_per_second", int(rate)).Info("completed archival for org")
-		}
 	}
 }

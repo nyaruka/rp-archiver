@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"errors"
+	aws_s3 "github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/rp-archiver/s3"
@@ -78,7 +79,7 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 
 	orgs := make([]Org, 0, 10)
 	for rows.Next() {
-		org := Org{ActiveDays: 1}
+		org := Org{ActiveDays: 90}
 		err = rows.StructScan(&org)
 		if err != nil {
 			return nil, err
@@ -283,7 +284,13 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archi
 
 	log.WithField("filename", file.Name()).Debug("creating new archive file")
 
-	rows, err := db.QueryxContext(ctx, lookupMsgs, task.Org.ID, task.StartDate, task.EndDate)
+	var rows *sqlx.Rows
+
+	if task.ArchiveType == MessageType {
+		rows, err = db.QueryxContext(ctx, lookupMsgs, task.Org.ID, task.StartDate, task.EndDate)
+	} else if task.ArchiveType == FlowRunType {
+		rows, err = db.QueryxContext(ctx, lookupFlowRuns, task.Org.ID, task.StartDate, task.EndDate)
+	}
 	if err != nil {
 		return err
 	}
@@ -292,14 +299,21 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archi
 	recordCount := 0
 	var msg, visibility string
 	for rows.Next() {
-		err = rows.Scan(&visibility, &msg)
-		if err != nil {
-			return err
-		}
+		if task.ArchiveType == MessageType {
+			err = rows.Scan(&visibility, &msg)
+			if err != nil {
+				return err
+			}
 
-		// skip over deleted rows
-		if visibility == "deleted" {
-			continue
+			// skip over deleted rows
+			if visibility == "deleted" {
+				continue
+			}
+		} else if task.ArchiveType == FlowRunType {
+			err = rows.Scan(&msg)
+			if err != nil {
+				return err
+			}
 		}
 
 		writer.WriteString(msg)
@@ -381,7 +395,7 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 	task.CreatedOn = time.Now()
 	task.IsPurged = false
 	task.BuildTime = int(time.Now().Sub(task.BuildStart) / time.Millisecond)
-
+	task.OrgID = task.Org.ID
 
 	rows, err := db.NamedQueryContext(ctx, insertArchive, task)
 	if err != nil {
@@ -414,4 +428,59 @@ func DeleteTemporaryArchive(task *ArchiveTask) error {
 	})
 	log.WithField("filename", task.Filename).Debug("Deleted temporary archive file")
 	return nil
+}
+
+func ExecuteArchiving(ctx context.Context, config *Config, db *sqlx.DB, s3Client *aws_s3.S3, org Org, archiveType ArchiveType) ([]ArchiveTask, error) {
+	log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
+
+	orgRecords := 0
+	orgStart := time.Now()
+
+	tasks, err := GetArchiveTasks(ctx, db, org, archiveType)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("error calculating tasks for type '%s'", archiveType))
+	}
+
+	for _, task := range tasks {
+		log = log.WithField("start_date", task.StartDate).WithField("end_date", task.EndDate).WithField("archive_type", task.ArchiveType)
+		log.Info("starting archive")
+		err := CreateMsgArchive(ctx, db, &task, config.TempDir)
+		if err != nil {
+			log.WithError(err).Error("error writing archive file")
+			continue
+		}
+
+		if config.UploadToS3 {
+			err = UploadArchive(ctx, s3Client, config.S3Bucket, &task)
+			if err != nil {
+				log.WithError(err).Error("error writing archive to s3")
+				continue
+			}
+		}
+
+		err = WriteArchiveToDB(ctx, db, &task)
+		if err != nil {
+			log.WithError(err).Error("error writing record to db")
+			continue
+		}
+
+		if config.DeleteAfterUpload == true {
+			err := DeleteTemporaryArchive(&task)
+			if err != nil {
+				log.WithError(err).Error("error deleting temporary file")
+				continue
+			}
+		}
+
+		log.WithField("id", task.ID).WithField("record_count", task.RecordCount).WithField("elapsed", time.Now().Sub(task.BuildStart)).Info("archive complete")
+		orgRecords += task.RecordCount
+	}
+
+	if len(tasks) > 0 {
+		elapsed := time.Now().Sub(orgStart)
+		rate := float32(orgRecords) / (float32(elapsed) / float32(time.Second))
+		log.WithField("elapsed", elapsed).WithField("records_per_second", int(rate)).Info("completed archival for org")
+	}
+
+	return tasks, nil
 }
