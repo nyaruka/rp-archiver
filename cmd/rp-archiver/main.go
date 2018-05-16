@@ -24,6 +24,10 @@ func main() {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro flows, msgs and sessions to S3", []string{"archiver.toml"})
 	loader.MustLoad()
 
+	if config.DeleteAfterUpload && !config.UploadToS3 {
+		log.Fatal("cannot delete archives and also not upload to s3")
+	}
+
 	// configure our logger
 	log.SetOutput(os.Stdout)
 	log.SetFormatter(&log.TextFormatter{})
@@ -91,19 +95,20 @@ func main() {
 		log.Fatal(dir_err)
 	}
 
+	now := time.Now()
 	for _, org := range orgs {
 		log := log.WithField("org", org.Name).WithField("org_id", org.ID)
 		orgStart := time.Now()
 		orgRecords := 0
 
-		tasks, err := archiver.GetArchiveTasks(ctx, db, org, archiver.MessageType)
+		tasks, err := archiver.GetArchiveTasks(ctx, db, now, org, archiver.MessageType)
 		if err != nil {
 			log.WithError(err).Error("error calculating message tasks")
 			continue
 		}
 
 		for _, task := range tasks {
-			log = log.WithField("start_date", task.StartDate).WithField("end_date", task.EndDate).WithField("archive_type", task.ArchiveType)
+			log = log.WithField("start_date", task.StartDate).WithField("period", task.Period).WithField("archive_type", task.ArchiveType)
 			log.Info("starting archive")
 			err := archiver.CreateMsgArchive(ctx, db, &task, config.TempDir)
 			if err != nil {
@@ -125,15 +130,15 @@ func main() {
 				continue
 			}
 
-			if config.DeleteAfterUpload == true {
-				err := archiver.DeleteTemporaryArchive(&task)
+			if config.DeleteAfterUpload {
+				err := archiver.DeleteArchiveFile(&task)
 				if err != nil {
 					log.WithError(err).Error("error deleting temporary file")
 					continue
 				}
 			}
 
-			log.WithField("id", task.ID).WithField("record_count", task.RecordCount).WithField("elapsed", time.Now().Sub(task.BuildStart)).Info("archive complete")
+			log.WithField("id", task.ID).WithField("record_count", task.RecordCount).WithField("elapsed", task.BuildTime).Info("archive complete")
 			orgRecords += task.RecordCount
 		}
 

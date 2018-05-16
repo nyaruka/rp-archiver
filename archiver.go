@@ -13,13 +13,13 @@ import (
 	"io/ioutil"
 	"time"
 
-	"errors"
+	"os"
+	"path/filepath"
+
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/rp-archiver/s3"
 	"github.com/sirupsen/logrus"
-	"os"
-	"path/filepath"
 )
 
 type ArchiveType string
@@ -30,67 +30,55 @@ const (
 	SessionType = ArchiveType("session")
 )
 
-type DBOrg struct {
+type ArchivePeriod string
+
+const (
+	Day   = ArchivePeriod("D")
+	Month = ArchivePeriod("M")
+)
+
+type Org struct {
 	ID         int       `db:"id"`
 	Name       string    `db:"name"`
 	CreatedOn  time.Time `db:"created_on"`
 	ActiveDays int
 }
 
-type DBArchive struct {
-	ID              int       `db:"id"`
-	ArchiveType     string    `db:"archive_type"`
-	OrgID           int       `db:"org_id"`
-	CreatedOn       time.Time `db:"created_on"`
-	ArchiveDuration int       `db:"archive_duration"`
+type Archive struct {
+	ID          int       `db:"id"`
+	ArchiveType string    `db:"archive_type"`
+	OrgID       int       `db:"org_id"`
+	CreatedOn   time.Time `db:"created_on"`
 
 	StartDate time.Time `db:"start_date"`
-	EndDate   time.Time `db:"end_date"`
+	Period    string    `db:"period"`
 
 	RecordCount int `db:"record_count"`
 
-	ArchiveSize int    `db:"archive_size"`
+	ArchiveSize int64  `db:"archive_size"`
 	ArchiveHash string `db:"archive_hash"`
 	ArchiveURL  string `db:"archive_url"`
 
 	IsPurged  bool `db:"is_purged"`
 	BuildTime int  `db:"build_time"`
+
+	Org         Org
+	ArchiveFile string
 }
 
-type ArchiveTask struct {
-	Org         DBOrg
-	ArchiveType ArchiveType
-	StartDate   time.Time
-	EndDate     time.Time
+const lookupActiveOrgs = `SELECT id, name, created_on FROM orgs_org WHERE is_active = TRUE order by id`
 
-	ID int
-
-	RecordCount int
-	Filename    string
-	FileSize    int64
-	FileHash    string
-	URL         string
-
-	BuildStart time.Time
-}
-
-func addMonth(t time.Time) time.Time {
-	monthLater := t.Add(time.Hour * 24 * 31)
-	return time.Date(monthLater.Year(), monthLater.Month(), 1, 0, 0, 0, 0, time.UTC)
-}
-
-const lookupActiveOrgs = `SELECT id, name, created_on FROM orgs_org WHERE is_active = TRUE`
-
-func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]DBOrg, error) {
+// GetActiveOrgs returns the active organizations sorted by id
+func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 	rows, err := db.QueryxContext(ctx, lookupActiveOrgs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	orgs := make([]DBOrg, 0, 10)
+	orgs := make([]Org, 0, 10)
 	for rows.Next() {
-		org := DBOrg{ActiveDays: 90}
+		org := Org{ActiveDays: 90}
 		err = rows.StructScan(&org)
 		if err != nil {
 			return nil, err
@@ -101,35 +89,53 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]DBOrg, error) {
 	return orgs, nil
 }
 
-const lookupLastArchive = `SELECT start_date, end_date FROM archives_archive WHERE org_id = $1 AND archive_type = $2 ORDER BY end_date DESC LIMIT 1`
+const lookupOrgArchives = `SELECT start_date, archive_type FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND period = 'D' ORDER BY start_date asc`
 
-func GetArchiveTasks(ctx context.Context, db *sqlx.DB, org DBOrg, archiveType ArchiveType) ([]ArchiveTask, error) {
-	archive := DBArchive{}
-	err := db.GetContext(ctx, &archive, lookupLastArchive, org.ID, archiveType)
+// GetArchiveTasks calculates what archives need to be generated for the passed in org this is calculated per day
+func GetArchiveTasks(ctx context.Context, db *sqlx.DB, now time.Time, org Org, archiveType ArchiveType) ([]Archive, error) {
+	archives := []Archive{}
+	err := db.SelectContext(ctx, &archives, lookupOrgArchives, org.ID, archiveType)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
-	nextArchiveStart := time.Date(org.CreatedOn.Year(), org.CreatedOn.Month(), 1, 0, 0, 0, 0, time.UTC)
-	if err != sql.ErrNoRows {
-		nextArchiveStart = addMonth(archive.StartDate)
-	}
+	// our first archive would be active days from today
+	endDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Add(time.Hour * 24 * -time.Duration(org.ActiveDays))
+	orgUTC := org.CreatedOn.In(time.UTC)
+	startDate := time.Date(orgUTC.Year(), orgUTC.Month(), orgUTC.Day(), 0, 0, 0, 0, time.UTC)
 
-	// while our end date of our latest archive is farther away than our active days, create a new task
-	tasks := make([]ArchiveTask, 0, 1)
-	for time.Now().Sub(nextArchiveStart) > time.Hour*time.Duration(24)*time.Duration(org.ActiveDays) {
-		end := addMonth(nextArchiveStart)
+	tasks := make([]Archive, 0, 1)
+	currentArchiveIdx := 0
 
-		task := ArchiveTask{
-			Org:         org,
-			ArchiveType: archiveType,
-			StartDate:   nextArchiveStart,
-			EndDate:     end,
+	// walk forwards until we are after our end date
+	for !startDate.After(endDate) {
+		existing := false
+
+		// advance our current archive idx until we are on our start date or later
+		for currentArchiveIdx < len(archives) && archives[currentArchiveIdx].StartDate.Before(startDate) {
+			currentArchiveIdx++
 		}
-		tasks = append(tasks, task)
 
-		nextArchiveStart = end
+		// do we already have this archive?
+		if currentArchiveIdx < len(archives) && archives[currentArchiveIdx].StartDate.Equal(startDate) {
+			existing = true
+		}
+
+		// this archive doesn't exist yet, we'll create it
+		if !existing {
+			archive := Archive{
+				Org:         org,
+				OrgID:       org.ID,
+				StartDate:   startDate,
+				ArchiveType: string(archiveType),
+				Period:      string(Day),
+			}
+			tasks = append(tasks, archive)
+		}
+
+		startDate = startDate.Add(time.Hour * 24)
 	}
+
 	return tasks, nil
 }
 
@@ -171,7 +177,7 @@ select rec.visibility, row_to_json(rec) FROM (
 		ELSE NULL
 		END as visibility,
 	  text,
-	  (select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?);(.*)$') attachment) as attach_data) as attach_row) as attachments,
+	  (select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?):(.*)$') attachment) as attach_data) as attach_row) as attachments,
 	  labels_agg.data as labels,
 	  mm.created_on,
 	  sent_on
@@ -223,68 +229,50 @@ FROM (
 ) as rec;
 `
 
+// EnsureTempArchiveDirectory checks that we can write to our archive directory, creating it first if needbe
 func EnsureTempArchiveDirectory(ctx context.Context, path string) error {
 	if len(path) == 0 {
-		return errors.New("Path argument cannot be empty")
+		return fmt.Errorf("path argument cannot be empty")
 	}
 
 	// check if path is a directory we can write to
-	fileinfo, err := os.Stat(path)
-
+	fileInfo, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		// try to create the directory
-		err := os.MkdirAll(path, 0700)
-
-		if err != nil {
-			return err
-		}
-		// created the directory
-		return nil
-
+		return os.MkdirAll(path, 0700)
 	} else if err != nil {
 		return err
 	}
 
 	// is path a directory
-	if !fileinfo.IsDir() {
-		return errors.New(fmt.Sprintf("Path '%s' is not a directory", path))
+	if !fileInfo.IsDir() {
+		return fmt.Errorf("path '%s' is not a directory", path)
 	}
 
-	var test_file_path string = filepath.Join(path, ".test_file")
-	test_file, err := os.Create(test_file_path)
-	defer test_file.Close()
+	testFilePath := filepath.Join(path, ".test_file")
+	testFile, err := os.Create(testFilePath)
+	defer testFile.Close()
 
 	if err != nil {
-		return errors.New(fmt.Sprintf("Directory '%s' is not writable for the user", path))
+		return fmt.Errorf("directory '%s' is not writable", path)
 	}
 
-	err = os.Remove(test_file_path)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	err = os.Remove(testFilePath)
+	return err
 }
 
-func generateArchiveFilename(task *ArchiveTask) string {
-	filename := fmt.Sprintf("%s_%d_%d%02d_%d%02d_", task.ArchiveType, task.Org.ID, task.StartDate.Year(), task.StartDate.Month(), task.EndDate.Year(), task.EndDate.Month())
-
-	return filename
-}
-
-func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archive_path string) error {
-	task.BuildStart = time.Now()
+// CreateMsgArchive is responsible for writing an archive file for the passed in archive from our database
+func CreateMsgArchive(ctx context.Context, db *sqlx.DB, archive *Archive, archivePath string) error {
+	start := time.Now()
 
 	log := logrus.WithFields(logrus.Fields{
-		"org_id":       task.Org.ID,
-		"archive_type": task.ArchiveType,
-		"start_date":   task.StartDate,
-		"end_date":     task.EndDate,
+		"org_id":       archive.Org.ID,
+		"archive_type": archive.ArchiveType,
+		"start_date":   archive.StartDate,
+		"period":       archive.Period,
 	})
 
-	filename := generateArchiveFilename(task)
-	file, err := ioutil.TempFile(archive_path, filename)
+	filename := fmt.Sprintf("%s_%d_%s%d%02d%02d", archive.ArchiveType, archive.Org.ID, archive.Period, archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day())
+	file, err := ioutil.TempFile(archivePath, filename)
 	if err != nil {
 		return err
 	}
@@ -295,7 +283,8 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archi
 
 	log.WithField("filename", file.Name()).Debug("creating new archive file")
 
-	rows, err := db.QueryxContext(ctx, lookupMsgs, task.Org.ID, task.StartDate, task.EndDate)
+	endDate := archive.StartDate.Add(time.Hour * 24)
+	rows, err := db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, endDate)
 	if err != nil {
 		return err
 	}
@@ -319,11 +308,11 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archi
 		recordCount++
 
 		if recordCount%100000 == 0 {
-			log.WithField("filename", file.Name()).WithField("record_count", recordCount).WithField("elapsed", time.Now().Sub(task.BuildStart)).Debug("writing archive file")
+			log.WithField("filename", file.Name()).WithField("record_count", recordCount).WithField("elapsed", time.Now().Sub(start)).Debug("writing archive file")
 		}
 	}
 
-	task.Filename = file.Name()
+	archive.ArchiveFile = file.Name()
 	err = writer.Flush()
 	if err != nil {
 		return err
@@ -335,87 +324,74 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archi
 	}
 
 	// calculate our size and hash
-	task.FileHash = fmt.Sprintf("%x", hash.Sum(nil))
+	archive.ArchiveHash = fmt.Sprintf("%x", hash.Sum(nil))
 	stat, err := file.Stat()
 	if err != nil {
 		return err
 	}
-	task.FileSize = stat.Size()
-	task.RecordCount = recordCount
+	archive.ArchiveSize = stat.Size()
+	archive.RecordCount = recordCount
+	archive.BuildTime = int(time.Now().Sub(start) / time.Millisecond)
 
 	log.WithFields(logrus.Fields{
 		"record_count": recordCount,
 		"filename":     file.Name(),
-		"file_size":    task.FileSize,
-		"file_hash":    task.FileHash,
-		"elapsed":      time.Now().Sub(task.BuildStart),
+		"file_size":    archive.ArchiveSize,
+		"file_hash":    archive.ArchiveHash,
+		"elapsed":      time.Now().Sub(start),
 	}).Debug("completed writing archive file")
 	return nil
 }
 
-func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, task *ArchiveTask) error {
+func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, archive *Archive) error {
 	// s3 wants a base64 encoded hash instead of our hex encoded
-	hashBytes, _ := hex.DecodeString(task.FileHash)
+	hashBytes, _ := hex.DecodeString(archive.ArchiveHash)
 	hashBase64 := base64.StdEncoding.EncodeToString(hashBytes)
 
 	url, err := s3.PutS3File(
 		s3Client,
 		bucket,
-		fmt.Sprintf("/%d/%s_%d_%02d_%s.jsonl.gz", task.Org.ID, task.ArchiveType, task.StartDate.Year(), task.StartDate.Month(), task.FileHash),
+		fmt.Sprintf("/%d/%s_%d_%02d_%s.jsonl.gz", archive.Org.ID, archive.ArchiveType, archive.StartDate.Year(), archive.StartDate.Month(), archive.ArchiveHash),
 		"application/json",
 		"gzip",
-		task.Filename,
+		archive.ArchiveFile,
 		hashBase64,
 	)
 
 	if err == nil {
-		task.URL = url
+		archive.ArchiveURL = url
 		logrus.WithFields(logrus.Fields{
-			"org_id":       task.Org.ID,
-			"archive_type": task.ArchiveType,
-			"start_date":   task.StartDate,
-			"end_date":     task.EndDate,
-			"url":          task.URL,
-			"file_size":    task.FileSize,
-			"file_hash":    task.FileHash,
+			"org_id":       archive.Org.ID,
+			"archive_type": archive.ArchiveType,
+			"start_date":   archive.StartDate,
+			"period":       archive.Period,
+			"url":          archive.ArchiveURL,
+			"file_size":    archive.ArchiveSize,
+			"file_hash":    archive.ArchiveHash,
 		}).Debug("completed uploading archive file")
 	}
 	return err
 }
 
 const insertArchive = `
-INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, end_date, record_count, archive_size, archive_hash, archive_url, is_purged, build_time)
-              VALUES(:archive_type, :org_id, :created_on, :start_date, :end_date, :record_count, :archive_size, :archive_hash, :archive_url, :is_purged, :build_time)
+INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, archive_size, archive_hash, archive_url, is_purged, build_time)
+              VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :archive_size, :archive_hash, :archive_url, :is_purged, :build_time)
 RETURNING id
 `
 
-func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error {
-	dbArchive := DBArchive{
-		ArchiveType: string(task.ArchiveType),
-		OrgID:       task.Org.ID,
-		CreatedOn:   time.Now(),
+func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error {
+	archive.OrgID = archive.Org.ID
+	archive.CreatedOn = time.Now()
+	archive.IsPurged = false
 
-		StartDate: task.StartDate,
-		EndDate:   task.EndDate,
-
-		RecordCount: task.RecordCount,
-
-		ArchiveSize: int(task.FileSize),
-		ArchiveHash: task.FileHash,
-		ArchiveURL:  task.URL,
-
-		IsPurged:  false,
-		BuildTime: int(time.Now().Sub(task.BuildStart) / time.Millisecond),
-	}
-
-	rows, err := db.NamedQueryContext(ctx, insertArchive, dbArchive)
+	rows, err := db.NamedQueryContext(ctx, insertArchive, archive)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
 	rows.Next()
-	err = rows.Scan(&task.ID)
+	err = rows.Scan(&archive.ID)
 	if err != nil {
 		return err
 	}
@@ -423,20 +399,21 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error
 	return nil
 }
 
-func DeleteTemporaryArchive(task *ArchiveTask) error {
-	err := os.Remove(task.Filename)
+// DeleteArchiveFile removes our own disk archive file
+func DeleteArchiveFile(archive *Archive) error {
+	err := os.Remove(archive.ArchiveFile)
 
 	if err != nil {
 		return err
 	}
 
 	log := logrus.WithFields(logrus.Fields{
-		"org_id":        task.Org.ID,
-		"archive_type":  task.ArchiveType,
-		"start_date":    task.StartDate,
-		"end_date":      task.EndDate,
-		"db_archive_id": task.ID,
+		"org_id":        archive.Org.ID,
+		"archive_type":  archive.ArchiveType,
+		"start_date":    archive.StartDate,
+		"periond":       archive.Period,
+		"db_archive_id": archive.ID,
 	})
-	log.WithField("filename", task.Filename).Debug("Deleted temporary archive file")
+	log.WithField("filename", archive.ArchiveFile).Debug("deleted temporary archive file")
 	return nil
 }

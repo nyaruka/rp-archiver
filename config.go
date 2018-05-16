@@ -15,7 +15,7 @@ type Config struct {
 	AWSSecretAccessKey string `help:"the secret access key id to use when authenticating S3"`
 
 	TempDir           string `help:"directory where temporary archive files are written"`
-	DeleteAfterUpload bool   `help:"whether we should delete temporary archive file, defaults to true"`
+	DeleteAfterUpload bool   `help:"whether we should delete temporary archive file"`
 	UploadToS3        bool   `help:"whether we should upload archive to S3"`
 }
 
