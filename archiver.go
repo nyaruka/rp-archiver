@@ -343,6 +343,7 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, archive *Archive, archiv
 	return nil
 }
 
+// UploadArchive upload file to S3
 func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, archive *Archive) error {
 	// s3 wants a base64 encoded hash instead of our hex encoded
 	hashBytes, _ := hex.DecodeString(archive.ArchiveHash)
@@ -379,6 +380,7 @@ INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, perio
 RETURNING id
 `
 
+// WriteArchiveToDB write an archive to the Database
 func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error {
 	archive.OrgID = archive.Org.ID
 	archive.CreatedOn = time.Now()
