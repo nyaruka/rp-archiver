@@ -30,16 +30,17 @@ const (
 	SessionType = ArchiveType("session")
 )
 
-type DBOrg struct {
+type Org struct {
 	ID         int       `db:"id"`
 	Name       string    `db:"name"`
 	CreatedOn  time.Time `db:"created_on"`
 	ActiveDays int
 }
 
-type DBArchive struct {
-	ID              int       `db:"id"`
-	ArchiveType     string    `db:"archive_type"`
+type ArchiveTask struct {
+	ID          int         `db:"id"`
+	ArchiveType ArchiveType `db:"archive_type"`
+
 	OrgID           int       `db:"org_id"`
 	CreatedOn       time.Time `db:"created_on"`
 	ArchiveDuration int       `db:"archive_duration"`
@@ -47,29 +48,16 @@ type DBArchive struct {
 	StartDate time.Time `db:"start_date"`
 	EndDate   time.Time `db:"end_date"`
 
-	RecordCount int `db:"record_count"`
-
+	RecordCount int    `db:"record_count"`
 	ArchiveSize int    `db:"archive_size"`
 	ArchiveHash string `db:"archive_hash"`
 	ArchiveURL  string `db:"archive_url"`
 
 	IsPurged  bool `db:"is_purged"`
 	BuildTime int  `db:"build_time"`
-}
 
-type ArchiveTask struct {
-	Org         DBOrg
-	ArchiveType ArchiveType
-	StartDate   time.Time
-	EndDate     time.Time
-
-	ID int
-
-	RecordCount int
-	Filename    string
-	FileSize    int64
-	FileHash    string
-	URL         string
+	Org      Org
+	Filename string
 
 	BuildStart time.Time
 }
@@ -81,16 +69,16 @@ func addMonth(t time.Time) time.Time {
 
 const lookupActiveOrgs = `SELECT id, name, created_on FROM orgs_org WHERE is_active = TRUE`
 
-func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]DBOrg, error) {
+func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 	rows, err := db.QueryxContext(ctx, lookupActiveOrgs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	orgs := make([]DBOrg, 0, 10)
+	orgs := make([]Org, 0, 10)
 	for rows.Next() {
-		org := DBOrg{ActiveDays: 90}
+		org := Org{ActiveDays: 1}
 		err = rows.StructScan(&org)
 		if err != nil {
 			return nil, err
@@ -103,8 +91,8 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]DBOrg, error) {
 
 const lookupLastArchive = `SELECT start_date, end_date FROM archives_archive WHERE org_id = $1 AND archive_type = $2 ORDER BY end_date DESC LIMIT 1`
 
-func GetArchiveTasks(ctx context.Context, db *sqlx.DB, org DBOrg, archiveType ArchiveType) ([]ArchiveTask, error) {
-	archive := DBArchive{}
+func GetArchiveTasks(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]ArchiveTask, error) {
+	archive := ArchiveTask{}
 	err := db.GetContext(ctx, &archive, lookupLastArchive, org.ID, archiveType)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
@@ -335,19 +323,19 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archi
 	}
 
 	// calculate our size and hash
-	task.FileHash = fmt.Sprintf("%x", hash.Sum(nil))
+	task.ArchiveHash = fmt.Sprintf("%x", hash.Sum(nil))
 	stat, err := file.Stat()
 	if err != nil {
 		return err
 	}
-	task.FileSize = stat.Size()
+	task.ArchiveSize = int(stat.Size())
 	task.RecordCount = recordCount
 
 	log.WithFields(logrus.Fields{
 		"record_count": recordCount,
 		"filename":     file.Name(),
-		"file_size":    task.FileSize,
-		"file_hash":    task.FileHash,
+		"file_size":    task.ArchiveSize,
+		"file_hash":    task.ArchiveHash,
 		"elapsed":      time.Now().Sub(task.BuildStart),
 	}).Debug("completed writing archive file")
 	return nil
@@ -355,13 +343,13 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, task *ArchiveTask, archi
 
 func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, task *ArchiveTask) error {
 	// s3 wants a base64 encoded hash instead of our hex encoded
-	hashBytes, _ := hex.DecodeString(task.FileHash)
+	hashBytes, _ := hex.DecodeString(task.ArchiveHash)
 	hashBase64 := base64.StdEncoding.EncodeToString(hashBytes)
 
 	url, err := s3.PutS3File(
 		s3Client,
 		bucket,
-		fmt.Sprintf("/%d/%s_%d_%02d_%s.jsonl.gz", task.Org.ID, task.ArchiveType, task.StartDate.Year(), task.StartDate.Month(), task.FileHash),
+		fmt.Sprintf("/%d/%s_%d_%02d_%s.jsonl.gz", task.Org.ID, task.ArchiveType, task.StartDate.Year(), task.StartDate.Month(), task.ArchiveHash),
 		"application/json",
 		"gzip",
 		task.Filename,
@@ -369,15 +357,15 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, t
 	)
 
 	if err == nil {
-		task.URL = url
+		task.ArchiveURL = url
 		logrus.WithFields(logrus.Fields{
 			"org_id":       task.Org.ID,
 			"archive_type": task.ArchiveType,
 			"start_date":   task.StartDate,
 			"end_date":     task.EndDate,
-			"url":          task.URL,
-			"file_size":    task.FileSize,
-			"file_hash":    task.FileHash,
+			"url":          task.ArchiveURL,
+			"file_size":    task.ArchiveSize,
+			"file_hash":    task.ArchiveHash,
 		}).Debug("completed uploading archive file")
 	}
 	return err
@@ -390,25 +378,12 @@ RETURNING id
 `
 
 func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, task *ArchiveTask) error {
-	dbArchive := DBArchive{
-		ArchiveType: string(task.ArchiveType),
-		OrgID:       task.Org.ID,
-		CreatedOn:   time.Now(),
+	task.CreatedOn = time.Now()
+	task.IsPurged = false
+	task.BuildTime = int(time.Now().Sub(task.BuildStart) / time.Millisecond)
 
-		StartDate: task.StartDate,
-		EndDate:   task.EndDate,
 
-		RecordCount: task.RecordCount,
-
-		ArchiveSize: int(task.FileSize),
-		ArchiveHash: task.FileHash,
-		ArchiveURL:  task.URL,
-
-		IsPurged:  false,
-		BuildTime: int(time.Now().Sub(task.BuildStart) / time.Millisecond),
-	}
-
-	rows, err := db.NamedQueryContext(ctx, insertArchive, dbArchive)
+	rows, err := db.NamedQueryContext(ctx, insertArchive, task)
 	if err != nil {
 		return err
 	}
