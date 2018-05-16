@@ -6,6 +6,9 @@ addons:
 go:
 - "1.10"
 
+before_script:
+  - psql -U postgres -c "CREATE DATABASE archiver_test;"
+
 script:
 - go test -p=1 -coverprofile=coverage.text -covermode=atomic github.com/nyaruka/rp-archiver/...
 

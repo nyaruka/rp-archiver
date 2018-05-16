@@ -1,0 +1,178 @@
+DROP TABLE IF EXISTS orgs_org CASCADE;
+CREATE TABLE orgs_org (
+    id serial primary key,
+    name character varying(255) NOT NULL,
+    is_anon boolean NOT NULL,
+    is_active boolean NOT NULL,
+    created_on timestamp with time zone NOT NULL
+);
+
+DROP TABLE IF EXISTS channels_channel CASCADE;
+CREATE TABLE channels_channel (
+    id serial primary key,
+    name character varying(255) NOT NULL,
+    uuid character varying(36) NOT NULL,
+    org_id integer references orgs_org(id) on delete cascade
+);
+
+DROP TABLE IF EXISTS contacts_contact CASCADE;
+CREATE TABLE contacts_contact (
+    id serial primary key,
+    is_active boolean NOT NULL,
+    created_by_id integer NOT NULL,
+    created_on timestamp with time zone NOT NULL,
+    modified_by_id integer NOT NULL,
+    modified_on timestamp with time zone NOT NULL,
+    org_id integer NOT NULL references orgs_org(id) on delete cascade,
+    is_blocked boolean NOT NULL,
+    name character varying(128),
+    is_test boolean NOT NULL,
+    language character varying(3),
+    uuid character varying(36) NOT NULL,
+    is_stopped boolean NOT NULL,
+    fields jsonb
+);
+
+DROP TABLE IF EXISTS contacts_contacturn CASCADE;
+CREATE TABLE contacts_contacturn (
+    id serial primary key,
+    contact_id integer,
+    scheme character varying(128) NOT NULL,
+    org_id integer NOT NULL,
+    priority integer NOT NULL,
+    path character varying(255) NOT NULL,
+    channel_id integer,
+    auth text,
+    display character varying(255),
+    identity character varying(255) NOT NULL
+);
+
+DROP TABLE IF EXISTS contacts_contactgroup CASCADE;
+CREATE TABLE contacts_contactgroup (
+    id serial primary key,
+    uuid character varying(36) NOT NULL,
+    name character varying(128) NOT NULL
+);
+
+DROP TABLE IF EXISTS contacts_contactgroup_contacts CASCADE;
+CREATE TABLE contacts_contactgroup_contacts (
+    id serial primary key,
+    contactgroup_id integer NOT NULL,
+    contact_id integer NOT NULL
+);
+
+DROP TABLE IF EXISTS msgs_msg CASCADE;
+CREATE TABLE msgs_msg (
+    id serial primary key,
+    broadcast_id integer NULL,
+    uuid character varying(36) NULL,
+    text text NOT NULL,
+    high_priority boolean NULL,
+    created_on timestamp with time zone NOT NULL,
+    modified_on timestamp with time zone,
+    sent_on timestamp with time zone,
+    queued_on timestamp with time zone,
+    direction character varying(1) NOT NULL,
+    status character varying(1) NOT NULL,
+    visibility character varying(1) NOT NULL,
+    msg_type character varying(1),
+    msg_count integer NOT NULL,
+    error_count integer NOT NULL,
+    next_attempt timestamp with time zone NOT NULL,
+    external_id character varying(255),
+    attachments character varying(255)[],
+    channel_id integer references channels_channel(id) on delete cascade,
+    contact_id integer NOT NULL references contacts_contact(id) on delete cascade,
+    contact_urn_id integer NOT NULL references contacts_contacturn(id) on delete cascade,
+    org_id integer NOT NULL references orgs_org(id) on delete cascade,
+    metadata text,
+    topup_id integer
+);
+
+DROP TABLE IF EXISTS msgs_label CASCADE;
+CREATE TABLE msgs_label (
+    id serial primary key,
+    uuid character varying(36) NULL,
+    name character varying(64)
+);
+
+DROP TABLE IF EXISTS msgs_msg_labels CASCADE;
+CREATE TABLE msgs_msg_labels (
+    id serial primary key,
+    msg_id integer NOT NULL,
+    label_id integer NOT NULL
+);
+
+DROP TABLE IF EXISTS archives_archive CASCADE;
+CREATE TABLE archives_archive (
+    id serial primary key,
+    archive_type varchar(16) NOT NULL, 
+    created_on timestamp with time zone NOT NULL, 
+    start_date date NOT NULL, 
+    period varchar(1) NOT NULL, 
+    record_count integer NOT NULL, 
+    archive_size bigint NOT NULL, 
+    archive_hash text NOT NULL, 
+    archive_url varchar(200) NOT NULL, 
+    is_purged boolean NOT NULL, 
+    build_time integer NOT NULL, 
+    org_id integer NOT NULL
+);
+
+INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES
+(1, 'Org 1', TRUE, FALSE, '2017-11-10 21:11:59.890662+00'),
+(2, 'Org 2', TRUE, FALSE, '2017-08-10 21:11:59.890662+00'),
+(3, 'Org 3', TRUE, TRUE, '2017-08-10 21:11:59.890662+00'),
+(4, 'Org 4', FALSE, TRUE, '2017-08-10 21:11:59.890662+00');
+
+INSERT INTO channels_channel(id, uuid, name, org_id) VALUES
+(1, '8c1223c3-bd43-466b-81f1-e7266a9f4465', 'Channel 1', 1),
+(2, '60f2ed5b-05f2-4156-9ff0-e44e90da1b85', 'Channel 2', 2),
+(3, 'b79e0054-068f-4928-a5f4-339d10a7ad5a', 'Channel 3', 3);
+
+INSERT INTO archives_archive(id, archive_type, created_on, start_date, period, record_count, archive_size, archive_hash, archive_url, is_purged, build_time, org_id) VALUES 
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 3),
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-08-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 3);
+
+INSERT INTO contacts_contact(id, is_active, created_by_id, created_on, modified_by_id, modified_on, org_id, is_blocked, name, is_test, language, uuid, is_stopped) VALUES
+(1,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 1, FALSE, NULL, FALSE, 'eng', 'c7a2dd87-a80e-420b-8431-ca48d422e924', FALSE),
+(2,  TRUE, -1, '2015-03-25 17:15:12.982168+00', -1, '2015-03-25 17:15:12.982168+00', 1, FALSE, NULL, TRUE, 'fra', '1ad43adc-c4fc-4244-8b3d-a938b8eba57a', FALSE),
+(3,  TRUE, -1, '2015-03-26 10:07:14.054521+00', -1, '2015-03-26 10:07:14.054521+00', 1, FALSE, NULL, FALSE, NULL, '7a6606c7-ff41-4203-aa98-454a10d37209', TRUE),
+(4,  TRUE, -1, '2015-03-26 13:04:58.699648+00', -1, '2015-03-26 13:04:58.699648+00', 1, TRUE, NULL, FALSE, NULL, '29b45297-15ad-4061-a7d4-e0b33d121541', FALSE),
+(5,  TRUE, -1, '2015-03-27 07:39:28.955051+00', -1, '2015-03-27 07:39:28.955051+00', 1, FALSE, 'John Doe', FALSE, NULL, '51762bba-01a2-4c4e-b5cd-b182d0405cd4', FALSE),
+(6,  TRUE, -1, '2015-10-30 19:42:27.001837+00', -1, '2015-10-30 19:42:27.001837+00', 2, FALSE, 'Ajodinabiff Dane', FALSE, NULL, '3e814add-e614-41f7-8b5d-a07f670a698f', FALSE),
+(7,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 2, FALSE, 'Joanne Stone', FALSE, NULL, '7051dff0-0a27-49d7-af1f-4494239139e6', FALSE),
+(8,  TRUE, -1, '2015-03-27 13:39:43.995812+00', -1, '2015-03-27 13:39:43.995812+00', 2, FALSE, NULL, FALSE, NULL, 'b46f6e18-95b4-4984-9926-dded047f4eb3', FALSE),
+(9,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 2, FALSE, NULL, FALSE, NULL, '9195c8b7-6138-4d84-ac56-5192cc3d8ceb', FALSE),
+(10, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 2, FALSE, NULL, FALSE, NULL, '2b8bd28d-43e0-4c34-a4bb-0f10b11fdb8a', FALSE);
+
+INSERT INTO contacts_contacturn(id, contact_id, scheme, org_id, priority, path, display, identity) VALUES
+(1, 1, 'tel', 1, 50, '+12067791111', NULL, 'tel:+12067791111'),
+(2, 1, 'tel', 1, 50, '+12067792222', NULL, 'tel:+12067792222'),
+(3, 2, 'tel', 1, 50, '+12067793333', NULL, 'tel:+12067793333'),
+(4, 3, 'tel', 1, 50, '+12067794444', NULL, 'tel:+12067794444'),
+(5, 4, 'tel', 1, 50, '+12067795555', NULL, 'tel:+12067795555'),
+(6, 5, 'tel', 1, 50, '+12060000556', NULL, 'tel:+12067796666'),
+(7, 6, 'tel', 2, 50, '+12060005577', NULL, 'tel:+12067797777'),
+(8, 7, 'tel', 2, 50, '+12067798888', NULL, 'tel:+12067798888'),
+(9, 8, 'viber', 2, 90, 'viberpath==', NULL, 'viber:viberpath=='),
+(10, 9, 'facebook', 2, 90, 1000001, 'funguy', 'facebook:1000001'),
+(11, 10, 'twitterid', 2, 90, 1000001, 'fungal', 'twitterid:1000001'),
+(12, 11, 'whatsapp',  2, 90, 1000003, NULL, 'whatsapp:1000003');
+
+INSERT INTO contacts_contactgroup(id, uuid, name) VALUES
+(1, '4ea0f313-2f62-4e57-bdf0-232b5191dd57', 'Group 1'),
+(2, '4c016340-468d-4675-a974-15cb7a45a5ab', 'Group 2'),
+(3, 'e61b5bf7-8ddf-4e05-b0a8-4c46a6b68cff', 'Group 3'),
+(4, '529bac39-550a-4d6f-817c-1833f3449007', 'Group 4');
+
+INSERT INTO contacts_contactgroup_contacts(id, contact_id, contactgroup_id) VALUES
+(1, 1, 1),
+(2, 2, 1),
+(3, 1, 4),
+(4, 3, 4);
+
+INSERT INTO msgs_msg(id, broadcast_id, uuid, text, created_on, sent_on, direction, status, visibility, msg_type, attachments, channel_id, contact_id, contact_urn_id, org_id, msg_count, error_count, next_attempt) VALUES
+(1, NULL, '2f969340-704a-4aa2-a1bd-2f832a21d257', 'message 1', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
+(2, NULL, 'abe87ac1-015c-4803-be29-1e89509fe682', 'message 2', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'D', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
+(3, NULL, 'a7e83a22-a6ff-4e18-82d0-19545640ccba', 'message 3', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'O', 'H', 'V', 'I', '{"image/png:https://foo.bar/image1.png", "image/png:https://foo.bar/image2.png"}', 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00');
