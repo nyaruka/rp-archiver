@@ -110,7 +110,7 @@ func main() {
 		for _, task := range tasks {
 			log = log.WithField("start_date", task.StartDate).WithField("period", task.Period).WithField("archive_type", task.ArchiveType)
 			log.Info("starting archive")
-			err := archiver.CreateMsgArchive(ctx, db, &task, config.TempDir)
+			err := archiver.CreateArchiveFile(ctx, db, &task, config.TempDir)
 			if err != nil {
 				log.WithError(err).Error("error writing archive file")
 				continue

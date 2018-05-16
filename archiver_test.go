@@ -74,7 +74,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	task := tasks[0]
 
 	// build our first task, should have no messages
-	err = CreateMsgArchive(ctx, db, &task, "/tmp")
+	err = CreateArchiveFile(ctx, db, &task, "/tmp")
 	assert.NoError(t, err)
 
 	// should have no records and be an empty gzip file
@@ -86,7 +86,7 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// build our second task, should have a single message
 	task = tasks[2]
-	err = CreateMsgArchive(ctx, db, &task, "/tmp")
+	err = CreateArchiveFile(ctx, db, &task, "/tmp")
 	assert.NoError(t, err)
 
 	// should have two records, second will have attachments

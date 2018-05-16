@@ -45,13 +45,13 @@ type Org struct {
 }
 
 type Archive struct {
-	ID          int       `db:"id"`
-	ArchiveType string    `db:"archive_type"`
-	OrgID       int       `db:"org_id"`
-	CreatedOn   time.Time `db:"created_on"`
+	ID          int         `db:"id"`
+	ArchiveType ArchiveType `db:"archive_type"`
+	OrgID       int         `db:"org_id"`
+	CreatedOn   time.Time   `db:"created_on"`
 
-	StartDate time.Time `db:"start_date"`
-	Period    string    `db:"period"`
+	StartDate time.Time     `db:"start_date"`
+	Period    ArchivePeriod `db:"period"`
 
 	RecordCount int `db:"record_count"`
 
@@ -127,8 +127,8 @@ func GetArchiveTasks(ctx context.Context, db *sqlx.DB, now time.Time, org Org, a
 				Org:         org,
 				OrgID:       org.ID,
 				StartDate:   startDate,
-				ArchiveType: string(archiveType),
-				Period:      string(Day),
+				ArchiveType: archiveType,
+				Period:      Day,
 			}
 			tasks = append(tasks, archive)
 		}
@@ -260,8 +260,8 @@ func EnsureTempArchiveDirectory(ctx context.Context, path string) error {
 	return err
 }
 
-// CreateMsgArchive is responsible for writing an archive file for the passed in archive from our database
-func CreateMsgArchive(ctx context.Context, db *sqlx.DB, archive *Archive, archivePath string) error {
+// CreateArchiveFile is responsible for writing an archive file for the passed in archive from our database
+func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archivePath string) error {
 	start := time.Now()
 
 	log := logrus.WithFields(logrus.Fields{
@@ -271,7 +271,7 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, archive *Archive, archiv
 		"period":       archive.Period,
 	})
 
-	filename := fmt.Sprintf("%s_%d_%s%d%02d%02d", archive.ArchiveType, archive.Org.ID, archive.Period, archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day())
+	filename := fmt.Sprintf("%s_%d_%s%d%02d%02d_", archive.ArchiveType, archive.Org.ID, archive.Period, archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day())
 	file, err := ioutil.TempFile(archivePath, filename)
 	if err != nil {
 		return err
@@ -284,26 +284,43 @@ func CreateMsgArchive(ctx context.Context, db *sqlx.DB, archive *Archive, archiv
 	log.WithField("filename", file.Name()).Debug("creating new archive file")
 
 	endDate := archive.StartDate.Add(time.Hour * 24)
-	rows, err := db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, endDate)
+	var rows *sqlx.Rows
+	if archive.ArchiveType == MessageType {
+		rows, err = db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, endDate)
+	} else if archive.ArchiveType == FlowRunType {
+		rows, err = db.QueryxContext(ctx, lookupFlowRuns, archive.Org.ID, archive.StartDate, endDate)
+	}
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
 	recordCount := 0
-	var msg, visibility string
+	var record, visibility string
 	for rows.Next() {
-		err = rows.Scan(&visibility, &msg)
+		err = rows.Scan(&visibility, &record)
 		if err != nil {
 			return err
 		}
 
-		// skip over deleted rows
-		if visibility == "deleted" {
-			continue
+		if archive.ArchiveType == MessageType {
+			err = rows.Scan(&visibility, &record)
+			if err != nil {
+				return err
+			}
+
+			// skip over deleted rows
+			if visibility == "deleted" {
+				continue
+			}
+		} else if archive.ArchiveType == FlowRunType {
+			err = rows.Scan(&record)
+			if err != nil {
+				return err
+			}
 		}
 
-		writer.WriteString(msg)
+		writer.WriteString(record)
 		writer.WriteString("\n")
 		recordCount++
 
