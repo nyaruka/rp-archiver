@@ -179,8 +179,8 @@ select rec.visibility, row_to_json(rec) FROM (
 	  text,
 	  (select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?):(.*)$') attachment) as attach_data) as attach_row) as attachments,
 	  labels_agg.data as labels,
-	  mm.created_on,
-	  sent_on
+	  mm.created_on AT TIME ZONE 'UTC' created_on,
+	  sent_on AT TIME ZONE 'UTC' sent_on
 	from msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
 	  JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
