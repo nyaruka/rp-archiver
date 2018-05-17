@@ -176,3 +176,14 @@ INSERT INTO msgs_msg(id, broadcast_id, uuid, text, created_on, sent_on, directio
 (1, NULL, '2f969340-704a-4aa2-a1bd-2f832a21d257', 'message 1', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
 (2, NULL, 'abe87ac1-015c-4803-be29-1e89509fe682', 'message 2', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'D', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
 (3, NULL, 'a7e83a22-a6ff-4e18-82d0-19545640ccba', 'message 3', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'O', 'H', 'V', 'I', '{"image/png:https://foo.bar/image1.png", "image/png:https://foo.bar/image2.png"}', 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00');
+
+INSERT INTO msgs_label(id, uuid, name) VALUES
+(1, '1d9e3188-b74b-4ae0-a166-0de31aedb34a', 'Label 1'),
+(2, 'c5a69101-8dc3-444f-8b0b-5ab816e46eec', 'Label 2'),
+(3, '9e13d3b6-1ffa-406e-b66b-5cebe6738488', 'Label 3');
+
+INSERT INTO msgs_msg_labels(id, msg_id, label_id) VALUES
+(1, 1, 1),
+(2, 1, 2),
+(3, 2, 2),
+(4, 3, 2);

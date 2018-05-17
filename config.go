@@ -1,5 +1,6 @@
 package archiver
 
+// Config is our top level configuration object
 type Config struct {
 	DB        string `help:"the connection string for our database"`
 	LogLevel  string `help:"the log level, one of error, warn, info, debug"`
@@ -22,6 +23,7 @@ type Config struct {
 	ArchiveRuns     bool `help:"whether we should archive runs"`
 }
 
+// NewConfig returns a new default configuration object
 func NewConfig() *Config {
 	config := Config{
 		DB:       "postgres://localhost/temba?sslmode=disable",
