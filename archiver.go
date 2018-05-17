@@ -22,21 +22,32 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// ArchiveType is the type for the archives
 type ArchiveType string
 
 const (
-	RunType     = ArchiveType("run")
+	// RunType for run archives
+	RunType = ArchiveType("run")
+
+	// MessageType for message archives
 	MessageType = ArchiveType("message")
+
+	// SessionType for session archives
 	SessionType = ArchiveType("session")
 )
 
+// ArchivePeriod is the period of data in the archive
 type ArchivePeriod string
 
 const (
-	Day   = ArchivePeriod("D")
+	// Day id the period of a day (24 hours) from archive start date
+	Day = ArchivePeriod("D")
+
+	// Month is the period of a month from archive start date
 	Month = ArchivePeriod("M")
 )
 
+// Org represents the model for an org
 type Org struct {
 	ID         int       `db:"id"`
 	Name       string    `db:"name"`
@@ -44,6 +55,7 @@ type Org struct {
 	ActiveDays int
 }
 
+// Archive represents the model for an archive
 type Archive struct {
 	ID          int         `db:"id"`
 	ArchiveType ArchiveType `db:"archive_type"`
