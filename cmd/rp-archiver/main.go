@@ -5,17 +5,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	aws_s3 "github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/evalphobia/logrus_sentry"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
 	archiver "github.com/nyaruka/rp-archiver"
-	"github.com/nyaruka/rp-archiver/s3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -56,30 +51,11 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	// create our s3 client
-	s3Session, err := session.NewSession(&aws.Config{
-		Credentials:      credentials.NewStaticCredentials(config.AWSAccessKeyID, config.AWSSecretAccessKey, ""),
-		Endpoint:         aws.String(config.S3Endpoint),
-		Region:           aws.String(config.S3Region),
-		DisableSSL:       aws.Bool(config.S3DisableSSL),
-		S3ForcePathStyle: aws.Bool(config.S3ForcePathStyle),
-	})
-	if err != nil {
-		logrus.WithError(err).Fatal("error creating s3 client")
-	}
-	s3Session.Handlers.Send.PushFront(func(r *request.Request) {
-		logrus.WithField("headers", r.HTTPRequest.Header).WithField("service", r.ClientInfo.ServiceName).WithField("operation", r.Operation).WithField("params", r.Params).Debug("making aws request")
-	})
-
-	s3Client := aws_s3.New(s3Session)
-
+	var s3Client s3iface.S3API
 	if config.UploadToS3 {
-		// test out our S3 credentials
-		err = s3.TestS3(s3Client, config.S3Bucket)
+		s3Client, err = archiver.NewS3Client(config)
 		if err != nil {
-			logrus.WithError(err).Fatal("s3 bucket not reachable")
-		} else {
-			logrus.Info("s3 bucket ok")
+			logrus.WithError(err).Fatal("unable to initialize s3 client")
 		}
 	}
 

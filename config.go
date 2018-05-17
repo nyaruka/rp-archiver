@@ -26,19 +26,19 @@ type Config struct {
 // NewConfig returns a new default configuration object
 func NewConfig() *Config {
 	config := Config{
-		DB:       "postgres://localhost/temba?sslmode=disable",
+		DB:       "postgres://localhost/archiver_test?sslmode=disable",
 		LogLevel: "info",
 
 		S3Endpoint:       "https://s3.amazonaws.com",
 		S3Region:         "us-east-1",
-		S3Bucket:         "dl-temba-archives",
+		S3Bucket:         "dl-archiver-test",
 		S3DisableSSL:     false,
 		S3ForcePathStyle: false,
 
 		AWSAccessKeyID:     "missing_aws_access_key_id",
 		AWSSecretAccessKey: "missing_aws_secret_access_key",
 
-		TempDir:           "/tmp/archiver",
+		TempDir:           "/tmp",
 		DeleteAfterUpload: true,
 		UploadToS3:        true,
 
