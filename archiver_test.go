@@ -91,8 +91,8 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have two records, second will have attachments
 	assert.Equal(t, 2, task.RecordCount)
-	assert.Equal(t, int64(365), task.ArchiveSize)
-	assert.Equal(t, "cc67ae0d1edb9caa4c8c56b3d4de58ee", task.ArchiveHash)
+	assert.Equal(t, int64(442), task.ArchiveSize)
+	assert.Equal(t, "7c39eb3244c34841cf5ca0382519142e", task.ArchiveHash)
 
 	DeleteArchiveFile(task)
 	_, err = os.Stat(task.ArchiveFile)
@@ -149,6 +149,6 @@ func TestArchiveOrg(t *testing.T) {
 	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[0].ArchiveHash)
 
 	assert.Equal(t, 2, archives[2].RecordCount)
-	assert.Equal(t, int64(365), archives[2].ArchiveSize)
-	assert.Equal(t, "cc67ae0d1edb9caa4c8c56b3d4de58ee", archives[2].ArchiveHash)
+	assert.Equal(t, int64(442), archives[2].ArchiveSize)
+	assert.Equal(t, "7c39eb3244c34841cf5ca0382519142e", archives[2].ArchiveHash)
 }
