@@ -283,7 +283,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		"period":       archive.Period,
 	})
 
-	filename := fmt.Sprintf("%s_%d_%s%d%02d%02d_", archive.ArchiveType, archive.Org.ID, archive.Period, archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day())
+	filename := fmt.Sprintf("%s_%d_%s_%d_%02d_%02d_", archive.ArchiveType, archive.Org.ID, archive.Period, archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day())
 	file, err := ioutil.TempFile(archivePath, filename)
 	if err != nil {
 		return err
@@ -381,13 +381,13 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, a
 	archivePath := ""
 	if archive.Period == Day {
 		archivePath = fmt.Sprintf(
-			"/%d/%s_%s%d%02d%02d_%s.jsonl.gz",
+			"/%d/%s_%s_%d_%02d_%02d_%s.jsonl.gz",
 			archive.Org.ID, archive.ArchiveType, archive.Period,
 			archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day(),
 			archive.ArchiveHash)
 	} else {
 		archivePath = fmt.Sprintf(
-			"/%d/%s_%s%d%02d_%s.jsonl.gz",
+			"/%d/%s_%s_%d_%02d_%s.jsonl.gz",
 			archive.Org.ID, archive.ArchiveType, archive.Period,
 			archive.StartDate.Year(), archive.StartDate.Month(),
 			archive.ArchiveHash)
