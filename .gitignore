@@ -5,6 +5,7 @@
 *.so
 *.dylib
 *~
+.vscode
 
 *.py
 *.pyc
