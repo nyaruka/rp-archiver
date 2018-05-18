@@ -16,7 +16,7 @@ import (
 
 func main() {
 	config := archiver.NewConfig()
-	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro flows, msgs and sessions to S3", []string{"archiver.toml"})
+	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", []string{"archiver.toml"})
 	loader.MustLoad()
 
 	if config.DeleteAfterUpload && !config.UploadToS3 {
@@ -50,6 +50,7 @@ func main() {
 	if err != nil {
 		logrus.Fatal(err)
 	}
+	db.SetMaxOpenConns(1)
 
 	var s3Client s3iface.S3API
 	if config.UploadToS3 {

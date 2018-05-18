@@ -103,6 +103,30 @@ CREATE TABLE msgs_msg_labels (
     label_id integer NOT NULL
 );
 
+DROP TABLE IF EXISTS flows_flow CASCADE;
+CREATE TABLE flows_flow (
+    id serial primary key,
+    uuid character varying(36) NOT NULL,
+    name character varying(128) NOT NULL
+);
+
+DROP TABLE IF EXISTS flows_flowrun CASCADE;
+CREATE TABLE flows_flowrun (
+    id serial primary key,
+    uuid character varying(36) NOT NULL,
+    responded boolean NOT NULL,
+    contact_id integer NOT NULL references contacts_contact(id) on delete cascade,
+    flow_id integer NOT NULL references flows_flow(id) on delete cascade,
+    org_id integer NOT NULL references orgs_org(id) on delete cascade,
+    results text NOT NULL,
+    path text NOT NULL,
+    events jsonb NOT NULL,
+    created_on timestamp with time zone NOT NULL,
+    modified_on timestamp with time zone NOT NULL,
+    exited_on timestamp with time zone NULL,
+    exit_type varchar(1) NULL
+);
+
 DROP TABLE IF EXISTS archives_archive CASCADE;
 CREATE TABLE archives_archive (
     id serial primary key,
@@ -133,7 +157,7 @@ INSERT INTO channels_channel(id, uuid, name, org_id) VALUES
 
 INSERT INTO archives_archive(id, archive_type, created_on, start_date, period, record_count, size, hash, url, is_purged, build_time, org_id) VALUES 
 (NEXTVAL('archives_archive_id_seq'), 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 3),
-(NEXTVAL('archives_archive_id_seq'), 'message', '2017-08-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 3),
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 3),
 (NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-02 00:00:00.000000+00', '2017-09-01 00:00:00.000000+00', 'M', 0, 0, '', '', FALSE, 0, 3);
 
 INSERT INTO contacts_contact(id, is_active, created_by_id, created_on, modified_by_id, modified_on, org_id, is_blocked, name, is_test, language, uuid, is_stopped) VALUES
@@ -143,7 +167,7 @@ INSERT INTO contacts_contact(id, is_active, created_by_id, created_on, modified_
 (4,  TRUE, -1, '2015-03-26 13:04:58.699648+00', -1, '2015-03-26 13:04:58.699648+00', 1, TRUE, NULL, FALSE, NULL, '29b45297-15ad-4061-a7d4-e0b33d121541', FALSE),
 (5,  TRUE, -1, '2015-03-27 07:39:28.955051+00', -1, '2015-03-27 07:39:28.955051+00', 1, FALSE, 'John Doe', FALSE, NULL, '51762bba-01a2-4c4e-b5cd-b182d0405cd4', FALSE),
 (6,  TRUE, -1, '2015-10-30 19:42:27.001837+00', -1, '2015-10-30 19:42:27.001837+00', 2, FALSE, 'Ajodinabiff Dane', FALSE, NULL, '3e814add-e614-41f7-8b5d-a07f670a698f', FALSE),
-(7,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 2, FALSE, 'Joanne Stone', FALSE, NULL, '7051dff0-0a27-49d7-af1f-4494239139e6', FALSE),
+(7,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 3, FALSE, 'Joanne Stone', FALSE, NULL, '7051dff0-0a27-49d7-af1f-4494239139e6', FALSE),
 (8,  TRUE, -1, '2015-03-27 13:39:43.995812+00', -1, '2015-03-27 13:39:43.995812+00', 2, FALSE, NULL, FALSE, NULL, 'b46f6e18-95b4-4984-9926-dded047f4eb3', FALSE),
 (9,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 2, FALSE, NULL, FALSE, NULL, '9195c8b7-6138-4d84-ac56-5192cc3d8ceb', FALSE),
 (10, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 2, FALSE, NULL, FALSE, NULL, '2b8bd28d-43e0-4c34-a4bb-0f10b11fdb8a', FALSE);
@@ -156,7 +180,7 @@ INSERT INTO contacts_contacturn(id, contact_id, scheme, org_id, priority, path, 
 (5, 4, 'tel', 1, 50, '+12067795555', NULL, 'tel:+12067795555'),
 (6, 5, 'tel', 1, 50, '+12060000556', NULL, 'tel:+12067796666'),
 (7, 6, 'tel', 2, 50, '+12060005577', NULL, 'tel:+12067797777'),
-(8, 7, 'tel', 2, 50, '+12067798888', NULL, 'tel:+12067798888'),
+(8, 7, 'tel', 3, 50, '+12067798888', NULL, 'tel:+12067798888'),
 (9, 8, 'viber', 2, 90, 'viberpath==', NULL, 'viber:viberpath=='),
 (10, 9, 'facebook', 2, 90, 1000001, 'funguy', 'facebook:1000001'),
 (11, 10, 'twitterid', 2, 90, 1000001, 'fungal', 'twitterid:1000001'),
@@ -178,7 +202,8 @@ INSERT INTO msgs_msg(id, broadcast_id, uuid, text, created_on, sent_on, directio
 (1, NULL, '2f969340-704a-4aa2-a1bd-2f832a21d257', 'message 1', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
 (2, NULL, 'abe87ac1-015c-4803-be29-1e89509fe682', 'message 2', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'D', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
 (3, NULL, 'a7e83a22-a6ff-4e18-82d0-19545640ccba', 'message 3', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'O', 'H', 'V', 'I', '{"image/png:https://foo.bar/image1.png", "image/png:https://foo.bar/image2.png"}', 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
-(4, NULL, '1cad36af-5581-4c8a-81cd-83708398f61e', 'message 4', '2017-08-13 21:11:59.890662+00', '2017-08-13 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-13 21:11:59.890662+00');
+(4, NULL, '1cad36af-5581-4c8a-81cd-83708398f61e', 'message 4', '2017-08-13 21:11:59.890662+00', '2017-08-13 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-13 21:11:59.890662+00'),
+(5, NULL, 'f557972e-2eb5-42fa-9b87-902116d18787', 'message 5', '2017-08-11 21:11:59.890662+02:00', '2017-08-11 21:11:59.890662+02:00', 'I', 'H', 'V', 'I', NULL, 3, 7, 8, 3, 1, 0, '2017-08-11 21:11:59.890662+02:00');
 
 INSERT INTO msgs_label(id, uuid, name) VALUES
 (1, '1d9e3188-b74b-4ae0-a166-0de31aedb34a', 'Label 1'),
@@ -190,3 +215,22 @@ INSERT INTO msgs_msg_labels(id, msg_id, label_id) VALUES
 (2, 1, 2),
 (3, 2, 2),
 (4, 3, 2);
+
+INSERT INTO flows_flow(id, uuid, name) VALUES
+(1, '6639286a-9120-45d4-aa39-03ae3942a4a6', 'Flow 1'),
+(2, '629db399-a5fb-4fa0-88e6-f479957b63d2', 'Flow 2'),
+(3, '3914b88e-625b-4603-bd9f-9319dc331c6b', 'Flow 3'),
+(4, 'cfa2371d-2f06-481d-84b2-d974f3803bb0', 'Flow 4');
+
+INSERT INTO flows_flowrun(id, uuid, responded, contact_id, flow_id, org_id, results, path, events, created_on, modified_on, exited_on, exit_type) VALUES
+(1, '4ced1260-9cfe-4b7f-81dd-b637108f15b9', TRUE, 6, 1, 2, '{}', '[]', '[]', '2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C'),
+(2, '7d68469c-0494-498a-bdf3-bac68321fd6d', TRUE, 6, 1, 2, 
+'{"agree": {"category": "Strongly agree", "node_uuid": "a0434c54-3e26-4eb0-bafc-46cdeaf435ac", "name": "Do you agree?", "value": "A", "created_on": "2017-05-03T12:25:21.714339+00:00", "input": "A"}}',
+'[{"uuid": "c3d0b417-db75-417c-8050-33776ec8f620", "node_uuid": "10896d63-8df7-4022-88dd-a9d93edf355b", "arrived_on": "2017-08-12T15:07:24.049815+02:00", "exit_uuid": "2f890507-2ad2-4bd1-92fc-0ca031155fca"}]', 
+'[{"msg": {"urn": "tel:+12076661212", "text": "hola", "uuid": "cf05c58f-31fb-4ce8-9e65-4ecc9fd47cbe", "channel": {"name": "1223", "uuid": "bbfe2e9c-cf69-4d0a-b42e-00ac3dc0b0b8"}}, "type": "msg_created", "step_uuid": "659cdae5-1f29-4a58-9437-10421f724268", "created_on": "2018-01-22T15:06:47.357682+00:00"}]',
+'2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C'),
+(3, 'de782b35-a398-46ed-8550-34c66053841b', TRUE, 7, 2, 3, 
+'{"agree": {"category": "Strongly agree", "node_uuid": "084c8cf1-715d-4d0a-b38d-a616ed74e638", "name": "Do you agree?", "value": "A", "created_on": "2017-05-03T12:25:21.714339+00:00", "input": "A"}}',
+'[{"uuid": "600ac5b4-4895-4161-ad97-6e2f1bb48bcb", "node_uuid": "accbc6e2-b0df-46cd-9a76-bff0fdf4d753", "arrived_on": "2017-08-12T15:07:24.049815+02:00", "exit_uuid": "8249e2dc-c893-4200-b6d2-398d07a459bc"}]', 
+'[{"msg": {"urn": "tel:+12076661212", "text": "hola", "uuid": "9ea50923-0888-4596-9a9d-4890994934a9", "channel": {"name": "1223", "uuid": "d6597e08-8285-428c-8e7e-97c68adfa073"}}, "type": "msg_created", "step_uuid": "ae067248-df92-41c8-bb29-92506e984259", "created_on": "2018-01-22T15:06:47.357682+00:00"}]',
+'2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00', 'C');

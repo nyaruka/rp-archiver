@@ -52,6 +52,7 @@ type Org struct {
 	ID         int       `db:"id"`
 	Name       string    `db:"name"`
 	CreatedOn  time.Time `db:"created_on"`
+	IsAnon     bool      `db:"is_anon"`
 	ActiveDays int
 }
 
@@ -79,7 +80,7 @@ type Archive struct {
 	Dailies     []*Archive
 }
 
-const lookupActiveOrgs = `SELECT id, name, created_on FROM orgs_org WHERE is_active = TRUE order by id`
+const lookupActiveOrgs = `SELECT id, name, created_on, is_anon FROM orgs_org WHERE is_active = TRUE order by id`
 
 // GetActiveOrgs returns the active organizations sorted by id
 func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
@@ -353,8 +354,8 @@ select rec.visibility, row_to_json(rec) FROM (
 	  text,
 	  (select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?):(.*)$') attachment) as attach_data) as attach_row) as attachments,
 	  labels_agg.data as labels,
-	  mm.created_on AT TIME ZONE 'UTC' created_on,
-	  sent_on AT TIME ZONE 'UTC' sent_on
+	  mm.created_on as created_on,
+	  sent_on
 	from msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
 	  JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
@@ -372,14 +373,20 @@ FROM (
      row_to_json(flow_struct) as flow,
      row_to_json(contact_struct) as contact,
      fr.responded,
-     (select jsonb_agg(path_data) from (
-          select path_row ->> 'node_uuid'  as node, path_row ->> 'arrived_on' as time
-          from jsonb_array_elements(fr.path :: jsonb) as path_row) as path_data
+     (select coalesce(jsonb_agg(path_data), '[]'::jsonb) from (
+		select path_row ->> 'node_uuid'  as node, (path_row ->> 'arrived_on')::timestamptz as time
+		from jsonb_array_elements(fr.path :: jsonb) as path_row) as path_data
      ) as path,
-     (select jsonb_agg(values_data.tmp_values) from (
-          select json_build_object(key, jsonb_build_object('name', value -> 'name', 'time', value -> 'created_on', 'category', value -> 'category', 'node', value -> 'node_uuid')) as tmp_values
-          FROM jsonb_each(fr.results :: jsonb)) as values_data
-     ) as values,
+     (select coalesce(jsonb_agg(values_data.tmp_values), '{}'::jsonb) from (
+		select json_build_object(key, jsonb_build_object('name', value -> 'name', 'time', (value -> 'created_on')::text::timestamptz, 'category', value -> 'category', 'node', value -> 'node_uuid')) as tmp_values
+		FROM jsonb_each(fr.results :: jsonb)) as values_data
+	 ) as values,
+	 CASE
+		WHEN $1
+			THEN '[]'::jsonb
+		ELSE
+			coalesce(fr.events, '[]'::jsonb)
+	 END as events,
      fr.created_on,
      fr.modified_on,
      fr.exited_on,
@@ -398,7 +405,7 @@ FROM (
      JOIN LATERAL (SELECT uuid, name from flows_flow where flows_flow.id = fr.flow_id) as flow_struct ON True
      JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = fr.contact_id) as contact_struct ON True
    
-   WHERE fr.org_id = $1 AND fr.created_on >= $2 AND fr.created_on < $3
+   WHERE fr.org_id = $2 AND fr.created_on >= $3 AND fr.created_on < $4
    ORDER BY fr.created_on ASC, id ASC
 ) as rec;
 `
@@ -457,26 +464,31 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 
 	log.WithField("filename", file.Name()).Debug("creating new archive file")
 
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("SET TIME ZONE 'UTC'")
+	if err != nil {
+		return err
+	}
+
 	endDate := archive.StartDate.Add(time.Hour * 24)
 	var rows *sqlx.Rows
 	if archive.ArchiveType == MessageType {
-		rows, err = db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, endDate)
+		rows, err = tx.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, endDate)
 	} else if archive.ArchiveType == RunType {
-		rows, err = db.QueryxContext(ctx, lookupFlowRuns, archive.Org.ID, archive.StartDate, endDate)
+		rows, err = tx.QueryxContext(ctx, lookupFlowRuns, archive.Org.IsAnon, archive.Org.ID, archive.StartDate, endDate)
 	}
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
+	defer tx.Rollback()
 
 	recordCount := 0
 	var record, visibility string
 	for rows.Next() {
-		err = rows.Scan(&visibility, &record)
-		if err != nil {
-			return err
-		}
-
 		if archive.ArchiveType == MessageType {
 			err = rows.Scan(&visibility, &record)
 			if err != nil {
