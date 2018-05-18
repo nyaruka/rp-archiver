@@ -18,6 +18,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 )
 
@@ -75,6 +76,7 @@ type Archive struct {
 
 	Org         Org
 	ArchiveFile string
+	Dailies     []*Archive
 }
 
 const lookupActiveOrgs = `SELECT id, name, created_on FROM orgs_org WHERE is_active = TRUE order by id`
@@ -307,6 +309,7 @@ func BuildMonthlyArchive(ctx context.Context, conf *Config, s3Client s3iface.S3A
 	month.Size = stat.Size()
 	month.RecordCount = recordCount
 	month.BuildTime = int(time.Now().Sub(start) / time.Millisecond)
+	month.Dailies = dailies
 	return nil
 }
 
@@ -583,25 +586,71 @@ INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, perio
 RETURNING id
 `
 
+const updateRollups = `
+UPDATE archives_archive SET rollup_id = $1 WHERE ARRAY[id] <@ $2
+`
+
 // WriteArchiveToDB write an archive to the Database
 func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error {
 	archive.OrgID = archive.Org.ID
 	archive.CreatedOn = time.Now()
 	archive.IsPurged = false
 
-	rows, err := db.NamedQueryContext(ctx, insertArchive, archive)
+	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
+		logrus.WithError(err).Error("error starting transaction")
 		return err
 	}
-	defer rows.Close()
+
+	rows, err := tx.NamedQuery(insertArchive, archive)
+	if err != nil {
+		logrus.WithError(err).Error("error inserting archive")
+		tx.Rollback()
+		return err
+	}
 
 	rows.Next()
 	err = rows.Scan(&archive.ID)
 	if err != nil {
+		logrus.WithError(err).Error("error reading new archive id")
+		tx.Rollback()
 		return err
 	}
+	rows.Close()
 
-	return nil
+	// if we have children to update do so
+	if len(archive.Dailies) > 0 {
+		// build our list of ids
+		childIDs := make([]int, 0, len(archive.Dailies))
+		for _, c := range archive.Dailies {
+			childIDs = append(childIDs, c.ID)
+		}
+
+		result, err := tx.ExecContext(ctx, updateRollups, archive.ID, pq.Array(childIDs))
+		if err != nil {
+			logrus.WithError(err).Error("error updating rollup ids")
+			tx.Rollback()
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			logrus.WithError(err).Error("error getting number rollup ids updated")
+			tx.Rollback()
+			return err
+		}
+		if int(affected) != len(childIDs) {
+			logrus.Error("mismatch in number of children and number of rows updated")
+			tx.Rollback()
+			return fmt.Errorf("mismatch in number of children updated")
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		logrus.WithError(err).Error("error comitting new archive")
+		tx.Rollback()
+	}
+	return err
 }
 
 // DeleteArchiveFile removes our own disk archive file
@@ -623,12 +672,12 @@ func DeleteArchiveFile(archive *Archive) error {
 	return nil
 }
 
-// ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
-func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+// BuildOrgDailyArchives builds all the montly archives for the passid in org
+func BuildOrgDailyArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
 	log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
 	records := 0
-
 	created := make([]*Archive, 0, 1)
+	start := time.Now()
 
 	existing, err := GetCurrentArchives(ctx, db, org, archiveType)
 	if err != nil {
@@ -680,24 +729,32 @@ func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB,
 	}
 
 	if len(archives) > 0 {
-		elapsed := time.Now().Sub(now)
+		elapsed := time.Now().Sub(start)
 		rate := float32(records) / (float32(elapsed) / float32(time.Second))
 		log.WithField("elapsed", elapsed).WithField("records_per_second", int(rate)).Info("completed archival for org")
 	}
 
-	existing, err = GetCurrentArchives(ctx, db, org, archiveType)
+	return created, nil
+}
+
+// BuildOrgMonthlyArchives builds all the montly archives for the passid in org
+func BuildOrgMonthlyArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
+	records := 0
+	created := make([]*Archive, 0, 1)
+	start := time.Now()
+
+	existing, err := GetCurrentArchives(ctx, db, org, archiveType)
 	if err != nil {
 		return nil, fmt.Errorf("error getting current archives")
 	}
 
 	// now build our monthlies
-	archives, err = GetMissingMonthArchives(existing, now, org, archiveType)
+	archives, err := GetMissingMonthArchives(existing, now, org, archiveType)
 	if err != nil {
 		return nil, fmt.Errorf("error calculating missing monthly archives for type '%s'", archiveType)
 	}
 
-	now = time.Now()
-	records = 0
 	for _, archive := range archives {
 		err = BuildMonthlyArchive(ctx, config, s3Client, existing, archive, now, org, archiveType)
 		if err != nil {
@@ -719,8 +776,6 @@ func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB,
 			continue
 		}
 
-		// purge records that were archived
-
 		if config.DeleteAfterUpload == true {
 			err := DeleteArchiveFile(archive)
 			if err != nil {
@@ -734,9 +789,28 @@ func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB,
 	}
 
 	if len(archives) > 0 {
-		elapsed := time.Now().Sub(now)
+		elapsed := time.Now().Sub(start)
 		rate := float32(records) / (float32(elapsed) / float32(time.Second))
 		log.WithField("elapsed", elapsed).WithField("records_per_second", int(rate)).Info("completed rollup for org")
+	}
+
+	return created, nil
+}
+
+// ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
+func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	created, err := BuildOrgDailyArchives(ctx, now, config, db, s3Client, org, archiveType)
+	if err != nil {
+		return nil, err
+	}
+
+	monthlies, err := BuildOrgMonthlyArchives(ctx, now, config, db, s3Client, org, archiveType)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, m := range monthlies {
+		created = append(created, m)
 	}
 
 	return created, nil

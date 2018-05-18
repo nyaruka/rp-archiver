@@ -151,14 +151,17 @@ func TestWriteArchiveToDB(t *testing.T) {
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
-	existing, err := GetCurrentArchives(ctx, db, orgs[1], MessageType)
+	existing, err := GetCurrentArchives(ctx, db, orgs[2], MessageType)
 	assert.NoError(t, err)
-	tasks, err := GetMissingDayArchives(existing, now, orgs[1], MessageType)
+
+	tasks, err := GetMissingDayArchives(existing, now, orgs[2], MessageType)
 	assert.NoError(t, err)
-	assert.Equal(t, 62, len(tasks))
-	assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
+	assert.Equal(t, 60, len(tasks))
+	assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
 
 	task := tasks[0]
+	task.Dailies = []*Archive{existing[0], existing[1]}
+
 	err = WriteArchiveToDB(ctx, db, task)
 
 	assert.NoError(t, err)
@@ -166,12 +169,15 @@ func TestWriteArchiveToDB(t *testing.T) {
 	assert.Equal(t, false, task.IsPurged)
 
 	// if we recalculate our tasks, we should have one less now
-	existing, err = GetCurrentArchives(ctx, db, orgs[1], MessageType)
+	existing, err = GetCurrentArchives(ctx, db, orgs[2], MessageType)
+	assert.Equal(t, task.ID, *existing[0].Rollup)
+	assert.Equal(t, task.ID, *existing[2].Rollup)
+
 	assert.NoError(t, err)
-	tasks, err = GetMissingDayArchives(existing, now, orgs[1], MessageType)
+	tasks, err = GetMissingDayArchives(existing, now, orgs[2], MessageType)
 	assert.NoError(t, err)
-	assert.Equal(t, 61, len(tasks))
-	assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
+	assert.Equal(t, 59, len(tasks))
+	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
 }
 
 func TestArchiveOrg(t *testing.T) {
@@ -188,10 +194,10 @@ func TestArchiveOrg(t *testing.T) {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro flows, msgs and sessions to S3", nil)
 	loader.MustLoad()
 	s3Client, err := NewS3Client(config)
-
 	assert.NoError(t, err)
 
 	archives, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
+	assert.NoError(t, err)
 
 	assert.Equal(t, 64, len(archives))
 	assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), archives[0].StartDate)
