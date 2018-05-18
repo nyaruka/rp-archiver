@@ -187,35 +187,39 @@ func TestArchiveOrg(t *testing.T) {
 
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro flows, msgs and sessions to S3", nil)
 	loader.MustLoad()
-	s3Client, err := NewS3Client(config)
 
-	assert.NoError(t, err)
+	// AWS S3 config in the environment needed to download from S3
+	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
 
-	archives, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
+		s3Client, err := NewS3Client(config)
+		assert.NoError(t, err)
 
-	assert.Equal(t, 64, len(archives))
-	assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), archives[0].StartDate)
-	assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), archives[61].StartDate)
-	assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), archives[62].StartDate)
-	assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), archives[63].StartDate)
+		archives, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
 
-	assert.Equal(t, 0, archives[0].RecordCount)
-	assert.Equal(t, int64(23), archives[0].Size)
-	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[0].Hash)
+		assert.Equal(t, 64, len(archives))
+		assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), archives[0].StartDate)
+		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), archives[61].StartDate)
+		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), archives[62].StartDate)
+		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), archives[63].StartDate)
 
-	assert.Equal(t, 2, archives[2].RecordCount)
-	assert.Equal(t, int64(442), archives[2].Size)
-	assert.Equal(t, "7c39eb3244c34841cf5ca0382519142e", archives[2].Hash)
+		assert.Equal(t, 0, archives[0].RecordCount)
+		assert.Equal(t, int64(23), archives[0].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[0].Hash)
 
-	assert.Equal(t, 1, archives[3].RecordCount)
-	assert.Equal(t, int64(296), archives[3].Size)
-	assert.Equal(t, "92c6ddd5ed1419a7f71156bd32fcb453", archives[3].Hash)
+		assert.Equal(t, 2, archives[2].RecordCount)
+		assert.Equal(t, int64(442), archives[2].Size)
+		assert.Equal(t, "7c39eb3244c34841cf5ca0382519142e", archives[2].Hash)
 
-	assert.Equal(t, 3, archives[62].RecordCount)
-	assert.Equal(t, int64(464), archives[62].Size)
-	assert.Equal(t, "258421e7e296cced927bb7ecd3e35287", archives[62].Hash)
+		assert.Equal(t, 1, archives[3].RecordCount)
+		assert.Equal(t, int64(296), archives[3].Size)
+		assert.Equal(t, "92c6ddd5ed1419a7f71156bd32fcb453", archives[3].Hash)
 
-	assert.Equal(t, 0, archives[63].RecordCount)
-	assert.Equal(t, int64(23), archives[63].Size)
-	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[63].Hash)
+		assert.Equal(t, 3, archives[62].RecordCount)
+		assert.Equal(t, int64(464), archives[62].Size)
+		assert.Equal(t, "258421e7e296cced927bb7ecd3e35287", archives[62].Hash)
+
+		assert.Equal(t, 0, archives[63].RecordCount)
+		assert.Equal(t, int64(23), archives[63].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[63].Hash)
+	}
 }
