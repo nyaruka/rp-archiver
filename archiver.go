@@ -405,8 +405,8 @@ FROM (
      JOIN LATERAL (SELECT uuid, name from flows_flow where flows_flow.id = fr.flow_id) as flow_struct ON True
      JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = fr.contact_id) as contact_struct ON True
    
-   WHERE fr.org_id = $2 AND fr.created_on >= $3 AND fr.created_on < $4
-   ORDER BY fr.created_on ASC, id ASC
+   WHERE fr.org_id = $2 AND fr.modified_on >= $3 AND fr.modified_on < $4
+   ORDER BY fr.modified_on ASC, id ASC
 ) as rec;
 `
 
