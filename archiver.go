@@ -256,6 +256,11 @@ func BuildMonthlyArchive(ctx context.Context, conf *Config, s3Client s3iface.S3A
 
 	// for each daily
 	for _, daily := range dailies {
+		// if there are no records in this daily, just move on
+		if daily.RecordCount == 0 {
+			continue
+		}
+
 		reader, err := GetS3File(ctx, s3Client, daily.URL)
 		if err != nil {
 			log.WithError(err).Error("error getting daily S3 file")
