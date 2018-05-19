@@ -1,3 +1,7 @@
+v0.0.8
+----------
+ * don't download 0 record archives when building monthlies
+
 v0.0.7
 ----------
  * archive flow runs based on modified instead of created
