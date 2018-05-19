@@ -1,3 +1,7 @@
+v0.0.7
+----------
+ * archive flow runs based on modified instead of created
+
 v0.0.6
 ----------
  * add tests for flow runs, test file contents as well
