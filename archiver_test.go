@@ -60,9 +60,10 @@ func TestGetMissingDayArchives(t *testing.T) {
 	assert.NoError(t, err)
 	tasks, err = GetMissingDayArchives(existing, now, orgs[2], MessageType)
 	assert.NoError(t, err)
-	assert.Equal(t, 60, len(tasks))
+	assert.Equal(t, 31, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
-	assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), tasks[59].StartDate)
+	assert.Equal(t, time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), tasks[21].StartDate)
+	assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), tasks[30].StartDate)
 }
 
 func TestGetMissingMonthArchives(t *testing.T) {
@@ -149,14 +150,13 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.NoError(t, err)
 	tasks, err = GetMissingDayArchives(existing, now, orgs[2], MessageType)
 	assert.NoError(t, err)
-	assert.Equal(t, 60, len(tasks))
+	assert.Equal(t, 31, len(tasks))
 	task = tasks[0]
 
-	// build our first task, should have no messages
 	err = CreateArchiveFile(ctx, db, task, "/tmp")
 	assert.NoError(t, err)
 
-	// should have no records and be an empty gzip file
+	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
 	assert.Equal(t, int64(283), task.Size)
 	assert.Equal(t, "d03b1ab8d3312b37d5e0ae38b88e1ea7", task.Hash)
@@ -198,7 +198,6 @@ func TestCreateRunArchive(t *testing.T) {
 	assert.Equal(t, 62, len(tasks))
 	task := tasks[0]
 
-	// build our first task, should have no messages
 	err = CreateArchiveFile(ctx, db, task, "/tmp")
 	assert.NoError(t, err)
 
@@ -209,15 +208,14 @@ func TestCreateRunArchive(t *testing.T) {
 
 	DeleteArchiveFile(task)
 
-	// build our third task, should have a single message
 	task = tasks[2]
 	err = CreateArchiveFile(ctx, db, task, "/tmp")
 	assert.NoError(t, err)
 
 	// should have two record
 	assert.Equal(t, 2, task.RecordCount)
-	assert.Equal(t, int64(568), task.Size)
-	assert.Equal(t, "830b11f3653e4c961fe714fb425d4cec", task.Hash)
+	assert.Equal(t, int64(581), task.Size)
+	assert.Equal(t, "d2111b94c94756147838129ca0618f38", task.Hash)
 	assertArchiveFile(t, task, "runs1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -238,8 +236,8 @@ func TestCreateRunArchive(t *testing.T) {
 
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
-	assert.Equal(t, int64(389), task.Size)
-	assert.Equal(t, "d356e67393a5ae9c0fc07f81739c9d03", task.Hash)
+	assert.Equal(t, int64(393), task.Size)
+	assert.Equal(t, "4f3beb90ee4dc586db7b04ddc7e0117d", task.Hash)
 	assertArchiveFile(t, task, "runs2.jsonl")
 
 	DeleteArchiveFile(task)
@@ -258,7 +256,7 @@ func TestWriteArchiveToDB(t *testing.T) {
 
 	tasks, err := GetMissingDayArchives(existing, now, orgs[2], MessageType)
 	assert.NoError(t, err)
-	assert.Equal(t, 60, len(tasks))
+	assert.Equal(t, 31, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
 
 	task := tasks[0]
@@ -278,7 +276,7 @@ func TestWriteArchiveToDB(t *testing.T) {
 	assert.NoError(t, err)
 	tasks, err = GetMissingDayArchives(existing, now, orgs[2], MessageType)
 	assert.NoError(t, err)
-	assert.Equal(t, 59, len(tasks))
+	assert.Equal(t, 30, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
 }
 
@@ -298,38 +296,40 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 	// AWS S3 config in the environment needed to download from S3
 	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
-
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
 		archives, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
 		assert.NoError(t, err)
 
-		assert.Equal(t, 64, len(archives))
-		assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), archives[0].StartDate)
-		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), archives[61].StartDate)
-		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), archives[62].StartDate)
-		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), archives[63].StartDate)
+		assert.Equal(t, 12, len(archives))
+		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), archives[0].StartDate)
+		assert.Equal(t, MonthPeriod, archives[0].Period)
 
-		assert.Equal(t, 0, archives[0].RecordCount)
-		assert.Equal(t, int64(23), archives[0].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[0].Hash)
+		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), archives[1].StartDate)
+		assert.Equal(t, MonthPeriod, archives[1].Period)
 
-		assert.Equal(t, 2, archives[2].RecordCount)
-		assert.Equal(t, int64(448), archives[2].Size)
-		assert.Equal(t, "74ab5f70262ccd7b10ef0ae7274c806d", archives[2].Hash)
+		assert.Equal(t, time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), archives[2].StartDate)
+		assert.Equal(t, DayPeriod, archives[2].Period)
 
-		assert.Equal(t, 1, archives[3].RecordCount)
-		assert.Equal(t, int64(299), archives[3].Size)
-		assert.Equal(t, "3683faa7b3a546b47b0bac1ec150f8af", archives[3].Hash)
+		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), archives[11].StartDate)
+		assert.Equal(t, DayPeriod, archives[11].Period)
 
-		assert.Equal(t, 3, archives[62].RecordCount)
-		assert.Equal(t, int64(470), archives[62].Size)
-		assert.Equal(t, "7033bb24efca482d121b8e0cdc6b1430", archives[62].Hash)
+		assert.Equal(t, 3, archives[0].RecordCount)
+		assert.Equal(t, int64(470), archives[0].Size)
+		assert.Equal(t, "7033bb24efca482d121b8e0cdc6b1430", archives[0].Hash)
 
-		assert.Equal(t, 0, archives[63].RecordCount)
-		assert.Equal(t, int64(23), archives[63].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[63].Hash)
+		assert.Equal(t, 0, archives[1].RecordCount)
+		assert.Equal(t, int64(23), archives[1].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[1].Hash)
+
+		assert.Equal(t, 0, archives[2].RecordCount)
+		assert.Equal(t, int64(23), archives[2].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[2].Hash)
+
+		assert.Equal(t, 0, archives[11].RecordCount)
+		assert.Equal(t, int64(23), archives[11].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[11].Hash)
 	}
 }
 
@@ -349,33 +349,35 @@ func TestArchiveOrgRuns(t *testing.T) {
 
 	// AWS S3 config in the environment needed to download from S3
 	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
-
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
 		archives, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
 		assert.NoError(t, err)
 
-		assert.Equal(t, 64, len(archives))
-		assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), archives[0].StartDate)
-		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), archives[61].StartDate)
-		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), archives[62].StartDate)
-		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), archives[63].StartDate)
+		assert.Equal(t, 12, len(archives))
+		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), archives[0].StartDate)
+		assert.Equal(t, MonthPeriod, archives[0].Period)
+
+		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), archives[1].StartDate)
+		assert.Equal(t, MonthPeriod, archives[1].Period)
+
+		assert.Equal(t, time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), archives[2].StartDate)
+		assert.Equal(t, DayPeriod, archives[2].Period)
+
+		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), archives[11].StartDate)
+		assert.Equal(t, DayPeriod, archives[11].Period)
 
 		assert.Equal(t, 1, archives[0].RecordCount)
-		assert.Equal(t, int64(389), archives[0].Size)
-		assert.Equal(t, "d356e67393a5ae9c0fc07f81739c9d03", archives[0].Hash)
+		assert.Equal(t, int64(393), archives[0].Size)
+		assert.Equal(t, "4f3beb90ee4dc586db7b04ddc7e0117d", archives[0].Hash)
 
-		assert.Equal(t, 0, archives[2].RecordCount)
-		assert.Equal(t, int64(23), archives[2].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[2].Hash)
+		assert.Equal(t, 0, archives[1].RecordCount)
+		assert.Equal(t, int64(23), archives[1].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[1].Hash)
 
-		assert.Equal(t, 1, archives[62].RecordCount)
-		assert.Equal(t, int64(389), archives[62].Size)
-		assert.Equal(t, "d356e67393a5ae9c0fc07f81739c9d03", archives[62].Hash)
-
-		assert.Equal(t, 0, archives[63].RecordCount)
-		assert.Equal(t, int64(23), archives[63].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", archives[63].Hash)
+		assert.Equal(t, 1, archives[11].RecordCount)
+		assert.Equal(t, int64(385), archives[11].Size)
+		assert.Equal(t, "e4ac24080ca5a05539d058cd7fe63291", archives[11].Hash)
 	}
 }
