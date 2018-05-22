@@ -1,3 +1,7 @@
+v0.0.10
+----------
+ * increase unit test coverage of rollup cases
+
 v0.0.9
 ----------
  * create montly archives when doing backfills, add input and value to run outputs
