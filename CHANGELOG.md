@@ -1,3 +1,7 @@
+v0.0.9
+----------
+ * create montly archives when doing backfills, add input and value to run outputs
+
 v0.0.8
 ----------
  * don't download 0 record archives when building monthlies
