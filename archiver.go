@@ -131,6 +131,26 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 	return existingArchives, nil
 }
 
+const lookupCountOrgArchives = `SELECT count(id) FROM archives_archive WHERE org_id = $1 AND archive_type = $2`
+
+// GetCurrentArchives returns all the current archives for the passed in org and record type
+func GetCurrentArchivesCount(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) (int, error) {
+
+	var archive_count int
+
+	rows, err := db.QueryxContext(ctx, lookupCountOrgArchives, org.ID, archiveType)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	rows.Next()
+	err = rows.Scan(&archive_count)
+
+	return archive_count, nil
+}
+
+
 // between is inclusive on both sides
 const lookupOrgDailyArchivesForDateRange = `
 SELECT id, start_date, period, archive_type, hash, size, record_count, url, rollup_id
@@ -744,13 +764,13 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	records := 0
 	start := time.Now()
 
-	existing, err := GetCurrentArchives(ctx, db, org, archiveType)
+	curr_archive_count, err := GetCurrentArchivesCount(ctx, db, org, archiveType)
 	if err != nil {
 		return nil, fmt.Errorf("error getting current archives")
 	}
 
 	var archives []*Archive
-	if len(existing) == 0 {
+	if curr_archive_count == 0 {
 		// no existing archives means this might be a backfill, figure out if there are full monthes we can build first
 		archives, err = GetMissingMonthArchives(ctx, db, now, org, archiveType)
 		if err != nil {
