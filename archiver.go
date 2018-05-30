@@ -95,6 +95,9 @@ func (a *Archive) coversDate(d time.Time) bool {
 	return !a.StartDate.After(d) && end.After(d)
 }
 
+// postgres driver uses the system timezone by default, override to always be in UTC
+const setUTCTimezone = `SET TIME ZONE 'UTC'`
+
 const lookupActiveOrgs = `SELECT id, name, created_on, is_anon FROM orgs_org WHERE is_active = TRUE order by id`
 
 // GetActiveOrgs returns the active organizations sorted by id
@@ -133,10 +136,9 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 
 const lookupCountOrgArchives = `SELECT count(id) FROM archives_archive WHERE org_id = $1 AND archive_type = $2`
 
-// GetCurrentArchives returns all the current archives for the passed in org and record type
-func GetCurrentArchivesCount(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) (int, error) {
-
-	var archive_count int
+// GetCurrentArchiveCount returns all the current archives for the passed in org and record type
+func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) (int, error) {
+	var archiveCount int
 
 	rows, err := db.QueryxContext(ctx, lookupCountOrgArchives, org.ID, archiveType)
 	if err != nil {
@@ -145,11 +147,10 @@ func GetCurrentArchivesCount(ctx context.Context, db *sqlx.DB, org Org, archiveT
 	defer rows.Close()
 
 	rows.Next()
-	err = rows.Scan(&archive_count)
+	err = rows.Scan(&archiveCount)
 
-	return archive_count, nil
+	return archiveCount, nil
 }
-
 
 // between is inclusive on both sides
 const lookupOrgDailyArchivesForDateRange = `
@@ -159,15 +160,36 @@ WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND start_date BETWEEN $
 ORDER BY start_date asc
 `
 
-// GetCurrentArchives returns all the current archives for the passed in org and record type
-func GetOrgDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType, startDate time.Time, endDate time.Time) ([]*Archive, error) {
+// GetDailyArchivesForDateRange returns all the current archives for the passed in org and record type and date range
+func GetDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType, startDate time.Time, endDate time.Time) ([]*Archive, error) {
 	existingArchives := []*Archive{}
-	err := db.SelectContext(ctx, &existingArchives, lookupOrgDailyArchivesForDateRange, org.ID, archiveType, DayPeriod, startDate, endDate)
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(setUTCTimezone)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Commit()
+
+	err = tx.SelectContext(ctx, &existingArchives, lookupOrgDailyArchivesForDateRange, org.ID, archiveType, DayPeriod, startDate, endDate)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
 	return existingArchives, nil
+}
+
+// GetMissingDailyArchives calculates what archives need to be generated for the passed in org this is calculated per day
+func GetMissingDailyArchives(ctx context.Context, db *sqlx.DB, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	// our first archive would be active days from today
+	endDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -org.ActiveDays)
+	orgUTC := org.CreatedOn.In(time.UTC)
+	startDate := time.Date(orgUTC.Year(), orgUTC.Month(), orgUTC.Day(), 0, 0, 0, 0, time.UTC)
+
+	return GetMissingDailyArchivesForDateRange(ctx, db, startDate, endDate, org, archiveType)
 }
 
 const lookupMissingDailyArchive = `
@@ -181,40 +203,40 @@ UNION DISTINCT
   FROM archives_archive WHERE org_id = $3 and period = 'M' and archive_type=$5
 )
 select missing_day::timestamp AT TIME ZONE 'UTC' from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_day
-wHERE curr_archives.start_date IS NULL
+WHERE curr_archives.start_date IS NULL
 `
 
-// GetMissingDayArchives calculates what archives need to be generated for the passed in org this is calculated per day
-func GetMissingDayArchives(ctx context.Context, db *sqlx.DB, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
-	// our first archive would be active days from today
-	endDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -org.ActiveDays)
-	orgUTC := org.CreatedOn.In(time.UTC)
-	startDate := time.Date(orgUTC.Year(), orgUTC.Month(), orgUTC.Day(), 0, 0, 0, 0, time.UTC)
-
-	return fetchMissingDayArchives(ctx, db, startDate, endDate, org, archiveType)
-}
-
-func fetchMissingDayArchives(ctx context.Context, db *sqlx.DB, startDate time.Time, endDate time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
+// GetMissingDailyArchivesForDateRange returns all them missing daily archives between the two passed in date ranges
+func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, startDate time.Time, endDate time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
 	missing := make([]*Archive, 0, 1)
 
-	rows, err := db.QueryxContext(ctx, lookupMissingDailyArchive, startDate, endDate, org.ID, DayPeriod, archiveType)
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(setUTCTimezone)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.QueryxContext(ctx, lookupMissingDailyArchive, startDate, endDate, org.ID, DayPeriod, archiveType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	defer tx.Commit()
 
-	var missing_day time.Time
-
+	var missingDay time.Time
 	for rows.Next() {
 
-		err = rows.Scan(&missing_day)
+		err = rows.Scan(&missingDay)
 		if err != nil {
 			return nil, err
 		}
 		archive := Archive{
 			Org:         org,
 			OrgID:       org.ID,
-			StartDate:   missing_day,
+			StartDate:   missingDay,
 			ArchiveType: archiveType,
 			Period:      DayPeriod,
 		}
@@ -234,11 +256,11 @@ WITH month_days(missing_month) AS (
   SELECT start_date FROM archives_archive WHERE org_id = $3 and period = $4 and archive_type=$5
 )
 select missing_month::timestamp AT TIME ZONE 'UTC' from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_month
-wHERE curr_archives.start_date IS NULL
+WHERE curr_archives.start_date IS NULL
 `
 
-// GetMissingMonthArchives gets which montly archives are currently missing for this org
-func GetMissingMonthArchives(ctx context.Context, db *sqlx.DB, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
+// GetMissingMonthlyArchives gets which montly archives are currently missing for this org
+func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
 	lastActive := now.AddDate(0, 0, -org.ActiveDays)
 	endDate := time.Date(lastActive.Year(), lastActive.Month(), 1, 0, 0, 0, 0, time.UTC)
 
@@ -247,24 +269,33 @@ func GetMissingMonthArchives(ctx context.Context, db *sqlx.DB, now time.Time, or
 
 	missing := make([]*Archive, 0, 1)
 
-	rows, err := db.QueryxContext(ctx, lookupMissingMonthlyArchive, startDate, endDate, org.ID, MonthPeriod, archiveType)
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(setUTCTimezone)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.QueryxContext(ctx, lookupMissingMonthlyArchive, startDate, endDate, org.ID, MonthPeriod, archiveType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	defer tx.Commit()
 
-	var missing_month time.Time
-
+	var missingMonth time.Time
 	for rows.Next() {
 
-		err = rows.Scan(&missing_month)
+		err = rows.Scan(&missingMonth)
 		if err != nil {
 			return nil, err
 		}
 		archive := Archive{
 			Org:         org,
 			OrgID:       org.ID,
-			StartDate:   missing_month,
+			StartDate:   missingMonth,
 			ArchiveType: archiveType,
 			Period:      MonthPeriod,
 		}
@@ -295,13 +326,13 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	}
 
 	// grab all the daily archives we need
-	missing_dailies, err := fetchMissingDayArchives(ctx, db, startDate, endDate, org, archiveType)
+	missingDailies, err := GetMissingDailyArchivesForDateRange(ctx, db, startDate, endDate, org, archiveType)
 	if err != nil {
 		return err
 	}
 
-	if len(missing_dailies) != 0 {
-		return fmt.Errorf("missing '%d' daily archives", len(missing_dailies))
+	if len(missingDailies) != 0 {
+		return fmt.Errorf("missing '%d' daily archives", len(missingDailies))
 	}
 
 	// great, we have all the dailies we need, download them
@@ -318,7 +349,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 
 	recordCount := 0
 
-	dailies, err := GetOrgDailyArchivesForDateRange(ctx, db, org, archiveType, startDate, endDate)
+	dailies, err := GetDailyArchivesForDateRange(ctx, db, org, archiveType, startDate, endDate)
 	if err != nil {
 		return err
 	}
@@ -543,7 +574,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("SET TIME ZONE 'UTC'")
+	_, err = tx.Exec(setUTCTimezone)
 	if err != nil {
 		return err
 	}
@@ -764,15 +795,15 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	records := 0
 	start := time.Now()
 
-	curr_archive_count, err := GetCurrentArchivesCount(ctx, db, org, archiveType)
+	archiveCount, err := GetCurrentArchiveCount(ctx, db, org, archiveType)
 	if err != nil {
 		return nil, fmt.Errorf("error getting current archives")
 	}
 
 	var archives []*Archive
-	if curr_archive_count == 0 {
+	if archiveCount == 0 {
 		// no existing archives means this might be a backfill, figure out if there are full monthes we can build first
-		archives, err = GetMissingMonthArchives(ctx, db, now, org, archiveType)
+		archives, err = GetMissingMonthlyArchives(ctx, db, now, org, archiveType)
 		if err != nil {
 			log.WithError(err).Error("error calculating missing monthly archives")
 			return nil, err
@@ -785,7 +816,7 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 		}
 
 		// then add in daily archives taking into account the monthly that have been built
-		daily, err := GetMissingDayArchives(ctx, db, now, org, archiveType)
+		daily, err := GetMissingDailyArchives(ctx, db, now, org, archiveType)
 		if err != nil {
 			log.WithError(err).Error("error calculating missing daily archives")
 			return nil, err
@@ -801,7 +832,7 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 
 	} else {
 		// figure out any missing day archives
-		archives, err = GetMissingDayArchives(ctx, db, now, org, archiveType)
+		archives, err = GetMissingDailyArchives(ctx, db, now, org, archiveType)
 		if err != nil {
 			log.WithError(err).Error("error calculating missing daily archives")
 			return nil, err
@@ -878,7 +909,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	start := time.Now()
 
 	// get our missing monthly archives
-	archives, err := GetMissingMonthArchives(ctx, db, now, org, archiveType)
+	archives, err := GetMissingMonthlyArchives(ctx, db, now, org, archiveType)
 	if err != nil {
 		return nil, fmt.Errorf("error calculating missing monthly archives for type '%s'", archiveType)
 	}

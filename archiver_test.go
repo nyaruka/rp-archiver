@@ -40,19 +40,19 @@ func TestGetMissingDayArchives(t *testing.T) {
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
 	// org 1 is too new, no tasks
-	tasks, err := GetMissingDayArchives(ctx, db, now, orgs[0], MessageType)
+	tasks, err := GetMissingDailyArchives(ctx, db, now, orgs[0], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(tasks))
 
 	// org 2 should have some
-	tasks, err = GetMissingDayArchives(ctx, db, now, orgs[1], MessageType)
+	tasks, err = GetMissingDailyArchives(ctx, db, now, orgs[1], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 61, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
 	assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), tasks[60].StartDate)
 
 	// org 3 is the same as 2, but two of the tasks have already been built
-	tasks, err = GetMissingDayArchives(ctx, db, now, orgs[2], MessageType)
+	tasks, err = GetMissingDailyArchives(ctx, db, now, orgs[2], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 31, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
@@ -71,19 +71,19 @@ func TestGetMissingMonthArchives(t *testing.T) {
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
 	// org 1 is too new, no tasks
-	tasks, err := GetMissingMonthArchives(ctx, db, now, orgs[0], MessageType)
+	tasks, err := GetMissingMonthlyArchives(ctx, db, now, orgs[0], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(tasks))
 
 	// org 2 should have some
-	tasks, err = GetMissingMonthArchives(ctx, db, now, orgs[1], MessageType)
+	tasks, err = GetMissingMonthlyArchives(ctx, db, now, orgs[1], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
 	assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), tasks[1].StartDate)
 
 	// org 3 is the same as 2, but two of the tasks have already been built
-	tasks, err = GetMissingMonthArchives(ctx, db, now, orgs[2], MessageType)
+	tasks, err = GetMissingMonthlyArchives(ctx, db, now, orgs[2], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
@@ -100,7 +100,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
-	tasks, err := GetMissingDayArchives(ctx, db, now, orgs[1], MessageType)
+	tasks, err := GetMissingDailyArchives(ctx, db, now, orgs[1], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 61, len(tasks))
 	task := tasks[0]
@@ -132,7 +132,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	// test the anonymous case
-	tasks, err = GetMissingDayArchives(ctx, db, now, orgs[2], MessageType)
+	tasks, err = GetMissingDailyArchives(ctx, db, now, orgs[2], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 31, len(tasks))
 	task = tasks[0]
@@ -175,7 +175,7 @@ func TestCreateRunArchive(t *testing.T) {
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
-	tasks, err := GetMissingDayArchives(ctx, db, now, orgs[1], RunType)
+	tasks, err := GetMissingDailyArchives(ctx, db, now, orgs[1], RunType)
 	assert.NoError(t, err)
 	assert.Equal(t, 62, len(tasks))
 	task := tasks[0]
@@ -205,7 +205,7 @@ func TestCreateRunArchive(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	// ok, let's do an anon org
-	tasks, err = GetMissingDayArchives(ctx, db, now, orgs[2], RunType)
+	tasks, err = GetMissingDailyArchives(ctx, db, now, orgs[2], RunType)
 	assert.NoError(t, err)
 	assert.Equal(t, 62, len(tasks))
 	task = tasks[0]
@@ -234,7 +234,7 @@ func TestWriteArchiveToDB(t *testing.T) {
 	existing, err := GetCurrentArchives(ctx, db, orgs[2], MessageType)
 	assert.NoError(t, err)
 
-	tasks, err := GetMissingDayArchives(ctx, db, now, orgs[2], MessageType)
+	tasks, err := GetMissingDailyArchives(ctx, db, now, orgs[2], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 31, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
@@ -254,7 +254,7 @@ func TestWriteArchiveToDB(t *testing.T) {
 	assert.Equal(t, task.ID, *existing[2].Rollup)
 
 	assert.NoError(t, err)
-	tasks, err = GetMissingDayArchives(ctx, db, now, orgs[2], MessageType)
+	tasks, err = GetMissingDailyArchives(ctx, db, now, orgs[2], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 30, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)

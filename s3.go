@@ -88,7 +88,7 @@ func PutS3File(s3Client s3iface.S3API, bucket string, path string, contentType s
 	return url, nil
 }
 
-func WithAcceptEncoding(e string) request.Option {
+func withAcceptEncoding(e string) request.Option {
 	return func(r *request.Request) {
 		r.HTTPRequest.Header.Add("Accept-Encoding", e)
 	}
@@ -110,7 +110,7 @@ func GetS3File(ctx context.Context, s3Client s3iface.S3API, fileURL string) (io.
 			Bucket: aws.String(bucket),
 			Key:    aws.String(path),
 		},
-		WithAcceptEncoding("gzip"),
+		withAcceptEncoding("gzip"),
 	)
 
 	if err != nil {
