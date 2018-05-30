@@ -77,13 +77,13 @@ func main() {
 	for _, org := range orgs {
 		log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
 		if config.ArchiveMessages {
-			_, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.MessageType)
+			_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.MessageType)
 			if err != nil {
 				log.WithError(err).Error()
 			}
 		}
 		if config.ArchiveRuns {
-			_, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.RunType)
+			_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.RunType)
 			if err != nil {
 				log.WithError(err).Error()
 			}

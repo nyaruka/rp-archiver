@@ -94,6 +94,37 @@ func withAcceptEncoding(e string) request.Option {
 	}
 }
 
+// GetS3FileETAG returns the ETAG hash for the passed in file
+func GetS3FileETAG(ctx context.Context, s3Client s3iface.S3API, fileURL string) (string, error) {
+	u, err := url.Parse(fileURL)
+	if err != nil {
+		return "", err
+	}
+
+	bucket := strings.Split(u.Host, ".")[0]
+	path := u.Path
+
+	output, err := s3Client.HeadObjectWithContext(
+		ctx,
+		&s3.HeadObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(path),
+		},
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	if output.ETag == nil {
+		return "", fmt.Errorf("no ETAG for object")
+	}
+
+	// etag is quoted, remove them
+	etag := strings.Trim(*output.ETag, `"`)
+	return etag, nil
+}
+
 // GetS3File return an io.ReadCloser for the passed in bucket and path
 func GetS3File(ctx context.Context, s3Client s3iface.S3API, fileURL string) (io.ReadCloser, error) {
 	u, err := url.Parse(fileURL)

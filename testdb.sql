@@ -86,7 +86,9 @@ CREATE TABLE msgs_msg (
     contact_urn_id integer NOT NULL references contacts_contacturn(id) on delete cascade,
     org_id integer NOT NULL references orgs_org(id) on delete cascade,
     metadata text,
-    topup_id integer
+    topup_id integer,
+    delete_reason char(1) NULL,
+    response_to_id integer NULL references msgs_msg(id) on delete cascade
 );
 
 DROP TABLE IF EXISTS msgs_label CASCADE;
@@ -142,6 +144,12 @@ CREATE TABLE archives_archive (
     build_time integer NOT NULL, 
     org_id integer NOT NULL,
     rollup_id integer NULL
+);
+
+DROP TABLE IF EXISTS channels_channellog CASCADE;
+CREATE TABLE channels_channellog (
+    id serial primary key,
+    msg_id integer NOT NULL references msgs_msg(id) on delete cascade
 );
 
 INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES

@@ -134,6 +134,19 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 	return existingArchives, nil
 }
 
+const lookupArchivesNeedingDeletion = `SELECT id, org_id, start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND is_purged = FALSE ORDER BY start_date asc, period desc`
+
+// GetArchivesNeedingDeletion returns all the archives which need to be deleted / purged
+func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	archives := []*Archive{}
+	err := db.SelectContext(ctx, &archives, lookupArchivesNeedingDeletion, org.ID, archiveType)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	return archives, nil
+}
+
 const lookupCountOrgArchives = `SELECT count(id) FROM archives_archive WHERE org_id = $1 AND archive_type = $2`
 
 // GetCurrentArchiveCount returns all the current archives for the passed in org and record type
@@ -957,21 +970,218 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	return created, nil
 }
 
+const selectOrgMessagesInRange = `
+SELECT id, visibility FROM msgs_msg WHERE org_id = $1 AND created_on >= $2 AND created_on < $3 ORDER BY created_on ASC, id ASC
+`
+
+const setMessageDeleteReason = `
+UPDATE msgs_msg SET delete_reason = 'A' WHERE id IN(?)
+`
+
+const deleteMessageLogs = `
+DELETE from channels_channellog WHERE msg_id IN(?)
+`
+
+const deleteMessageLabels = `
+DELETE from msgs_msg_labels WHERE msg_id IN(?)
+`
+
+const unlinkResponses = `
+UPDATE msgs_msg SET response_to_id = NULL WHERE response_to_id IN(?)
+`
+
+const deleteMessages = `
+DELETE from msgs_msg WHERE id IN(?)
+`
+
+const setArchivePurged = `
+UPDATE archives_archive SET is_purged = TRUE WHERE id = $1
+`
+
+func executeInQuery(ctx context.Context, tx *sqlx.Tx, query string, ids []int64) error {
+	q, vs, err := sqlx.In(query, ids)
+	if err != nil {
+		return err
+	}
+	q = tx.Rebind(q)
+
+	_, err = tx.ExecContext(ctx, q, vs...)
+	if err != nil {
+		tx.Rollback()
+	}
+	return err
+}
+
+// DeleteArchivedMessages takes the passed in archive, verifies the S3 file is still present (and correct), then selects
+// all the messages in the archive date range, and if equal or fewer than the number archived, deletes them 1000 at a time
+//
+// Upon completion it updates the is_purged flag on the archive
+func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
+	// first things first, make sure our file is present on S3
+	md5, err := GetS3FileETAG(ctx, s3Client, archive.URL)
+	if err != nil {
+		return err
+	}
+
+	// if our etag and archive md5 don't match, that's an error, return
+	if md5 != archive.Hash {
+		return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, md5)
+	}
+
+	// ok, archive file looks good, let's build up our list of message ids, this may be big but we are int64s so shouldn't be too big
+	rows, err := db.QueryxContext(ctx, selectOrgMessagesInRange, archive.OrgID, archive.StartDate, archive.endDate())
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	visibleCount := 0
+	var msgID int64
+	var visibility string
+	msgIDs := make([]int64, 0, archive.RecordCount)
+	for rows.Next() {
+		err = rows.Scan(&msgID, &visibility)
+		if err != nil {
+			return err
+		}
+		msgIDs = append(msgIDs, msgID)
+
+		// keep track of the number of visible messages, there were the ones archived
+		if visibility != "D" {
+			visibleCount++
+		}
+	}
+	rows.Close()
+
+	logrus.WithField("msg_count", len(msgIDs)).Debug("found messages")
+
+	// verify we don't see more messages than there are in our archive (fewer is ok)
+	if visibleCount > archive.RecordCount {
+		return fmt.Errorf("more messages in the database: %d than in archive: %d", visibleCount, archive.RecordCount)
+	}
+
+	// ok, delete our messages 1000 at a time, we do this in transactions as it spans a few different queries
+	for start := 0; start < len(msgIDs); start += 1000 {
+		end := start + 1000
+		if end > len(msgIDs) {
+			end = len(msgIDs)
+		}
+		batchIDs := msgIDs[start:end]
+
+		// start our transaction
+		tx, err := db.BeginTxx(ctx, nil)
+		if err != nil {
+			return err
+		}
+
+		// first update our delete_reason
+		err = executeInQuery(ctx, tx, setMessageDeleteReason, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error updating delete reason: %s", err.Error())
+		}
+
+		// now delete any channel logs
+		err = executeInQuery(ctx, tx, deleteMessageLogs, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error removing channel logs: %s", err.Error())
+		}
+
+		// then any labels
+		err = executeInQuery(ctx, tx, deleteMessageLabels, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error removing message labels: %s", err.Error())
+		}
+
+		// unlink any responses
+		err = executeInQuery(ctx, tx, unlinkResponses, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error unlinking responses: %s", err.Error())
+		}
+
+		// finally, delete our messages
+		err = executeInQuery(ctx, tx, deleteMessages, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error deleting messages: %s", err.Error())
+		}
+
+		// commit our transaction
+		err = tx.Commit()
+		if err != nil {
+			return fmt.Errorf("error committing message delete transaction: %s", err.Error())
+		}
+	}
+
+	// all went well! mark our archive as purged
+	_, err = db.ExecContext(ctx, setArchivePurged, archive.ID)
+	if err != nil {
+		return fmt.Errorf("error setting archive as purged: %s", err.Error())
+	}
+	archive.IsPurged = true
+
+	return nil
+}
+
+// DeleteArchivedOrgRecords deletes all the records for the passeg in org based on archives already created
+func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	// get all the archives that haven't yet been purged
+	archives, err := GetArchivesNeedingDeletion(ctx, db, org, archiveType)
+	if err != nil {
+		return nil, fmt.Errorf("error finding archives needing deletion '%s'", archiveType)
+	}
+
+	// for each archive
+	deleted := make([]*Archive, 0, len(archives))
+	for _, a := range archives {
+		log := logrus.WithFields(logrus.Fields{
+			"archive_id": a.ID,
+			"org_id":     a.OrgID,
+			"type":       a.ArchiveType,
+			"count":      a.RecordCount,
+			"start":      a.StartDate,
+			"period":     a.Period,
+		})
+
+		if a.ArchiveType == MessageType {
+			start := time.Now()
+
+			err := DeleteArchivedMessages(ctx, config, db, s3Client, a)
+			if err != nil {
+				log.WithError(err).Error("Error deleting archive messages")
+				continue
+			}
+
+			log.WithField("elapsed", time.Now().Sub(start)).Info("deleted archive messages")
+			deleted = append(deleted, a)
+		}
+	}
+
+	return deleted, nil
+}
+
 // ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
-func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, error) {
 	created, err := CreateOrgArchives(ctx, now, config, db, s3Client, org, archiveType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	monthlies, err := RollupOrgArchives(ctx, now, config, db, s3Client, org, archiveType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, m := range monthlies {
 		created = append(created, m)
 	}
 
-	return created, nil
+	// finally delete any archives not yet actually archived
+	deleted := make([]*Archive, 0, 1)
+	if config.DeleteRecords {
+		deleted, err = DeleteArchivedOrgRecords(ctx, now, config, db, s3Client, org, archiveType)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return created, deleted, nil
 }
