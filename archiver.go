@@ -118,24 +118,24 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 	return orgs, nil
 }
 
-const lookupOrgArchives = `SELECT id, start_date AT TIME ZONE 'UTC' as start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 ORDER BY start_date asc, period desc`
+const lookupOrgArchives = `SELECT id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 ORDER BY start_date asc, period desc`
 
 // GetCurrentArchives returns all the current archives for the passed in org and record type
 func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
-	existingArchives := []*Archive{}
-	err := db.SelectContext(ctx, &existingArchives, lookupOrgArchives, org.ID, archiveType)
+	archives := make([]*Archive, 0, 1)
+	err := db.SelectContext(ctx, &archives, lookupOrgArchives, org.ID, archiveType)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
-	return existingArchives, nil
+	return archives, nil
 }
 
-const lookupArchivesNeedingDeletion = `SELECT id, org_id, start_date AT TIME ZONE 'UTC' as start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND is_purged = FALSE ORDER BY start_date asc, period desc`
+const lookupArchivesNeedingDeletion = `SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND is_purged = FALSE ORDER BY start_date asc, period desc`
 
 // GetArchivesNeedingDeletion returns all the archives which need to be deleted / purged
 func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
-	archives := []*Archive{}
+	archives := make([]*Archive, 0, 1)
 	err := db.SelectContext(ctx, &archives, lookupArchivesNeedingDeletion, org.ID, archiveType)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
@@ -164,7 +164,7 @@ func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveTy
 
 // between is inclusive on both sides
 const lookupOrgDailyArchivesForDateRange = `
-SELECT id, start_date AT TIME ZONE 'UTC' as start_date, period, archive_type, hash, size, record_count, url, rollup_id
+SELECT id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id
 FROM archives_archive
 WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND start_date BETWEEN $4 AND $5
 ORDER BY start_date asc
@@ -202,7 +202,7 @@ UNION DISTINCT
   SELECT generate_series(start_date, (start_date + '1 month'::interval) - '1 second'::interval, '1 day')::date as start_date
   FROM archives_archive WHERE org_id = $3 and period = 'M' and archive_type=$5
 )
-select missing_day::timestamp AT TIME ZONE 'UTC' from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_day
+select missing_day::timestamp with time zone from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_day
 WHERE curr_archives.start_date IS NULL
 `
 
@@ -245,7 +245,7 @@ WITH month_days(missing_month) AS (
 ), curr_archives AS (
   SELECT start_date FROM archives_archive WHERE org_id = $3 and period = $4 and archive_type=$5
 )
-select missing_month::timestamp AT TIME ZONE 'UTC' from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_month
+select missing_month::timestamp with time zone from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_month
 WHERE curr_archives.start_date IS NULL
 `
 
