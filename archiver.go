@@ -118,7 +118,7 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 	return orgs, nil
 }
 
-const lookupOrgArchives = `SELECT id, start_date AT TIME ZONE 'UTC', period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 ORDER BY start_date asc, period desc`
+const lookupOrgArchives = `SELECT id, start_date AT TIME ZONE 'UTC' as start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 ORDER BY start_date asc, period desc`
 
 // GetCurrentArchives returns all the current archives for the passed in org and record type
 func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
@@ -131,7 +131,7 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 	return existingArchives, nil
 }
 
-const lookupArchivesNeedingDeletion = `SELECT id, org_id, start_date AT TIME ZONE 'UTC', period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND is_purged = FALSE ORDER BY start_date asc, period desc`
+const lookupArchivesNeedingDeletion = `SELECT id, org_id, start_date AT TIME ZONE 'UTC' as start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND is_purged = FALSE ORDER BY start_date asc, period desc`
 
 // GetArchivesNeedingDeletion returns all the archives which need to be deleted / purged
 func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
@@ -164,7 +164,7 @@ func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveTy
 
 // between is inclusive on both sides
 const lookupOrgDailyArchivesForDateRange = `
-SELECT id, start_date AT TIME ZONE 'UTC', period, archive_type, hash, size, record_count, url, rollup_id
+SELECT id, start_date AT TIME ZONE 'UTC' as start_date, period, archive_type, hash, size, record_count, url, rollup_id
 FROM archives_archive
 WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND start_date BETWEEN $4 AND $5
 ORDER BY start_date asc
