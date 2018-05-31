@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
@@ -41,9 +42,21 @@ func main() {
 		hook.StacktraceConfiguration.Skip = 4
 		hook.StacktraceConfiguration.Context = 5
 		if err != nil {
-			logrus.Fatalf("Invalid sentry DSN: '%s': %s", config.SentryDSN, err)
+			logrus.Fatalf("invalid sentry DSN: '%s': %s", config.SentryDSN, err)
 		}
 		logrus.StandardLogger().Hooks.Add(hook)
+	}
+
+	// our settings shouldn't contain a timezone, nothing will work right with this not being a constant UTC
+	if strings.Contains(config.DB, "TimeZone") {
+		logrus.WithField("db", config.DB).Fatalf("invalid db connection string, do not specify a timezone, archiver always uses UTC")
+	}
+
+	// force our DB connection to be in UTC
+	if strings.Contains(config.DB, "?") {
+		config.DB += "&TimeZone=UTC"
+	} else {
+		config.DB += "?TimeZone=UTC"
 	}
 
 	db, err := sqlx.Open("postgres", config.DB)

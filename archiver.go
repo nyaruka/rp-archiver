@@ -95,9 +95,6 @@ func (a *Archive) coversDate(d time.Time) bool {
 	return !a.StartDate.After(d) && end.After(d)
 }
 
-// postgres driver uses the system timezone by default, override to always be in UTC
-const setUTCTimezone = `SET TIME ZONE 'UTC'`
-
 const lookupActiveOrgs = `SELECT id, name, created_on, is_anon FROM orgs_org WHERE is_active = TRUE order by id`
 
 // GetActiveOrgs returns the active organizations sorted by id
@@ -177,17 +174,7 @@ ORDER BY start_date asc
 func GetDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType, startDate time.Time, endDate time.Time) ([]*Archive, error) {
 	existingArchives := []*Archive{}
 
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(setUTCTimezone)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Commit()
-
-	err = tx.SelectContext(ctx, &existingArchives, lookupOrgDailyArchivesForDateRange, org.ID, archiveType, DayPeriod, startDate, endDate)
+	err := db.SelectContext(ctx, &existingArchives, lookupOrgDailyArchivesForDateRange, org.ID, archiveType, DayPeriod, startDate, endDate)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -223,21 +210,11 @@ WHERE curr_archives.start_date IS NULL
 func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, startDate time.Time, endDate time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
 	missing := make([]*Archive, 0, 1)
 
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(setUTCTimezone)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := tx.QueryxContext(ctx, lookupMissingDailyArchive, startDate, endDate, org.ID, DayPeriod, archiveType)
+	rows, err := db.QueryxContext(ctx, lookupMissingDailyArchive, startDate, endDate, org.ID, DayPeriod, archiveType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	defer tx.Commit()
 
 	var missingDay time.Time
 	for rows.Next() {
@@ -282,21 +259,11 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 
 	missing := make([]*Archive, 0, 1)
 
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(setUTCTimezone)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := tx.QueryxContext(ctx, lookupMissingMonthlyArchive, startDate, endDate, org.ID, MonthPeriod, archiveType)
+	rows, err := db.QueryxContext(ctx, lookupMissingMonthlyArchive, startDate, endDate, org.ID, MonthPeriod, archiveType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	defer tx.Commit()
 
 	var missingMonth time.Time
 	for rows.Next() {
@@ -583,26 +550,16 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 
 	log.WithField("filename", file.Name()).Debug("creating new archive file")
 
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(setUTCTimezone)
-	if err != nil {
-		return err
-	}
-
 	var rows *sqlx.Rows
 	if archive.ArchiveType == MessageType {
-		rows, err = tx.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, archive.endDate())
+		rows, err = db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, archive.endDate())
 	} else if archive.ArchiveType == RunType {
-		rows, err = tx.QueryxContext(ctx, lookupFlowRuns, archive.Org.IsAnon, archive.Org.ID, archive.StartDate, archive.endDate())
+		rows, err = db.QueryxContext(ctx, lookupFlowRuns, archive.Org.IsAnon, archive.Org.ID, archive.StartDate, archive.endDate())
 	}
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	defer tx.Rollback()
 
 	recordCount := 0
 	var record, visibility string
