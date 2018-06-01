@@ -184,7 +184,7 @@ ORDER BY start_date asc
 
 // GetDailyArchivesForDateRange returns all the current archives for the passed in org and record type and date range
 func GetDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType, startDate time.Time, endDate time.Time) ([]*Archive, error) {
-	existingArchives := []*Archive{}
+	existingArchives := make([]*Archive, 0, 1)
 
 	err := db.SelectContext(ctx, &existingArchives, lookupOrgDailyArchivesForDateRange, org.ID, archiveType, DayPeriod, startDate, endDate)
 	if err != nil && err != sql.ErrNoRows {
@@ -1179,10 +1179,11 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 				continue
 			}
 
+			deleted = append(deleted, a)
+
 			log.WithFields(logrus.Fields{
 				"elapsed": time.Now().Sub(start),
 			}).Info("deleted archive messages")
-			deleted = append(deleted, a)
 		}
 	}
 
@@ -1210,7 +1211,7 @@ func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB,
 	if config.DeleteRecords {
 		deleted, err = DeleteArchivedOrgRecords(ctx, now, config, db, s3Client, org, archiveType)
 		if err != nil {
-			return nil, nil, err
+			return created, deleted, err
 		}
 	}
 

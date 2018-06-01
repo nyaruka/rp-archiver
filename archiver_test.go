@@ -260,7 +260,11 @@ func TestWriteArchiveToDB(t *testing.T) {
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
 }
 
-const getMsgCount = `select count(*) from msgs_msg where org_id = $1 and created_on >= $2 and created_on < $3`
+const getMsgCount = `
+SELECT COUNT(*) 
+FROM msgs_msg 
+WHERE org_id = $1 and created_on >= $2 and created_on < $3
+`
 
 func getMessageCountForOrg(db *sqlx.DB, orgID int, start time.Time, end time.Time) (int, error) {
 	var count int
@@ -341,6 +345,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 			count, err := getMessageCountForOrg(db, orgs[1].ID, d.StartDate, d.endDate())
 			assert.NoError(t, err)
 			assert.Equal(t, 0, count)
+			assert.True(t, d.IsPurged)
 		}
 
 		// our one message in our existing archive (but that had an invalid URL) should still exist however
