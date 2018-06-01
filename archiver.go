@@ -118,7 +118,11 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 	return orgs, nil
 }
 
-const lookupOrgArchives = `SELECT id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 ORDER BY start_date asc, period desc`
+const lookupOrgArchives = `
+SELECT id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id 
+FROM archives_archive WHERE org_id = $1 AND archive_type = $2 
+ORDER BY start_date asc, period desc
+`
 
 // GetCurrentArchives returns all the current archives for the passed in org and record type
 func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
@@ -131,7 +135,11 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 	return archives, nil
 }
 
-const lookupArchivesNeedingDeletion = `SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND is_purged = FALSE ORDER BY start_date asc, period desc`
+const lookupArchivesNeedingDeletion = `
+SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id 
+FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND is_purged = FALSE 
+ORDER BY start_date asc, period desc
+`
 
 // GetArchivesNeedingDeletion returns all the archives which need to be deleted / purged
 func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
@@ -144,7 +152,11 @@ func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archi
 	return archives, nil
 }
 
-const lookupCountOrgArchives = `SELECT count(id) FROM archives_archive WHERE org_id = $1 AND archive_type = $2`
+const lookupCountOrgArchives = `
+SELECT count(id) 
+FROM archives_archive 
+WHERE org_id = $1 AND archive_type = $2
+`
 
 // GetCurrentArchiveCount returns all the current archives for the passed in org and record type
 func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) (int, error) {
@@ -241,11 +253,11 @@ func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, start
 // endDate for range is not inclusive so we must deduct 1 second
 const lookupMissingMonthlyArchive = `
 WITH month_days(missing_month) AS (
-  select generate_series(date_trunc('month', $1::timestamp with time zone), $2::timestamp with time zone - '1 second'::interval, '1 month')::date
+  SELECT generate_series(date_trunc('month', $1::timestamp with time zone), $2::timestamp with time zone - '1 second'::interval, '1 month')::date
 ), curr_archives AS (
   SELECT start_date FROM archives_archive WHERE org_id = $3 and period = $4 and archive_type=$5
 )
-select missing_month::timestamp with time zone from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_month
+SELECT missing_month::timestamp with time zone from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_month
 WHERE curr_archives.start_date IS NULL
 `
 
@@ -396,12 +408,16 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	monthlyArchive.RecordCount = recordCount
 	monthlyArchive.BuildTime = int(time.Now().Sub(start) / time.Millisecond)
 	monthlyArchive.Dailies = dailies
+
+	// rollups are always purged, purges happen at the daily level
+	monthlyArchive.IsPurged = true
+
 	return nil
 }
 
 const lookupMsgs = `
-select rec.visibility, row_to_json(rec) FROM (
-	select
+SELECT rec.visibility, row_to_json(rec) FROM (
+	SELECT
 	  mm.id,
 	  broadcast_id as broadcast,
 	  row_to_json(contact) as contact,
@@ -441,19 +457,19 @@ select rec.visibility, row_to_json(rec) FROM (
 	  labels_agg.data as labels,
 	  mm.created_on as created_on,
 	  sent_on
-	from msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
+	FROM msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
 	  JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
 
 	  WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
-	order by created_on ASC, id ASC) rec; 
+	ORDER BY created_on ASC, id ASC) rec; 
 `
 
 const lookupFlowRuns = `
-select row_to_json(rec)
+SELECT row_to_json(rec)
 FROM (
-   select
+   SELECT
      fr.id,
      row_to_json(flow_struct) as flow,
      row_to_json(contact_struct) as contact,
@@ -675,12 +691,14 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, a
 
 const insertArchive = `
 INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, url, is_purged, build_time, rollup_id)
-              VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :url, :is_purged, :build_time, :rollup_id)
+VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :url, :is_purged, :build_time, :rollup_id)
 RETURNING id
 `
 
 const updateRollups = `
-UPDATE archives_archive SET rollup_id = $1 WHERE ARRAY[id] <@ $2
+UPDATE archives_archive 
+SET rollup_id = $1 
+WHERE ARRAY[id] <@ $2
 `
 
 // WriteArchiveToDB write an archive to the Database
@@ -965,33 +983,46 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 }
 
 const selectOrgMessagesInRange = `
-SELECT id, visibility FROM msgs_msg WHERE org_id = $1 AND created_on >= $2 AND created_on < $3 ORDER BY created_on ASC, id ASC
+SELECT id, visibility 
+FROM msgs_msg 
+WHERE org_id = $1 AND created_on >= $2 AND created_on < $3 
+ORDER BY created_on ASC, id ASC
 `
 
 const setMessageDeleteReason = `
-UPDATE msgs_msg SET delete_reason = 'A' WHERE id IN(?)
+UPDATE msgs_msg 
+SET delete_reason = 'A' 
+WHERE id IN(?)
 `
 
 const deleteMessageLogs = `
-DELETE from channels_channellog WHERE msg_id IN(?)
+DELETE FROM channels_channellog 
+WHERE msg_id IN(?)
 `
 
 const deleteMessageLabels = `
-DELETE from msgs_msg_labels WHERE msg_id IN(?)
+DELETE FROM msgs_msg_labels 
+WHERE msg_id IN(?)
 `
 
 const unlinkResponses = `
-UPDATE msgs_msg SET response_to_id = NULL WHERE response_to_id IN(?)
+UPDATE msgs_msg 
+SET response_to_id = NULL 
+WHERE response_to_id IN(?)
 `
 
 const deleteMessages = `
-DELETE from msgs_msg WHERE id IN(?)
+DELETE FROM msgs_msg 
+WHERE id IN(?)
 `
 
 const setArchivePurged = `
-UPDATE archives_archive SET is_purged = TRUE WHERE id = $1
+UPDATE archives_archive 
+SET is_purged = TRUE 
+WHERE id = $1
 `
 
+// helper method to safely execute an IN query in the passed in transaction
 func executeInQuery(ctx context.Context, tx *sqlx.Tx, query string, ids []int64) error {
 	q, vs, err := sqlx.In(query, ids)
 	if err != nil {
@@ -1005,6 +1036,8 @@ func executeInQuery(ctx context.Context, tx *sqlx.Tx, query string, ids []int64)
 	}
 	return err
 }
+
+var deleteTransactionSize = 1000
 
 // DeleteArchivedMessages takes the passed in archive, verifies the S3 file is still present (and correct), then selects
 // all the messages in the archive date range, and if equal or fewer than the number archived, deletes them 1000 at a time
@@ -1057,8 +1090,8 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	}
 
 	// ok, delete our messages 1000 at a time, we do this in transactions as it spans a few different queries
-	for start := 0; start < len(msgIDs); start += 1000 {
-		end := start + 1000
+	for start := 0; start < len(msgIDs); start += deleteTransactionSize {
+		end := start + deleteTransactionSize
 		if end > len(msgIDs) {
 			end = len(msgIDs)
 		}

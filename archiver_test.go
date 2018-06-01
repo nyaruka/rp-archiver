@@ -260,9 +260,21 @@ func TestWriteArchiveToDB(t *testing.T) {
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
 }
 
+const getMsgCount = `select count(*) from msgs_msg where org_id = $1 and created_on >= $2 and created_on < $3`
+
+func getMessageCountForOrg(db *sqlx.DB, orgID int, start time.Time, end time.Time) (int, error) {
+	var count int
+	err := db.Get(&count, getMsgCount, orgID, start, end)
+	if err != nil {
+		return -1, err
+	}
+	return count, nil
+}
+
 func TestArchiveOrgMessages(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
+	deleteTransactionSize = 1
 
 	orgs, err := GetActiveOrgs(ctx, db)
 	assert.NoError(t, err)
@@ -323,6 +335,43 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, 63, len(deleted))
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
 		assert.Equal(t, MonthPeriod, deleted[0].Period)
+
+		// shouldn't have any messages remaining for this org for those periods
+		for _, d := range deleted {
+			count, err := getMessageCountForOrg(db, orgs[1].ID, d.StartDate, d.endDate())
+			assert.NoError(t, err)
+			assert.Equal(t, 0, count)
+		}
+
+		// our one message in our existing archive (but that had an invalid URL) should still exist however
+		count, err := getMessageCountForOrg(
+			db,
+			orgs[1].ID,
+			time.Date(2017, 10, 8, 0, 0, 0, 0, time.UTC),
+			time.Date(2017, 10, 9, 0, 0, 0, 0, time.UTC),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, count)
+
+		// and messages on our other orgs should be unaffected
+		count, err = getMessageCountForOrg(
+			db,
+			orgs[2].ID,
+			time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, count)
+
+		// as is our newer message which was replied to
+		count, err = getMessageCountForOrg(
+			db,
+			orgs[1].ID,
+			time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2018, 2, 1, 0, 0, 0, 0, time.UTC),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, count)
 	}
 }
 
