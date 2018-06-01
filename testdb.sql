@@ -142,7 +142,7 @@ CREATE TABLE archives_archive (
     size bigint NOT NULL, 
     hash text NOT NULL, 
     url varchar(200) NOT NULL, 
-    is_purged boolean NOT NULL, 
+    needs_deletion boolean NOT NULL, 
     build_time integer NOT NULL, 
     org_id integer NOT NULL,
     rollup_id integer NULL
@@ -164,11 +164,11 @@ INSERT INTO channels_channel(id, uuid, name, org_id) VALUES
 (2, '60f2ed5b-05f2-4156-9ff0-e44e90da1b85', 'Channel 2', 2),
 (3, 'b79e0054-068f-4928-a5f4-339d10a7ad5a', 'Channel 3', 3);
 
-INSERT INTO archives_archive(id, archive_type, created_on, start_date, period, record_count, size, hash, url, is_purged, build_time, org_id) VALUES 
-(NEXTVAL('archives_archive_id_seq'), 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 3),
-(NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 3),
-(NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-02 00:00:00.000000+00', '2017-09-01 00:00:00.000000+00', 'M', 0, 0, '', '', FALSE, 0, 3),
-(NEXTVAL('archives_archive_id_seq'), 'message', '2017-10-08 00:00:00.000000+00', '2017-10-08 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 2);
+INSERT INTO archives_archive(id, archive_type, created_on, start_date, period, record_count, size, hash, url, needs_deletion, build_time, org_id) VALUES 
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '', '', TRUE, 0, 3),
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '', '', TRUE, 0, 3),
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-02 00:00:00.000000+00', '2017-09-01 00:00:00.000000+00', 'M', 0, 0, '', '', TRUE, 0, 3),
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-10-08 00:00:00.000000+00', '2017-10-08 00:00:00.000000+00', 'D', 0, 0, '', '', TRUE, 0, 2);
 
 INSERT INTO contacts_contact(id, is_active, created_by_id, created_on, modified_by_id, modified_on, org_id, is_blocked, name, is_test, language, uuid, is_stopped) VALUES
 (1,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 1, FALSE, NULL, FALSE, 'eng', 'c7a2dd87-a80e-420b-8431-ca48d422e924', FALSE),

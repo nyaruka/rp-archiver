@@ -72,8 +72,8 @@ type Archive struct {
 	URL         string `db:"url"`
 	BuildTime   int    `db:"build_time"`
 
-	IsPurged bool `db:"is_purged"`
-	Rollup   *int `db:"rollup_id"`
+	NeedsDeletion bool `db:"needs_deletion"`
+	Rollup        *int `db:"rollup_id"`
 
 	Org         Org
 	ArchiveFile string
@@ -137,11 +137,11 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 
 const lookupArchivesNeedingDeletion = `
 SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id 
-FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND is_purged = FALSE 
+FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
 ORDER BY start_date asc, period desc
 `
 
-// GetArchivesNeedingDeletion returns all the archives which need to be deleted / purged
+// GetArchivesNeedingDeletion returns all the archives which need to be deleted
 func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
 	archives := make([]*Archive, 0, 1)
 	err := db.SelectContext(ctx, &archives, lookupArchivesNeedingDeletion, org.ID, archiveType)
@@ -409,9 +409,6 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	monthlyArchive.BuildTime = int(time.Now().Sub(start) / time.Millisecond)
 	monthlyArchive.Dailies = dailies
 
-	// rollups are always purged, purges happen at the daily level
-	monthlyArchive.IsPurged = true
-
 	return nil
 }
 
@@ -674,24 +671,29 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, a
 		hashBase64,
 	)
 
-	if err == nil {
-		archive.URL = url
-		logrus.WithFields(logrus.Fields{
-			"org_id":       archive.Org.ID,
-			"archive_type": archive.ArchiveType,
-			"start_date":   archive.StartDate,
-			"period":       archive.Period,
-			"url":          archive.URL,
-			"file_size":    archive.Size,
-			"file_hash":    archive.Hash,
-		}).Debug("completed uploading archive file")
+	if err != nil {
+		return err
 	}
-	return err
+
+	archive.URL = url
+	archive.NeedsDeletion = true
+
+	logrus.WithFields(logrus.Fields{
+		"org_id":       archive.Org.ID,
+		"archive_type": archive.ArchiveType,
+		"start_date":   archive.StartDate,
+		"period":       archive.Period,
+		"url":          archive.URL,
+		"file_size":    archive.Size,
+		"file_hash":    archive.Hash,
+	}).Debug("completed uploading archive file")
+
+	return nil
 }
 
 const insertArchive = `
-INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, url, is_purged, build_time, rollup_id)
-VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :url, :is_purged, :build_time, :rollup_id)
+INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, url, needs_deletion, build_time, rollup_id)
+VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :url, :needs_deletion, :build_time, :rollup_id)
 RETURNING id
 `
 
@@ -705,7 +707,7 @@ WHERE ARRAY[id] <@ $2
 func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error {
 	archive.OrgID = archive.Org.ID
 	archive.CreatedOn = time.Now()
-	archive.IsPurged = false
+	archive.NeedsDeletion = false
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -1016,9 +1018,9 @@ DELETE FROM msgs_msg
 WHERE id IN(?)
 `
 
-const setArchivePurged = `
+const setArchiveDeleted = `
 UPDATE archives_archive 
-SET is_purged = TRUE 
+SET needs_deletion = FALSE
 WHERE id = $1
 `
 
@@ -1042,7 +1044,7 @@ var deleteTransactionSize = 1000
 // DeleteArchivedMessages takes the passed in archive, verifies the S3 file is still present (and correct), then selects
 // all the messages in the archive date range, and if equal or fewer than the number archived, deletes them 1000 at a time
 //
-// Upon completion it updates the is_purged flag on the archive
+// Upon completion it updates the needs_deletion flag on the archive
 func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
 	// first things first, make sure our file is present on S3
 	md5, err := GetS3FileETAG(ctx, s3Client, archive.URL)
@@ -1140,19 +1142,19 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		}
 	}
 
-	// all went well! mark our archive as purged
-	_, err = db.ExecContext(ctx, setArchivePurged, archive.ID)
+	// all went well! mark our archive as no longer needing deletion
+	_, err = db.ExecContext(ctx, setArchiveDeleted, archive.ID)
 	if err != nil {
-		return fmt.Errorf("error setting archive as purged: %s", err.Error())
+		return fmt.Errorf("error setting archive as deleted: %s", err.Error())
 	}
-	archive.IsPurged = true
+	archive.NeedsDeletion = true
 
 	return nil
 }
 
 // DeleteArchivedOrgRecords deletes all the records for the passeg in org based on archives already created
 func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
-	// get all the archives that haven't yet been purged
+	// get all the archives that haven't yet been deleted
 	archives, err := GetArchivesNeedingDeletion(ctx, db, org, archiveType)
 	if err != nil {
 		return nil, fmt.Errorf("error finding archives needing deletion '%s'", archiveType)

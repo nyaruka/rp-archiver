@@ -246,7 +246,7 @@ func TestWriteArchiveToDB(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 5, task.ID)
-	assert.Equal(t, false, task.IsPurged)
+	assert.Equal(t, false, task.NeedsDeletion)
 
 	// if we recalculate our tasks, we should have one less now
 	existing, err = GetCurrentArchives(ctx, db, orgs[2], MessageType)
@@ -345,7 +345,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 			count, err := getMessageCountForOrg(db, orgs[1].ID, d.StartDate, d.endDate())
 			assert.NoError(t, err)
 			assert.Equal(t, 0, count)
-			assert.True(t, d.IsPurged)
+			assert.False(t, d.NeedsDeletion)
 		}
 
 		// our one message in our existing archive (but that had an invalid URL) should still exist however
