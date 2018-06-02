@@ -408,6 +408,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	monthlyArchive.RecordCount = recordCount
 	monthlyArchive.BuildTime = int(time.Now().Sub(start) / time.Millisecond)
 	monthlyArchive.Dailies = dailies
+	monthlyArchive.NeedsDeletion = false
 
 	return nil
 }
