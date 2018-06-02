@@ -119,7 +119,7 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 }
 
 const lookupOrgArchives = `
-SELECT id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id 
+SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id, needs_deletion
 FROM archives_archive WHERE org_id = $1 AND archive_type = $2 
 ORDER BY start_date asc, period desc
 `
@@ -136,7 +136,7 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 }
 
 const lookupArchivesNeedingDeletion = `
-SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id 
+SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id, needs_deletion 
 FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
 ORDER BY start_date asc, period desc
 `
@@ -707,7 +707,6 @@ WHERE ARRAY[id] <@ $2
 func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error {
 	archive.OrgID = archive.Org.ID
 	archive.CreatedOn = time.Now()
-	archive.NeedsDeletion = false
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -1147,7 +1146,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	if err != nil {
 		return fmt.Errorf("error setting archive as deleted: %s", err.Error())
 	}
-	archive.NeedsDeletion = true
+	archive.NeedsDeletion = false
 
 	return nil
 }
