@@ -62,7 +62,7 @@ func TestS3(s3Client s3iface.S3API, bucket string) error {
 }
 
 // PutS3File writes the passed in file to the bucket with the passed in content type
-func PutS3File(s3Client s3iface.S3API, bucket string, path string, contentType string, contentEncoding string, filename string, md5 string) (string, error) {
+func PutS3File(ctx context.Context, s3Client s3iface.S3API, bucket string, path string, contentType string, contentEncoding string, filename string, md5 string) (string, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return "", err
@@ -79,7 +79,7 @@ func PutS3File(s3Client s3iface.S3API, bucket string, path string, contentType s
 		ContentMD5:      aws.String(md5),
 		Metadata:        map[string]*string{"md5chksum": aws.String(md5)},
 	}
-	_, err = s3Client.PutObject(params)
+	_, err = s3Client.PutObjectWithContext(ctx, params)
 	if err != nil {
 		return "", err
 	}
