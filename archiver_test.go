@@ -246,7 +246,7 @@ func TestWriteArchiveToDB(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 5, task.ID)
-	assert.Equal(t, true, task.NeedsDeletion)
+	assert.Equal(t, false, task.NeedsDeletion)
 
 	// if we recalculate our tasks, we should have one less now
 	existing, err = GetCurrentArchives(ctx, db, orgs[2], MessageType)
