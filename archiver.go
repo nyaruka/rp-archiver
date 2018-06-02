@@ -433,7 +433,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	}
 	monthlyArchive.Size = stat.Size()
 	monthlyArchive.RecordCount = recordCount
-	monthlyArchive.BuildTime = int(time.Now().Sub(start) / time.Millisecond)
+	monthlyArchive.BuildTime = int(time.Since(start) / time.Millisecond)
 	monthlyArchive.Dailies = dailies
 	monthlyArchive.NeedsDeletion = false
 
@@ -635,7 +635,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 			log.WithFields(logrus.Fields{
 				"filename":     file.Name(),
 				"record_count": recordCount,
-				"elapsed":      time.Now().Sub(start),
+				"elapsed":      time.Since(start),
 			}).Debug("writing archive file")
 		}
 	}
@@ -659,14 +659,14 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	}
 	archive.Size = stat.Size()
 	archive.RecordCount = recordCount
-	archive.BuildTime = int(time.Now().Sub(start) / time.Millisecond)
+	archive.BuildTime = int(time.Since(start) / time.Millisecond)
 
 	log.WithFields(logrus.Fields{
 		"record_count": recordCount,
 		"filename":     file.Name(),
 		"file_size":    archive.Size,
 		"file_hash":    archive.Hash,
-		"elapsed":      time.Now().Sub(start),
+		"elapsed":      time.Since(start),
 	}).Debug("completed writing archive file")
 	return nil
 }
@@ -887,7 +887,7 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	}
 
 	if len(archives) > 0 {
-		elapsed := time.Now().Sub(start)
+		elapsed := time.Since(start)
 		rate := float32(records) / (float32(elapsed) / float32(time.Second))
 		log.WithFields(logrus.Fields{
 			"elapsed":            elapsed,
@@ -944,7 +944,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 			}
 		}
 
-		elapsed := time.Now().Sub(start)
+		elapsed := time.Since(start)
 		log.WithFields(logrus.Fields{
 			"id":           archive.ID,
 			"record_count": archive.RecordCount,
@@ -1013,7 +1013,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	}
 
 	if len(archives) > 0 {
-		elapsed := time.Now().Sub(start)
+		elapsed := time.Since(start)
 		rate := float32(records) / (float32(elapsed) / float32(time.Second))
 		log.WithFields(logrus.Fields{
 			"elapsed":            elapsed,
@@ -1227,7 +1227,7 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 			deleted = append(deleted, a)
 
 			log.WithFields(logrus.Fields{
-				"elapsed": time.Now().Sub(start),
+				"elapsed": time.Since(start),
 			}).Info("deleted archive messages")
 		}
 	}
