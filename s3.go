@@ -62,7 +62,7 @@ func TestS3(s3Client s3iface.S3API, bucket string) error {
 }
 
 // PutS3File writes the passed in file to the bucket with the passed in content type
-func PutS3File(s3Client s3iface.S3API, bucket string, path string, contentType string, contentEncoding string, filename string, md5 string) (string, error) {
+func PutS3File(ctx context.Context, s3Client s3iface.S3API, bucket string, path string, contentType string, contentEncoding string, filename string, md5 string) (string, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return "", err
@@ -79,7 +79,7 @@ func PutS3File(s3Client s3iface.S3API, bucket string, path string, contentType s
 		ContentMD5:      aws.String(md5),
 		Metadata:        map[string]*string{"md5chksum": aws.String(md5)},
 	}
-	_, err = s3Client.PutObject(params)
+	_, err = s3Client.PutObjectWithContext(ctx, params)
 	if err != nil {
 		return "", err
 	}
@@ -92,6 +92,37 @@ func withAcceptEncoding(e string) request.Option {
 	return func(r *request.Request) {
 		r.HTTPRequest.Header.Add("Accept-Encoding", e)
 	}
+}
+
+// GetS3FileETAG returns the ETAG hash for the passed in file
+func GetS3FileETAG(ctx context.Context, s3Client s3iface.S3API, fileURL string) (string, error) {
+	u, err := url.Parse(fileURL)
+	if err != nil {
+		return "", err
+	}
+
+	bucket := strings.Split(u.Host, ".")[0]
+	path := u.Path
+
+	output, err := s3Client.HeadObjectWithContext(
+		ctx,
+		&s3.HeadObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(path),
+		},
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	if output.ETag == nil {
+		return "", fmt.Errorf("no ETAG for object")
+	}
+
+	// etag is quoted, remove them
+	etag := strings.Trim(*output.ETag, `"`)
+	return etag, nil
 }
 
 // GetS3File return an io.ReadCloser for the passed in bucket and path

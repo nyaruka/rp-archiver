@@ -72,8 +72,8 @@ type Archive struct {
 	URL         string `db:"url"`
 	BuildTime   int    `db:"build_time"`
 
-	IsPurged bool `db:"is_purged"`
-	Rollup   *int `db:"rollup_id"`
+	NeedsDeletion bool `db:"needs_deletion"`
+	Rollup        *int `db:"rollup_id"`
 
 	Org         Org
 	ArchiveFile string
@@ -95,13 +95,13 @@ func (a *Archive) coversDate(d time.Time) bool {
 	return !a.StartDate.After(d) && end.After(d)
 }
 
-// postgres driver uses the system timezone by default, override to always be in UTC
-const setUTCTimezone = `SET TIME ZONE 'UTC'`
-
 const lookupActiveOrgs = `SELECT id, name, created_on, is_anon FROM orgs_org WHERE is_active = TRUE order by id`
 
 // GetActiveOrgs returns the active organizations sorted by id
 func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
 	rows, err := db.QueryxContext(ctx, lookupActiveOrgs)
 	if err != nil {
 		return nil, err
@@ -121,23 +121,57 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 	return orgs, nil
 }
 
-const lookupOrgArchives = `SELECT id, start_date, period, archive_type, hash, size, record_count, url, rollup_id FROM archives_archive WHERE org_id = $1 AND archive_type = $2 ORDER BY start_date asc, period desc`
+const lookupOrgArchives = `
+SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id, needs_deletion
+FROM archives_archive WHERE org_id = $1 AND archive_type = $2 
+ORDER BY start_date asc, period desc
+`
 
 // GetCurrentArchives returns all the current archives for the passed in org and record type
 func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
-	existingArchives := []*Archive{}
-	err := db.SelectContext(ctx, &existingArchives, lookupOrgArchives, org.ID, archiveType)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	archives := make([]*Archive, 0, 1)
+	err := db.SelectContext(ctx, &archives, lookupOrgArchives, org.ID, archiveType)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
 
-	return existingArchives, nil
+	return archives, nil
 }
 
-const lookupCountOrgArchives = `SELECT count(id) FROM archives_archive WHERE org_id = $1 AND archive_type = $2`
+const lookupArchivesNeedingDeletion = `
+SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id, needs_deletion 
+FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
+ORDER BY start_date asc, period desc
+`
+
+// GetArchivesNeedingDeletion returns all the archives which need to be deleted
+func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	archives := make([]*Archive, 0, 1)
+	err := db.SelectContext(ctx, &archives, lookupArchivesNeedingDeletion, org.ID, archiveType)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	return archives, nil
+}
+
+const lookupCountOrgArchives = `
+SELECT count(id) 
+FROM archives_archive 
+WHERE org_id = $1 AND archive_type = $2
+`
 
 // GetCurrentArchiveCount returns all the current archives for the passed in org and record type
 func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
 	var archiveCount int
 
 	rows, err := db.QueryxContext(ctx, lookupCountOrgArchives, org.ID, archiveType)
@@ -154,7 +188,7 @@ func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveTy
 
 // between is inclusive on both sides
 const lookupOrgDailyArchivesForDateRange = `
-SELECT id, start_date, period, archive_type, hash, size, record_count, url, rollup_id
+SELECT id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id
 FROM archives_archive
 WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND start_date BETWEEN $4 AND $5
 ORDER BY start_date asc
@@ -162,19 +196,12 @@ ORDER BY start_date asc
 
 // GetDailyArchivesForDateRange returns all the current archives for the passed in org and record type and date range
 func GetDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType, startDate time.Time, endDate time.Time) ([]*Archive, error) {
-	existingArchives := []*Archive{}
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
 
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(setUTCTimezone)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Commit()
+	existingArchives := make([]*Archive, 0, 1)
 
-	err = tx.SelectContext(ctx, &existingArchives, lookupOrgDailyArchivesForDateRange, org.ID, archiveType, DayPeriod, startDate, endDate)
+	err := db.SelectContext(ctx, &existingArchives, lookupOrgDailyArchivesForDateRange, org.ID, archiveType, DayPeriod, startDate, endDate)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -184,6 +211,9 @@ func GetDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, org Org, arc
 
 // GetMissingDailyArchives calculates what archives need to be generated for the passed in org this is calculated per day
 func GetMissingDailyArchives(ctx context.Context, db *sqlx.DB, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
 	// our first archive would be active days from today
 	endDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -org.ActiveDays)
 	orgUTC := org.CreatedOn.In(time.UTC)
@@ -202,29 +232,22 @@ UNION DISTINCT
   SELECT generate_series(start_date, (start_date + '1 month'::interval) - '1 second'::interval, '1 day')::date as start_date
   FROM archives_archive WHERE org_id = $3 and period = 'M' and archive_type=$5
 )
-select missing_day::timestamp AT TIME ZONE 'UTC' from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_day
+select missing_day::timestamp with time zone from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_day
 WHERE curr_archives.start_date IS NULL
 `
 
 // GetMissingDailyArchivesForDateRange returns all them missing daily archives between the two passed in date ranges
 func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, startDate time.Time, endDate time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
 	missing := make([]*Archive, 0, 1)
 
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(setUTCTimezone)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := tx.QueryxContext(ctx, lookupMissingDailyArchive, startDate, endDate, org.ID, DayPeriod, archiveType)
+	rows, err := db.QueryxContext(ctx, lookupMissingDailyArchive, startDate, endDate, org.ID, DayPeriod, archiveType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	defer tx.Commit()
 
 	var missingDay time.Time
 	for rows.Next() {
@@ -251,16 +274,19 @@ func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, start
 // endDate for range is not inclusive so we must deduct 1 second
 const lookupMissingMonthlyArchive = `
 WITH month_days(missing_month) AS (
-  select generate_series(date_trunc('month', $1::timestamp with time zone), $2::timestamp with time zone - '1 second'::interval, '1 month')::date
+  SELECT generate_series(date_trunc('month', $1::timestamp with time zone), $2::timestamp with time zone - '1 second'::interval, '1 month')::date
 ), curr_archives AS (
   SELECT start_date FROM archives_archive WHERE org_id = $3 and period = $4 and archive_type=$5
 )
-select missing_month::timestamp AT TIME ZONE 'UTC' from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_month
+SELECT missing_month::timestamp with time zone from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_month
 WHERE curr_archives.start_date IS NULL
 `
 
 // GetMissingMonthlyArchives gets which montly archives are currently missing for this org
 func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+	defer cancel()
+
 	lastActive := now.AddDate(0, 0, -org.ActiveDays)
 	endDate := time.Date(lastActive.Year(), lastActive.Month(), 1, 0, 0, 0, 0, time.UTC)
 
@@ -269,21 +295,11 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 
 	missing := make([]*Archive, 0, 1)
 
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(setUTCTimezone)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := tx.QueryxContext(ctx, lookupMissingMonthlyArchive, startDate, endDate, org.ID, MonthPeriod, archiveType)
+	rows, err := db.QueryxContext(ctx, lookupMissingMonthlyArchive, startDate, endDate, org.ID, MonthPeriod, archiveType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	defer tx.Commit()
 
 	var missingMonth time.Time
 	for rows.Next() {
@@ -308,6 +324,9 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 
 // BuildRollupArchive builds a monthly archive from the files present on S3
 func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client s3iface.S3API, monthlyArchive *Archive, now time.Time, org Org, archiveType ArchiveType) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Hour)
+	defer cancel()
+
 	start := time.Now()
 
 	log := logrus.WithFields(logrus.Fields{
@@ -414,14 +433,16 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	}
 	monthlyArchive.Size = stat.Size()
 	monthlyArchive.RecordCount = recordCount
-	monthlyArchive.BuildTime = int(time.Now().Sub(start) / time.Millisecond)
+	monthlyArchive.BuildTime = int(time.Since(start) / time.Millisecond)
 	monthlyArchive.Dailies = dailies
+	monthlyArchive.NeedsDeletion = false
+
 	return nil
 }
 
 const lookupMsgs = `
-select rec.visibility, row_to_json(rec) FROM (
-	select
+SELECT rec.visibility, row_to_json(rec) FROM (
+	SELECT
 	  mm.id,
 	  broadcast_id as broadcast,
 	  row_to_json(contact) as contact,
@@ -461,19 +482,19 @@ select rec.visibility, row_to_json(rec) FROM (
 	  labels_agg.data as labels,
 	  mm.created_on as created_on,
 	  sent_on
-	from msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
+	FROM msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
 	  JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
 
 	  WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
-	order by created_on ASC, id ASC) rec; 
+	ORDER BY created_on ASC, id ASC) rec; 
 `
 
 const lookupFlowRuns = `
-select row_to_json(rec)
+SELECT row_to_json(rec)
 FROM (
-   select
+   SELECT
      fr.id,
      row_to_json(flow_struct) as flow,
      row_to_json(contact_struct) as contact,
@@ -548,6 +569,9 @@ func EnsureTempArchiveDirectory(path string) error {
 
 // CreateArchiveFile is responsible for writing an archive file for the passed in archive from our database
 func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archivePath string) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Hour*3)
+	defer cancel()
+
 	start := time.Now()
 
 	log := logrus.WithFields(logrus.Fields{
@@ -568,28 +592,20 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	writer := bufio.NewWriter(gzWriter)
 	defer file.Close()
 
-	log.WithField("filename", file.Name()).Debug("creating new archive file")
-
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(setUTCTimezone)
-	if err != nil {
-		return err
-	}
+	log.WithFields(logrus.Fields{
+		"filename": file.Name(),
+	}).Debug("creating new archive file")
 
 	var rows *sqlx.Rows
 	if archive.ArchiveType == MessageType {
-		rows, err = tx.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, archive.endDate())
+		rows, err = db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, archive.endDate())
 	} else if archive.ArchiveType == RunType {
-		rows, err = tx.QueryxContext(ctx, lookupFlowRuns, archive.Org.IsAnon, archive.Org.ID, archive.StartDate, archive.endDate())
+		rows, err = db.QueryxContext(ctx, lookupFlowRuns, archive.Org.IsAnon, archive.Org.ID, archive.StartDate, archive.endDate())
 	}
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	defer tx.Rollback()
 
 	recordCount := 0
 	var record, visibility string
@@ -616,7 +632,11 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		recordCount++
 
 		if recordCount%100000 == 0 {
-			log.WithField("filename", file.Name()).WithField("record_count", recordCount).WithField("elapsed", time.Now().Sub(start)).Debug("writing archive file")
+			log.WithFields(logrus.Fields{
+				"filename":     file.Name(),
+				"record_count": recordCount,
+				"elapsed":      time.Since(start),
+			}).Debug("writing archive file")
 		}
 	}
 
@@ -639,20 +659,23 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	}
 	archive.Size = stat.Size()
 	archive.RecordCount = recordCount
-	archive.BuildTime = int(time.Now().Sub(start) / time.Millisecond)
+	archive.BuildTime = int(time.Since(start) / time.Millisecond)
 
 	log.WithFields(logrus.Fields{
 		"record_count": recordCount,
 		"filename":     file.Name(),
 		"file_size":    archive.Size,
 		"file_hash":    archive.Hash,
-		"elapsed":      time.Now().Sub(start),
+		"elapsed":      time.Since(start),
 	}).Debug("completed writing archive file")
 	return nil
 }
 
 // UploadArchive uploads the passed archive file to S3
 func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, archive *Archive) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
+	defer cancel()
+
 	// s3 wants a base64 encoded hash instead of our hex encoded
 	hashBytes, _ := hex.DecodeString(archive.Hash)
 	hashBase64 := base64.StdEncoding.EncodeToString(hashBytes)
@@ -673,6 +696,7 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, a
 	}
 
 	url, err := PutS3File(
+		ctx,
 		s3Client,
 		bucket,
 		archivePath,
@@ -682,36 +706,45 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, a
 		hashBase64,
 	)
 
-	if err == nil {
-		archive.URL = url
-		logrus.WithFields(logrus.Fields{
-			"org_id":       archive.Org.ID,
-			"archive_type": archive.ArchiveType,
-			"start_date":   archive.StartDate,
-			"period":       archive.Period,
-			"url":          archive.URL,
-			"file_size":    archive.Size,
-			"file_hash":    archive.Hash,
-		}).Debug("completed uploading archive file")
+	if err != nil {
+		return err
 	}
-	return err
+
+	archive.URL = url
+	archive.NeedsDeletion = true
+
+	logrus.WithFields(logrus.Fields{
+		"org_id":       archive.Org.ID,
+		"archive_type": archive.ArchiveType,
+		"start_date":   archive.StartDate,
+		"period":       archive.Period,
+		"url":          archive.URL,
+		"file_size":    archive.Size,
+		"file_hash":    archive.Hash,
+	}).Debug("completed uploading archive file")
+
+	return nil
 }
 
 const insertArchive = `
-INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, url, is_purged, build_time, rollup_id)
-              VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :url, :is_purged, :build_time, :rollup_id)
+INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, url, needs_deletion, build_time, rollup_id)
+VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :url, :needs_deletion, :build_time, :rollup_id)
 RETURNING id
 `
 
 const updateRollups = `
-UPDATE archives_archive SET rollup_id = $1 WHERE ARRAY[id] <@ $2
+UPDATE archives_archive 
+SET rollup_id = $1 
+WHERE ARRAY[id] <@ $2
 `
 
 // WriteArchiveToDB write an archive to the Database
 func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
 	archive.OrgID = archive.Org.ID
 	archive.CreatedOn = time.Now()
-	archive.IsPurged = false
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -778,20 +811,23 @@ func DeleteArchiveFile(archive *Archive) error {
 		return err
 	}
 
-	log := logrus.WithFields(logrus.Fields{
+	logrus.WithFields(logrus.Fields{
 		"org_id":        archive.Org.ID,
 		"archive_type":  archive.ArchiveType,
 		"start_date":    archive.StartDate,
 		"periond":       archive.Period,
 		"db_archive_id": archive.ID,
-	})
-	log.WithField("filename", archive.ArchiveFile).Debug("deleted temporary archive file")
+		"filename":      archive.ArchiveFile,
+	}).Debug("deleted temporary archive file")
 	return nil
 }
 
 // CreateOrgArchives builds all the missing archives for the passed in org
 func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
-	log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
+	log := logrus.WithFields(logrus.Fields{
+		"org":    org.Name,
+		"org_id": org.ID,
+	})
 	records := 0
 	start := time.Now()
 
@@ -829,7 +865,7 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 
 		// append daily archives to the monthly archives
 		archives = append(archives, daily...)
-
+		defer ctx.Done()
 	} else {
 		// figure out any missing day archives
 		archives, err = GetMissingDailyArchives(ctx, db, now, org, archiveType)
@@ -851,20 +887,33 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	}
 
 	if len(archives) > 0 {
-		elapsed := time.Now().Sub(start)
+		elapsed := time.Since(start)
 		rate := float32(records) / (float32(elapsed) / float32(time.Second))
-		log.WithField("elapsed", elapsed).WithField("records_per_second", rate).Info("completed archival for org")
+		log.WithFields(logrus.Fields{
+			"elapsed":            elapsed,
+			"records_per_second": rate,
+		}).Info("completed archival for org")
 	}
 
 	return archives, nil
 }
 
 func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3iface.S3API, org Org, archives []*Archive) error {
-	log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
+	log := logrus.WithFields(logrus.Fields{
+		"org":    org.Name,
+		"org_id": org.ID,
+	})
 
 	for _, archive := range archives {
-		log = log.WithField("start_date", archive.StartDate).WithField("end_date", archive.endDate()).WithField("period", archive.Period).WithField("archive_type", archive.ArchiveType)
+		log = log.WithFields(logrus.Fields{
+			"start_date":   archive.StartDate,
+			"end_date":     archive.endDate(),
+			"period":       archive.Period,
+			"archive_type": archive.ArchiveType,
+		})
 		log.Info("starting archive")
+		start := time.Now()
+
 		err := CreateArchiveFile(ctx, db, archive, config.TempDir)
 		if err != nil {
 			log.WithError(err).Error("error writing archive file")
@@ -895,7 +944,12 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 			}
 		}
 
-		log.WithField("id", archive.ID).WithField("record_count", archive.RecordCount).WithField("elapsed", archive.BuildTime).Info("archive complete")
+		elapsed := time.Since(start)
+		log.WithFields(logrus.Fields{
+			"id":           archive.ID,
+			"record_count": archive.RecordCount,
+			"elapsed":      elapsed,
+		}).Info("archive complete")
 	}
 
 	return nil
@@ -903,10 +957,14 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 
 // RollupOrgArchives rolls up monthly archives from our daily archives
 func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
-	log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
-	records := 0
+	ctx, cancel := context.WithTimeout(ctx, time.Hour*3)
+	defer cancel()
+
+	log := logrus.WithFields(logrus.Fields{
+		"org":    org.Name,
+		"org_id": org.ID,
+	})
 	created := make([]*Archive, 0, 1)
-	start := time.Now()
 
 	// get our missing monthly archives
 	archives, err := GetMissingMonthlyArchives(ctx, db, now, org, archiveType)
@@ -916,6 +974,13 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 
 	// build them from rollups
 	for _, archive := range archives {
+		log.WithFields(logrus.Fields{
+			"start_date":   archive.StartDate,
+			"archive_type": archive.ArchiveType,
+		})
+		start := time.Now()
+		log.Info("starting rollup")
+
 		err = BuildRollupArchive(ctx, db, config, s3Client, archive, now, org, archiveType)
 		if err != nil {
 			log.WithError(err).Error("error building monthly archive")
@@ -944,34 +1009,274 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			}
 		}
 
-		log.WithField("id", archive.ID).WithField("record_count", archive.RecordCount).WithField("elapsed", archive.BuildTime).Info("rollup complete")
+		log.WithFields(logrus.Fields{
+			"id":           archive.ID,
+			"record_count": archive.RecordCount,
+			"elapsed":      time.Since(start),
+		}).Info("rollup complete")
 		created = append(created, archive)
-	}
-
-	if len(archives) > 0 {
-		elapsed := time.Now().Sub(start)
-		rate := float32(records) / (float32(elapsed) / float32(time.Second))
-		log.WithField("elapsed", elapsed).WithField("records_per_second", int(rate)).Info("completed rollup for org")
 	}
 
 	return created, nil
 }
 
+const selectOrgMessagesInRange = `
+SELECT id, visibility 
+FROM msgs_msg 
+WHERE org_id = $1 AND created_on >= $2 AND created_on < $3 
+ORDER BY created_on ASC, id ASC
+`
+
+const setMessageDeleteReason = `
+UPDATE msgs_msg 
+SET delete_reason = 'A' 
+WHERE id IN(?)
+`
+
+const deleteMessageLogs = `
+DELETE FROM channels_channellog 
+WHERE msg_id IN(?)
+`
+
+const deleteMessageLabels = `
+DELETE FROM msgs_msg_labels 
+WHERE msg_id IN(?)
+`
+
+const unlinkResponses = `
+UPDATE msgs_msg 
+SET response_to_id = NULL 
+WHERE response_to_id IN(?)
+`
+
+const deleteMessages = `
+DELETE FROM msgs_msg 
+WHERE id IN(?)
+`
+
+const setArchiveDeleted = `
+UPDATE archives_archive 
+SET needs_deletion = FALSE
+WHERE id = $1
+`
+
+// helper method to safely execute an IN query in the passed in transaction
+func executeInQuery(ctx context.Context, tx *sqlx.Tx, query string, ids []int64) error {
+	q, vs, err := sqlx.In(query, ids)
+	if err != nil {
+		return err
+	}
+	q = tx.Rebind(q)
+
+	_, err = tx.ExecContext(ctx, q, vs...)
+	if err != nil {
+		tx.Rollback()
+	}
+	return err
+}
+
+var deleteTransactionSize = 1000
+
+// DeleteArchivedMessages takes the passed in archive, verifies the S3 file is still present (and correct), then selects
+// all the messages in the archive date range, and if equal or fewer than the number archived, deletes them 1000 at a time
+//
+// Upon completion it updates the needs_deletion flag on the archive
+func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Hour*3)
+	defer cancel()
+
+	start := time.Now()
+	log := logrus.WithFields(logrus.Fields{
+		"id":           archive.ID,
+		"org_id":       archive.OrgID,
+		"start_date":   archive.StartDate,
+		"end_date":     archive.endDate(),
+		"archive_type": archive.ArchiveType,
+		"total_count":  archive.RecordCount,
+	})
+	log.Info("deleting messages")
+
+	// first things first, make sure our file is present on S3
+	md5, err := GetS3FileETAG(ctx, s3Client, archive.URL)
+	if err != nil {
+		return err
+	}
+
+	// if our etag and archive md5 don't match, that's an error, return
+	if md5 != archive.Hash {
+		return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, md5)
+	}
+
+	// ok, archive file looks good, let's build up our list of message ids, this may be big but we are int64s so shouldn't be too big
+	rows, err := db.QueryxContext(ctx, selectOrgMessagesInRange, archive.OrgID, archive.StartDate, archive.endDate())
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	visibleCount := 0
+	var msgID int64
+	var visibility string
+	msgIDs := make([]int64, 0, archive.RecordCount)
+	for rows.Next() {
+		err = rows.Scan(&msgID, &visibility)
+		if err != nil {
+			return err
+		}
+		msgIDs = append(msgIDs, msgID)
+
+		// keep track of the number of visible messages, there were the ones archived
+		if visibility != "D" {
+			visibleCount++
+		}
+	}
+	rows.Close()
+
+	log.WithFields(logrus.Fields{
+		"msg_count": len(msgIDs),
+	}).Debug("found messages")
+
+	// verify we don't see more messages than there are in our archive (fewer is ok)
+	if visibleCount > archive.RecordCount {
+		return fmt.Errorf("more messages in the database: %d than in archive: %d", visibleCount, archive.RecordCount)
+	}
+
+	// ok, delete our messages 1000 at a time, we do this in transactions as it spans a few different queries
+	for startIdx := 0; startIdx < len(msgIDs); startIdx += deleteTransactionSize {
+		start := time.Now()
+
+		endIdx := startIdx + deleteTransactionSize
+		if endIdx > len(msgIDs) {
+			endIdx = len(msgIDs)
+		}
+		batchIDs := msgIDs[startIdx:endIdx]
+
+		// start our transaction
+		tx, err := db.BeginTxx(ctx, nil)
+		if err != nil {
+			return err
+		}
+
+		// first update our delete_reason
+		err = executeInQuery(ctx, tx, setMessageDeleteReason, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error updating delete reason: %s", err.Error())
+		}
+
+		// now delete any channel logs
+		err = executeInQuery(ctx, tx, deleteMessageLogs, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error removing channel logs: %s", err.Error())
+		}
+
+		// then any labels
+		err = executeInQuery(ctx, tx, deleteMessageLabels, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error removing message labels: %s", err.Error())
+		}
+
+		// unlink any responses
+		err = executeInQuery(ctx, tx, unlinkResponses, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error unlinking responses: %s", err.Error())
+		}
+
+		// finally, delete our messages
+		err = executeInQuery(ctx, tx, deleteMessages, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error deleting messages: %s", err.Error())
+		}
+
+		// commit our transaction
+		err = tx.Commit()
+		if err != nil {
+			return fmt.Errorf("error committing message delete transaction: %s", err.Error())
+		}
+
+		log.WithFields(logrus.Fields{
+			"elapsed": time.Since(start),
+			"count":   len(batchIDs),
+		}).Debug("deleted batch of messages")
+	}
+
+	// all went well! mark our archive as no longer needing deletion
+	_, err = db.ExecContext(ctx, setArchiveDeleted, archive.ID)
+	if err != nil {
+		return fmt.Errorf("error setting archive as deleted: %s", err.Error())
+	}
+	archive.NeedsDeletion = false
+
+	logrus.WithFields(logrus.Fields{
+		"elapsed": time.Since(start),
+	}).Info("completed deleting messages")
+
+	return nil
+}
+
+// DeleteArchivedOrgRecords deletes all the records for the passeg in org based on archives already created
+func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	// get all the archives that haven't yet been deleted
+	archives, err := GetArchivesNeedingDeletion(ctx, db, org, archiveType)
+	if err != nil {
+		return nil, fmt.Errorf("error finding archives needing deletion '%s'", archiveType)
+	}
+
+	// for each archive
+	deleted := make([]*Archive, 0, len(archives))
+	for _, a := range archives {
+		log := logrus.WithFields(logrus.Fields{
+			"archive_id": a.ID,
+			"org_id":     a.OrgID,
+			"type":       a.ArchiveType,
+			"count":      a.RecordCount,
+			"start":      a.StartDate,
+			"period":     a.Period,
+		})
+
+		if a.ArchiveType == MessageType {
+			start := time.Now()
+
+			err := DeleteArchivedMessages(ctx, config, db, s3Client, a)
+			if err != nil {
+				log.WithError(err).Error("Error deleting archive messages")
+				continue
+			}
+
+			deleted = append(deleted, a)
+
+			log.WithFields(logrus.Fields{
+				"elapsed": time.Since(start),
+			}).Info("deleted archive messages")
+		}
+	}
+
+	return deleted, nil
+}
+
 // ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
-func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, error) {
 	created, err := CreateOrgArchives(ctx, now, config, db, s3Client, org, archiveType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	monthlies, err := RollupOrgArchives(ctx, now, config, db, s3Client, org, archiveType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, m := range monthlies {
 		created = append(created, m)
 	}
 
-	return created, nil
+	// finally delete any archives not yet actually archived
+	deleted := make([]*Archive, 0, 1)
+	if config.DeleteRecords {
+		deleted, err = DeleteArchivedOrgRecords(ctx, now, config, db, s3Client, org, archiveType)
+		if err != nil {
+			return created, deleted, err
+		}
+	}
+
+	return created, deleted, nil
 }

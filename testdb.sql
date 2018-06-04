@@ -61,6 +61,8 @@ CREATE TABLE contacts_contactgroup_contacts (
     contact_id integer NOT NULL
 );
 
+DROP TABLE IF EXISTS channels_channellog CASCADE;
+DROP TABLE IF EXISTS msgs_msg_labels CASCADE;
 DROP TABLE IF EXISTS msgs_msg CASCADE;
 CREATE TABLE msgs_msg (
     id serial primary key,
@@ -86,7 +88,9 @@ CREATE TABLE msgs_msg (
     contact_urn_id integer NOT NULL references contacts_contacturn(id) on delete cascade,
     org_id integer NOT NULL references orgs_org(id) on delete cascade,
     metadata text,
-    topup_id integer
+    topup_id integer,
+    delete_reason char(1) NULL,
+    response_to_id integer NULL references msgs_msg(id)
 );
 
 DROP TABLE IF EXISTS msgs_label CASCADE;
@@ -96,10 +100,10 @@ CREATE TABLE msgs_label (
     name character varying(64)
 );
 
-DROP TABLE IF EXISTS msgs_msg_labels CASCADE;
+
 CREATE TABLE msgs_msg_labels (
     id serial primary key,
-    msg_id integer NOT NULL,
+    msg_id integer NOT NULL references msgs_msg(id),
     label_id integer NOT NULL
 );
 
@@ -115,9 +119,9 @@ CREATE TABLE flows_flowrun (
     id serial primary key,
     uuid character varying(36) NOT NULL,
     responded boolean NOT NULL,
-    contact_id integer NOT NULL references contacts_contact(id) on delete cascade,
-    flow_id integer NOT NULL references flows_flow(id) on delete cascade,
-    org_id integer NOT NULL references orgs_org(id) on delete cascade,
+    contact_id integer NOT NULL references contacts_contact(id),
+    flow_id integer NOT NULL references flows_flow(id),
+    org_id integer NOT NULL references orgs_org(id),
     results text NOT NULL,
     path text NOT NULL,
     events jsonb NOT NULL,
@@ -138,10 +142,15 @@ CREATE TABLE archives_archive (
     size bigint NOT NULL, 
     hash text NOT NULL, 
     url varchar(200) NOT NULL, 
-    is_purged boolean NOT NULL, 
+    needs_deletion boolean NOT NULL, 
     build_time integer NOT NULL, 
     org_id integer NOT NULL,
     rollup_id integer NULL
+);
+
+CREATE TABLE channels_channellog (
+    id serial primary key,
+    msg_id integer NOT NULL references msgs_msg(id)
 );
 
 INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES
@@ -155,11 +164,11 @@ INSERT INTO channels_channel(id, uuid, name, org_id) VALUES
 (2, '60f2ed5b-05f2-4156-9ff0-e44e90da1b85', 'Channel 2', 2),
 (3, 'b79e0054-068f-4928-a5f4-339d10a7ad5a', 'Channel 3', 3);
 
-INSERT INTO archives_archive(id, archive_type, created_on, start_date, period, record_count, size, hash, url, is_purged, build_time, org_id) VALUES 
-(NEXTVAL('archives_archive_id_seq'), 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 3),
-(NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 3),
-(NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-02 00:00:00.000000+00', '2017-09-01 00:00:00.000000+00', 'M', 0, 0, '', '', FALSE, 0, 3),
-(NEXTVAL('archives_archive_id_seq'), 'message', '2017-10-08 00:00:00.000000+00', '2017-10-08 00:00:00.000000+00', 'D', 0, 0, '', '', FALSE, 0, 2);
+INSERT INTO archives_archive(id, archive_type, created_on, start_date, period, record_count, size, hash, url, needs_deletion, build_time, org_id) VALUES 
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '', '', TRUE, 0, 3),
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '', '', TRUE, 0, 3),
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-09-02 00:00:00.000000+00', '2017-09-01 00:00:00.000000+00', 'M', 0, 0, '', '', TRUE, 0, 3),
+(NEXTVAL('archives_archive_id_seq'), 'message', '2017-10-08 00:00:00.000000+00', '2017-10-08 00:00:00.000000+00', 'D', 0, 0, '', '', TRUE, 0, 2);
 
 INSERT INTO contacts_contact(id, is_active, created_by_id, created_on, modified_by_id, modified_on, org_id, is_blocked, name, is_test, language, uuid, is_stopped) VALUES
 (1,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 1, FALSE, NULL, FALSE, 'eng', 'c7a2dd87-a80e-420b-8431-ca48d422e924', FALSE),
@@ -199,12 +208,14 @@ INSERT INTO contacts_contactgroup_contacts(id, contact_id, contactgroup_id) VALU
 (3, 1, 4),
 (4, 3, 4);
 
-INSERT INTO msgs_msg(id, broadcast_id, uuid, text, created_on, sent_on, direction, status, visibility, msg_type, attachments, channel_id, contact_id, contact_urn_id, org_id, msg_count, error_count, next_attempt) VALUES
-(1, NULL, '2f969340-704a-4aa2-a1bd-2f832a21d257', 'message 1', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
-(2, NULL, 'abe87ac1-015c-4803-be29-1e89509fe682', 'message 2', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'D', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
-(3, NULL, 'a7e83a22-a6ff-4e18-82d0-19545640ccba', 'message 3', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'O', 'H', 'V', 'I', '{"image/png:https://foo.bar/image1.png", "image/png:https://foo.bar/image2.png"}', 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00'),
-(4, NULL, '1cad36af-5581-4c8a-81cd-83708398f61e', 'message 4', '2017-08-13 21:11:59.890662+00', '2017-08-13 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-13 21:11:59.890662+00'),
-(5, NULL, 'f557972e-2eb5-42fa-9b87-902116d18787', 'message 5', '2017-08-11 21:11:59.890662+02:00', '2017-08-11 21:11:59.890662+02:00', 'I', 'H', 'V', 'I', NULL, 3, 7, 8, 3, 1, 0, '2017-08-11 21:11:59.890662+02:00');
+INSERT INTO msgs_msg(id, broadcast_id, uuid, text, created_on, sent_on, direction, status, visibility, msg_type, attachments, channel_id, contact_id, contact_urn_id, org_id, msg_count, error_count, next_attempt, response_to_id) VALUES
+(1, NULL, '2f969340-704a-4aa2-a1bd-2f832a21d257', 'message 1', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00', NULL),
+(2, NULL, 'abe87ac1-015c-4803-be29-1e89509fe682', 'message 2', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'D', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00', NULL),
+(3, NULL, 'a7e83a22-a6ff-4e18-82d0-19545640ccba', 'message 3', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'O', 'H', 'V', 'I', '{"image/png:https://foo.bar/image1.png", "image/png:https://foo.bar/image2.png"}', 2, 6, 7, 2, 1, 0, '2017-08-12 21:11:59.890662+00', NULL),
+(4, NULL, '1cad36af-5581-4c8a-81cd-83708398f61e', 'message 4', '2017-08-13 21:11:59.890662+00', '2017-08-13 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-08-13 21:11:59.890662+00', NULL),
+(5, NULL, 'f557972e-2eb5-42fa-9b87-902116d18787', 'message 5', '2017-08-11 21:11:59.890662+02:00', '2017-08-11 21:11:59.890662+02:00', 'I', 'H', 'V', 'I', NULL, 3, 7, 8, 3, 1, 0, '2017-08-11 21:11:59.890662+02:00', NULL),
+(6, NULL, '579d148c-0ab1-4afb-832f-afb1fe0e19b7', 'message 6', '2017-10-08 21:11:59.890662+00', '2017-10-08 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2017-10-08 21:11:59.890662+00', NULL),
+(7, NULL, '7aeca469-2593-444e-afe4-4702317534c9', 'message 7', '2018-01-02 21:11:59.890662+00', '2018-01-02 21:11:59.890662+00', 'I', 'H', 'V', 'I', NULL, 2, 6, 7, 2, 1, 0, '2018-01-02 21:11:59.890662+00', 2);
 
 INSERT INTO msgs_label(id, uuid, name) VALUES
 (1, '1d9e3188-b74b-4ae0-a166-0de31aedb34a', 'Label 1'),
@@ -216,6 +227,15 @@ INSERT INTO msgs_msg_labels(id, msg_id, label_id) VALUES
 (2, 1, 2),
 (3, 2, 2),
 (4, 3, 2);
+
+INSERT INTO channels_channellog(id, msg_id) VALUES 
+(1, 1),
+(2, 2),
+(3, 3),
+(4, 4),
+(5, 5),
+(6, 6);
+
 
 INSERT INTO flows_flow(id, uuid, name) VALUES
 (1, '6639286a-9120-45d4-aa39-03ae3942a4a6', 'Flow 1'),
