@@ -1,3 +1,10 @@
+v0.0.11
+----------
+ * deletion of messages after archiving
+ * more logging, add status logging of deletions
+ * more tests, remove cascades so we test accurately, rollups dont need purging
+ * correct set of incantations to get UTC dates out of golang/pg
+
 v0.0.10
 ----------
  * increase unit test coverage of rollup cases
