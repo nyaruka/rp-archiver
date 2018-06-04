@@ -1,3 +1,7 @@
+v0.0.12
+----------
+ * allow msgs with null channels, dont archive test contacts
+
 v0.0.11
 ----------
  * deletion of messages after archiving
