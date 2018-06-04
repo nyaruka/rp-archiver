@@ -964,9 +964,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 		"org":    org.Name,
 		"org_id": org.ID,
 	})
-	records := 0
 	created := make([]*Archive, 0, 1)
-	start := time.Now()
 
 	// get our missing monthly archives
 	archives, err := GetMissingMonthlyArchives(ctx, db, now, org, archiveType)
@@ -976,6 +974,13 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 
 	// build them from rollups
 	for _, archive := range archives {
+		log.WithFields(logrus.Fields{
+			"start_date":   archive.StartDate,
+			"archive_type": archive.ArchiveType,
+		})
+		start := time.Now()
+		log.Info("starting rollup")
+
 		err = BuildRollupArchive(ctx, db, config, s3Client, archive, now, org, archiveType)
 		if err != nil {
 			log.WithError(err).Error("error building monthly archive")
@@ -1007,18 +1012,9 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 		log.WithFields(logrus.Fields{
 			"id":           archive.ID,
 			"record_count": archive.RecordCount,
-			"elapsed":      archive.BuildTime,
+			"elapsed":      time.Since(start),
 		}).Info("rollup complete")
 		created = append(created, archive)
-	}
-
-	if len(archives) > 0 {
-		elapsed := time.Since(start)
-		rate := float32(records) / (float32(elapsed) / float32(time.Second))
-		log.WithFields(logrus.Fields{
-			"elapsed":            elapsed,
-			"records_per_second": int(rate),
-		}).Info("completed rollup for org")
 	}
 
 	return created, nil
@@ -1089,6 +1085,17 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	ctx, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
+	start := time.Now()
+	log := logrus.WithFields(logrus.Fields{
+		"id":           archive.ID,
+		"org_id":       archive.OrgID,
+		"start_date":   archive.StartDate,
+		"end_date":     archive.endDate(),
+		"archive_type": archive.ArchiveType,
+		"total_count":  archive.RecordCount,
+	})
+	log.Info("deleting messages")
+
 	// first things first, make sure our file is present on S3
 	md5, err := GetS3FileETAG(ctx, s3Client, archive.URL)
 	if err != nil {
@@ -1125,7 +1132,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	}
 	rows.Close()
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(logrus.Fields{
 		"msg_count": len(msgIDs),
 	}).Debug("found messages")
 
@@ -1135,12 +1142,14 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	}
 
 	// ok, delete our messages 1000 at a time, we do this in transactions as it spans a few different queries
-	for start := 0; start < len(msgIDs); start += deleteTransactionSize {
-		end := start + deleteTransactionSize
-		if end > len(msgIDs) {
-			end = len(msgIDs)
+	for startIdx := 0; startIdx < len(msgIDs); startIdx += deleteTransactionSize {
+		start := time.Now()
+
+		endIdx := startIdx + deleteTransactionSize
+		if endIdx > len(msgIDs) {
+			endIdx = len(msgIDs)
 		}
-		batchIDs := msgIDs[start:end]
+		batchIDs := msgIDs[startIdx:endIdx]
 
 		// start our transaction
 		tx, err := db.BeginTxx(ctx, nil)
@@ -1183,6 +1192,11 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		if err != nil {
 			return fmt.Errorf("error committing message delete transaction: %s", err.Error())
 		}
+
+		log.WithFields(logrus.Fields{
+			"elapsed": time.Since(start),
+			"count":   len(batchIDs),
+		}).Debug("deleted batch of messages")
 	}
 
 	// all went well! mark our archive as no longer needing deletion
@@ -1191,6 +1205,10 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		return fmt.Errorf("error setting archive as deleted: %s", err.Error())
 	}
 	archive.NeedsDeletion = false
+
+	logrus.WithFields(logrus.Fields{
+		"elapsed": time.Since(start),
+	}).Info("completed deleting messages")
 
 	return nil
 }
