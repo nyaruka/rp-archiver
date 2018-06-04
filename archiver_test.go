@@ -344,6 +344,8 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, int64(23), created[62].Size)
 		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[62].Hash)
 
+		// no rollup for october since that had one invalid daily archive
+
 		assert.Equal(t, 63, len(deleted))
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
 		assert.Equal(t, MonthPeriod, deleted[0].Period)
