@@ -116,15 +116,16 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	DeleteArchiveFile(task)
 
-	// build our third task, should have a single message
+	// build our third task, should have two messages
 	task = tasks[2]
 	err = CreateArchiveFile(ctx, db, task, "/tmp")
 	assert.NoError(t, err)
 
 	// should have two records, second will have attachments
 	assert.Equal(t, 2, task.RecordCount)
-	assert.Equal(t, int64(448), task.Size)
-	assert.Equal(t, "74ab5f70262ccd7b10ef0ae7274c806d", task.Hash)
+	assert.Equal(t, int64(450), task.Size)
+	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
+	assert.Equal(t, "79b5a7d40afc23ad3fa51bf69140dc51", task.Hash)
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveFile(task)
