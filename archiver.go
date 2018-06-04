@@ -483,8 +483,8 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	  mm.created_on as created_on,
 	  sent_on
 	FROM msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
-	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
-	  JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
+	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id and cc.is_test = FALSE) as contact ON True
+	  LEFT JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
 
 	  WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
@@ -1021,10 +1021,10 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 }
 
 const selectOrgMessagesInRange = `
-SELECT id, visibility 
-FROM msgs_msg 
-WHERE org_id = $1 AND created_on >= $2 AND created_on < $3 
-ORDER BY created_on ASC, id ASC
+SELECT mm.id, mm.visibility, cc.is_test
+FROM msgs_msg mm, contacts_contact cc 
+WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3 AND mm.contact_id = cc.id
+ORDER BY mm.created_on ASC, mm.id ASC
 `
 
 const setMessageDeleteReason = `
@@ -1117,16 +1117,17 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	visibleCount := 0
 	var msgID int64
 	var visibility string
+	var isTest bool
 	msgIDs := make([]int64, 0, archive.RecordCount)
 	for rows.Next() {
-		err = rows.Scan(&msgID, &visibility)
+		err = rows.Scan(&msgID, &visibility, &isTest)
 		if err != nil {
 			return err
 		}
 		msgIDs = append(msgIDs, msgID)
 
 		// keep track of the number of visible messages, there were the ones archived
-		if visibility != "D" {
+		if visibility != "D" && !isTest {
 			visibleCount++
 		}
 	}
