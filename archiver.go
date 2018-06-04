@@ -1127,7 +1127,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		}
 		msgIDs = append(msgIDs, msgID)
 
-		// keep track of the number of visible messages, there were the ones archived
+		// keep track of the number of visible messages, ie, not deleted and not for test contacts
 		if visibility != "D" && !isTest {
 			visibleCount++
 		}

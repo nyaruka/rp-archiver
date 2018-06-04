@@ -304,35 +304,42 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, 63, len(created))
 		assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), created[0].StartDate)
 		assert.Equal(t, DayPeriod, created[0].Period)
+		assert.Equal(t, 0, created[0].RecordCount)
+		assert.Equal(t, int64(23), created[0].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[0].Hash)
 
 		assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), created[1].StartDate)
 		assert.Equal(t, DayPeriod, created[1].Period)
+		assert.Equal(t, 0, created[1].RecordCount)
+		assert.Equal(t, int64(23), created[1].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[1].Hash)
+
+		assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), created[2].StartDate)
+		assert.Equal(t, DayPeriod, created[2].Period)
+		assert.Equal(t, 2, created[2].RecordCount)
+		assert.Equal(t, int64(450), created[2].Size)
+		assert.Equal(t, "79b5a7d40afc23ad3fa51bf69140dc51", created[2].Hash)
+
+		assert.Equal(t, time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), created[3].StartDate)
+		assert.Equal(t, DayPeriod, created[3].Period)
+		assert.Equal(t, 1, created[3].RecordCount)
+		assert.Equal(t, int64(299), created[3].Size)
+		assert.Equal(t, "3683faa7b3a546b47b0bac1ec150f8af", created[3].Hash)
 
 		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[60].StartDate)
 		assert.Equal(t, DayPeriod, created[60].Period)
+		assert.Equal(t, 0, created[60].RecordCount)
+		assert.Equal(t, int64(23), created[60].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[60].Hash)
 
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[61].StartDate)
 		assert.Equal(t, MonthPeriod, created[61].Period)
+		assert.Equal(t, 3, created[61].RecordCount)
+		assert.Equal(t, int64(473), created[61].Size)
+		assert.Equal(t, "98ea1a74bef2dd1c02be1a1df031e579", created[61].Hash)
 
 		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[62].StartDate)
 		assert.Equal(t, MonthPeriod, created[62].Period)
-
-		assert.Equal(t, 0, created[0].RecordCount)
-		assert.Equal(t, int64(23), created[0].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[1].Hash)
-
-		assert.Equal(t, 2, created[2].RecordCount)
-		assert.Equal(t, int64(448), created[2].Size)
-		assert.Equal(t, "74ab5f70262ccd7b10ef0ae7274c806d", created[2].Hash)
-
-		assert.Equal(t, 1, created[3].RecordCount)
-		assert.Equal(t, int64(299), created[3].Size)
-		assert.Equal(t, "74ab5f70262ccd7b10ef0ae7274c806d", created[2].Hash)
-
-		assert.Equal(t, 3, created[61].RecordCount)
-		assert.Equal(t, int64(470), created[61].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[0].Hash)
-
 		assert.Equal(t, 0, created[62].RecordCount)
 		assert.Equal(t, int64(23), created[62].Size)
 		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[62].Hash)
