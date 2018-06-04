@@ -1022,7 +1022,8 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 
 const selectOrgMessagesInRange = `
 SELECT mm.id, mm.visibility, cc.is_test
-FROM msgs_msg mm, contacts_contact cc 
+FROM msgs_msg mm
+LEFT JOIN contacts_contact cc ON cc.id = mm.contact_id
 WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3 AND mm.contact_id = cc.id
 ORDER BY mm.created_on ASC, mm.id ASC
 `
