@@ -1,3 +1,7 @@
+v0.0.15
+----------
+ * better context management in archival deletion
+
 v0.0.14
 ----------
  * bump batch size down to 100
