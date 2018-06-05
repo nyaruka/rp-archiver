@@ -1,3 +1,7 @@
+v0.0.16
+----------
+ * add deletion_date field, write upon deletion
+
 v0.0.15
 ----------
  * better context management in archival deletion
