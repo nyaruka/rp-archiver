@@ -1,3 +1,7 @@
+v0.0.17
+----------
+ * add support for multipart uploads and archives > 5 gigs
+
 v0.0.16
 ----------
  * add deletion_date field, write upon deletion
