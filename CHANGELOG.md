@@ -1,3 +1,7 @@
+v0.0.14
+----------
+ * bump batch size down to 100
+
 v0.0.13
 ----------
  * dont try to build archives that are too big
