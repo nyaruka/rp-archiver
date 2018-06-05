@@ -373,6 +373,15 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 		return err
 	}
 
+	// calculate total expected size
+	estimatedSize := int64(0)
+	for _, d := range dailies {
+		estimatedSize += d.Size
+	}
+	if estimatedSize > 4e9 {
+		return fmt.Errorf("rollup size (%d) bigger than currently possible skipping", estimatedSize)
+	}
+
 	// for each daily
 	for _, daily := range dailies {
 		// if there are no records in this daily, just move on
