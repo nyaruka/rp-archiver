@@ -1092,7 +1092,7 @@ var deleteTransactionSize = 100
 //
 // Upon completion it updates the needs_deletion flag on the archive
 func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
-	ctx, cancel := context.WithTimeout(ctx, time.Hour*3)
+	outer, cancel := context.WithTimeout(ctx, time.Minute*15)
 	defer cancel()
 
 	start := time.Now()
@@ -1107,7 +1107,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	log.Info("deleting messages")
 
 	// first things first, make sure our file is present on S3
-	md5, err := GetS3FileETAG(ctx, s3Client, archive.URL)
+	md5, err := GetS3FileETAG(outer, s3Client, archive.URL)
 	if err != nil {
 		return err
 	}
@@ -1118,7 +1118,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	}
 
 	// ok, archive file looks good, let's build up our list of message ids, this may be big but we are int64s so shouldn't be too big
-	rows, err := db.QueryxContext(ctx, selectOrgMessagesInRange, archive.OrgID, archive.StartDate, archive.endDate())
+	rows, err := db.QueryxContext(outer, selectOrgMessagesInRange, archive.OrgID, archive.StartDate, archive.endDate())
 	if err != nil {
 		return err
 	}
@@ -1154,6 +1154,10 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 
 	// ok, delete our messages 1000 at a time, we do this in transactions as it spans a few different queries
 	for startIdx := 0; startIdx < len(msgIDs); startIdx += deleteTransactionSize {
+		// no single batch should take more than a few minutes
+		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+		defer cancel()
+
 		start := time.Now()
 
 		endIdx := startIdx + deleteTransactionSize
@@ -1208,6 +1212,8 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 			"elapsed": time.Since(start),
 			"count":   len(batchIDs),
 		}).Debug("deleted batch of messages")
+
+		cancel()
 	}
 
 	// all went well! mark our archive as no longer needing deletion
