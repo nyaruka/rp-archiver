@@ -1,3 +1,7 @@
+v0.0.13
+----------
+ * dont try to build archives that are too big
+
 v0.0.12
 ----------
  * allow msgs with null channels, dont archive test contacts
