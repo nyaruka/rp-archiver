@@ -1085,7 +1085,7 @@ func executeInQuery(ctx context.Context, tx *sqlx.Tx, query string, ids []int64)
 	return err
 }
 
-var deleteTransactionSize = 1000
+var deleteTransactionSize = 100
 
 // DeleteArchivedMessages takes the passed in archive, verifies the S3 file is still present (and correct), then selects
 // all the messages in the archive date range, and if equal or fewer than the number archived, deletes them 1000 at a time
