@@ -356,6 +356,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, 0, count)
 			assert.False(t, d.NeedsDeletion)
+			assert.NotNil(t, d.DeletionDate)
 		}
 
 		// our one message in our existing archive (but that had an invalid URL) should still exist however

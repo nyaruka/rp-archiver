@@ -143,6 +143,7 @@ CREATE TABLE archives_archive (
     hash text NOT NULL, 
     url varchar(200) NOT NULL, 
     needs_deletion boolean NOT NULL, 
+    deletion_date timestamp with time zone NULL,
     build_time integer NOT NULL, 
     org_id integer NOT NULL,
     rollup_id integer NULL
