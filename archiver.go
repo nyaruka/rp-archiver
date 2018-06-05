@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/md5"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -379,9 +378,6 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	for _, d := range dailies {
 		estimatedSize += d.Size
 	}
-	if estimatedSize > 4e9 {
-		return fmt.Errorf("rollup size (%d) bigger than currently possible skipping", estimatedSize)
-	}
 
 	// for each daily
 	for _, daily := range dailies {
@@ -667,6 +663,11 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	if err != nil {
 		return err
 	}
+
+	if stat.Size() > 5e9 {
+		return fmt.Errorf("archive too large, must be smaller than 5 gigs, build dailies if possible")
+	}
+
 	archive.Size = stat.Size()
 	archive.RecordCount = recordCount
 	archive.BuildTime = int(time.Since(start) / time.Millisecond)
@@ -686,10 +687,6 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, a
 	ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 	defer cancel()
 
-	// s3 wants a base64 encoded hash instead of our hex encoded
-	hashBytes, _ := hex.DecodeString(archive.Hash)
-	hashBase64 := base64.StdEncoding.EncodeToString(hashBytes)
-
 	archivePath := ""
 	if archive.Period == DayPeriod {
 		archivePath = fmt.Sprintf(
@@ -705,22 +702,11 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, a
 			archive.Hash)
 	}
 
-	url, err := PutS3File(
-		ctx,
-		s3Client,
-		bucket,
-		archivePath,
-		"application/json",
-		"gzip",
-		archive.ArchiveFile,
-		hashBase64,
-	)
-
+	err := UploadToS3(ctx, s3Client, bucket, archivePath, archive)
 	if err != nil {
 		return err
 	}
 
-	archive.URL = url
 	archive.NeedsDeletion = true
 
 	logrus.WithFields(logrus.Fields{

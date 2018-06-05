@@ -2,6 +2,8 @@ package archiver
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/url"
@@ -14,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/sirupsen/logrus"
 )
 
@@ -61,31 +64,61 @@ func TestS3(s3Client s3iface.S3API, bucket string) error {
 	return nil
 }
 
-// PutS3File writes the passed in file to the bucket with the passed in content type
-func PutS3File(ctx context.Context, s3Client s3iface.S3API, bucket string, path string, contentType string, contentEncoding string, filename string, md5 string) (string, error) {
-	f, err := os.Open(filename)
+// UploadToS3 writes the passed in archive
+func UploadToS3(ctx context.Context, s3Client s3iface.S3API, bucket string, path string, archive *Archive) error {
+	f, err := os.Open(archive.ArchiveFile)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer f.Close()
 
-	params := &s3.PutObjectInput{
-		Bucket:          aws.String(bucket),
-		Body:            f,
-		Key:             aws.String(path),
-		ContentType:     aws.String(contentType),
-		ContentEncoding: aws.String(contentEncoding),
-		ACL:             aws.String(s3.BucketCannedACLPrivate),
-		ContentMD5:      aws.String(md5),
-		Metadata:        map[string]*string{"md5chksum": aws.String(md5)},
-	}
-	_, err = s3Client.PutObjectWithContext(ctx, params)
-	if err != nil {
-		return "", err
+	url := fmt.Sprintf(s3BucketURL, bucket, path)
+
+	// s3 wants a base64 encoded hash instead of our hex encoded
+	hashBytes, _ := hex.DecodeString(archive.Hash)
+	md5 := base64.StdEncoding.EncodeToString(hashBytes)
+
+	// if this fits into a single part, upload that way
+	if archive.Size <= 5e9 {
+		params := &s3.PutObjectInput{
+			Bucket:          aws.String(bucket),
+			Body:            f,
+			Key:             aws.String(path),
+			ContentType:     aws.String("application/json"),
+			ContentEncoding: aws.String("gzip"),
+			ACL:             aws.String(s3.BucketCannedACLPrivate),
+			ContentMD5:      aws.String(md5),
+			Metadata:        map[string]*string{"md5chksum": aws.String(md5)},
+		}
+		_, err = s3Client.PutObjectWithContext(ctx, params)
+		if err != nil {
+			return err
+		}
+	} else {
+		// this file is bigger than 5 gigs, use an upload manager instead, it will take care of uploading in parts
+		uploader := s3manager.NewUploaderWithClient(
+			s3Client,
+			func(u *s3manager.Uploader) {
+				u.PartSize = 1e9 // 1 gig per part
+			},
+		)
+		params := &s3manager.UploadInput{
+			Bucket:          aws.String(bucket),
+			Key:             aws.String(path),
+			Body:            f,
+			ContentType:     aws.String("application/json"),
+			ContentEncoding: aws.String("gzip"),
+			ACL:             aws.String(s3.BucketCannedACLPrivate),
+		}
+
+		_, err = uploader.UploadWithContext(ctx, params)
+		if err != nil {
+			return err
+		}
 	}
 
-	url := fmt.Sprintf(s3BucketURL, bucket, path)
-	return url, nil
+	archive.URL = url
+	return nil
 }
 
 func withAcceptEncoding(e string) request.Option {
