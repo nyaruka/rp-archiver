@@ -114,9 +114,13 @@ CREATE TABLE flows_flow (
     name character varying(128) NOT NULL
 );
 
+DROP TABLE IF EXISTS api_webhookevent CASCADE;
+DROP TABLE IF EXISTS flows_flowpathrecentrun CASCADE;
+DROP TABLE IF EXISTS flows_actionlog CASCADE;
 DROP TABLE IF EXISTS flows_flowrun CASCADE;
 CREATE TABLE flows_flowrun (
     id serial primary key,
+    is_active boolean NOT NULL DEFAULT FALSE,
     uuid character varying(36) NOT NULL,
     responded boolean NOT NULL,
     contact_id integer NOT NULL references contacts_contact(id),
@@ -125,10 +129,12 @@ CREATE TABLE flows_flowrun (
     results text NOT NULL,
     path text NOT NULL,
     events jsonb NOT NULL,
+    parent_id integer NULL references flows_flowrun(id),
     created_on timestamp with time zone NOT NULL,
     modified_on timestamp with time zone NOT NULL,
     exited_on timestamp with time zone NULL,
-    exit_type varchar(1) NULL
+    exit_type varchar(1) NULL,
+    delete_reason char(1) NULL
 );
 
 DROP TABLE IF EXISTS archives_archive CASCADE;
@@ -152,6 +158,21 @@ CREATE TABLE archives_archive (
 CREATE TABLE channels_channellog (
     id serial primary key,
     msg_id integer NOT NULL references msgs_msg(id)
+);
+
+CREATE TABLE api_webhookevent (
+    id serial primary key,
+    run_id integer NOT NULL references flows_flowrun(id)
+);
+
+CREATE TABLE flows_flowpathrecentrun (
+    id serial primary key,
+    run_id integer NOT NULL references flows_flowrun(id)
+);
+
+CREATE TABLE flows_actionlog (
+    id serial primary key,
+    run_id integer NOT NULL references flows_flowrun(id)
 );
 
 INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES

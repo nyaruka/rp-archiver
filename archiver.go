@@ -502,23 +502,23 @@ SELECT row_to_json(rec)
 FROM (
    SELECT
      fr.id,
-     row_to_json(flow_struct) as flow,
-     row_to_json(contact_struct) as contact,
+     row_to_json(flow_struct) AS flow,
+     row_to_json(contact_struct) AS contact,
      fr.responded,
-     (select coalesce(jsonb_agg(path_data), '[]'::jsonb) from (
-		select path_row ->> 'node_uuid'  as node, (path_row ->> 'arrived_on')::timestamptz as time
-		from jsonb_array_elements(fr.path :: jsonb) as path_row) as path_data
+     (SELECT coalesce(jsonb_agg(path_data), '[]'::jsonb) from (
+		SELECT path_row ->> 'node_uuid' AS node, (path_row ->> 'arrived_on')::timestamptz as time
+		FROM jsonb_array_elements(fr.path::jsonb) AS path_row) as path_data
      ) as path,
-     (select coalesce(jsonb_agg(values_data.tmp_values), '{}'::jsonb) from (
-		select json_build_object(key, jsonb_build_object('name', value -> 'name', 'value', value -> 'value', 'input', value -> 'input', 'time', (value -> 'created_on')::text::timestamptz, 'category', value -> 'category', 'node', value -> 'node_uuid')) as tmp_values
-		FROM jsonb_each(fr.results :: jsonb)) as values_data
+     (SELECT coalesce(jsonb_agg(values_data.tmp_values), '{}'::jsonb) from (
+		SELECT json_build_object(key, jsonb_build_object('name', value -> 'name', 'value', value -> 'value', 'input', value -> 'input', 'time', (value -> 'created_on')::text::timestamptz, 'category', value -> 'category', 'node', value -> 'node_uuid')) as tmp_values
+		FROM jsonb_each(fr.results::jsonb)) AS values_data
 	 ) as values,
 	 CASE
 		WHEN $1
 			THEN '[]'::jsonb
 		ELSE
 			coalesce(fr.events, '[]'::jsonb)
-	 END as events,
+	 END AS events,
      fr.created_on,
      fr.modified_on,
      fr.exited_on,
@@ -534,8 +534,8 @@ FROM (
      END as exit_type
 
    FROM flows_flowrun fr
-     JOIN LATERAL (SELECT uuid, name from flows_flow where flows_flow.id = fr.flow_id) as flow_struct ON True
-     JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = fr.contact_id) as contact_struct ON True
+     JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
+     JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id AND cc.is_test = FALSE) AS contact_struct ON True
    
    WHERE fr.org_id = $2 AND fr.modified_on >= $3 AND fr.modified_on < $4
    ORDER BY fr.modified_on ASC, id ASC
@@ -1075,7 +1075,7 @@ func executeInQuery(ctx context.Context, tx *sqlx.Tx, query string, ids []int64)
 var deleteTransactionSize = 100
 
 // DeleteArchivedMessages takes the passed in archive, verifies the S3 file is still present (and correct), then selects
-// all the messages in the archive date range, and if equal or fewer than the number archived, deletes them 1000 at a time
+// all the messages in the archive date range, and if equal or fewer than the number archived, deletes them 100 at a time
 //
 // Upon completion it updates the needs_deletion flag on the archive
 func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
@@ -1139,7 +1139,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		return fmt.Errorf("more messages in the database: %d than in archive: %d", visibleCount, archive.RecordCount)
 	}
 
-	// ok, delete our messages 1000 at a time, we do this in transactions as it spans a few different queries
+	// ok, delete our messages in batches, we do this in transactions as it spans a few different queries
 	for startIdx := 0; startIdx < len(msgIDs); startIdx += deleteTransactionSize {
 		// no single batch should take more than a few minutes
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
@@ -1223,6 +1223,213 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	return nil
 }
 
+const selectOrgRunsInRange = `
+SELECT fr.id, fr.is_active, cc.is_test
+FROM flows_flowrun fr
+LEFT JOIN contacts_contact cc ON cc.id = fr.contact_id
+WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
+ORDER BY fr.modified_on ASC, fr.id ASC
+`
+
+const setRunDeleteReason = `
+UPDATE flows_flowrun
+SET delete_reason = 'A' 
+WHERE id IN(?)
+`
+
+const deleteWebhookEvents = `
+DELETE FROM api_webhookevent
+WHERE run_id IN(?)
+`
+
+const deleteRecentRuns = `
+DELETE FROM flows_flowpathrecentrun 
+WHERE run_id IN(?)
+`
+
+const deleteActionLogs = `
+DELETE FROM flows_actionlog
+WHERE run_id IN(?)
+`
+
+const unlinkParents = `
+UPDATE flows_flowrun
+SET parent_id = NULL 
+WHERE parent_id IN(?)
+`
+
+const deleteRuns = `
+DELETE FROM flows_flowrun
+WHERE id IN(?)
+`
+
+// DeleteArchivedRuns takes the passed in archive, verifies the S3 file is still present (and correct), then selects
+// all the runs in the archive date range, and if equal or fewer than the number archived, deletes them 100 at a time
+//
+// Upon completion it updates the needs_deletion flag on the archive
+func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
+	outer, cancel := context.WithTimeout(ctx, time.Minute*15)
+	defer cancel()
+
+	start := time.Now()
+	log := logrus.WithFields(logrus.Fields{
+		"id":           archive.ID,
+		"org_id":       archive.OrgID,
+		"start_date":   archive.StartDate,
+		"end_date":     archive.endDate(),
+		"archive_type": archive.ArchiveType,
+		"total_count":  archive.RecordCount,
+	})
+	log.Info("deleting messages")
+
+	// first things first, make sure our file is present on S3
+	md5, err := GetS3FileETAG(outer, s3Client, archive.URL)
+	if err != nil {
+		return err
+	}
+
+	// if our etag and archive md5 don't match, that's an error, return
+	if md5 != archive.Hash {
+		return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, md5)
+	}
+
+	// ok, archive file looks good, let's build up our list of run ids, this may be big but we are int64s so shouldn't be too big
+	rows, err := db.QueryxContext(outer, selectOrgRunsInRange, archive.OrgID, archive.StartDate, archive.endDate())
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var runID int64
+	var isTest bool
+	var isActive bool
+	runCount := 0
+	runIDs := make([]int64, 0, archive.RecordCount)
+	for rows.Next() {
+		err = rows.Scan(&runID, &isActive, &isTest)
+		if err != nil {
+			return err
+		}
+
+		// if this run is still active, something has gone wrong, throw an error
+		if isActive {
+			return fmt.Errorf("run %d in archive is still active", runID)
+		}
+
+		// if this run isn't a test contact, increment it
+		if !isTest {
+			runCount++
+		}
+
+		runIDs = append(runIDs, runID)
+	}
+	rows.Close()
+
+	log.WithFields(logrus.Fields{
+		"run_count": len(runIDs),
+	}).Debug("found runs")
+
+	// verify we don't see more runs than there are in our archive (fewer is ok)
+	if runCount > archive.RecordCount {
+		return fmt.Errorf("more runs in the database: %d than in archive: %d", runCount, archive.RecordCount)
+	}
+
+	// ok, delete our runs in batchs, we do this in transactions as it spans a few different queries
+	for startIdx := 0; startIdx < len(runIDs); startIdx += deleteTransactionSize {
+		// no single batch should take more than a few minutes
+		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+		defer cancel()
+
+		start := time.Now()
+
+		endIdx := startIdx + deleteTransactionSize
+		if endIdx > len(runIDs) {
+			endIdx = len(runIDs)
+		}
+		batchIDs := runIDs[startIdx:endIdx]
+
+		// start our transaction
+		tx, err := db.BeginTxx(ctx, nil)
+		if err != nil {
+			return err
+		}
+
+		// first update our delete_reason
+		err = executeInQuery(ctx, tx, setRunDeleteReason, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error updating delete reason: %s", err.Error())
+		}
+
+		// now delete any webhook events
+		err = executeInQuery(ctx, tx, deleteWebhookEvents, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error removing webhook events: %s", err.Error())
+		}
+
+		// any action logs
+		err = executeInQuery(ctx, tx, deleteActionLogs, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error removing action logs: %s", err.Error())
+		}
+
+		// then any labels
+		err = executeInQuery(ctx, tx, deleteMessageLabels, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error removing message labels: %s", err.Error())
+		}
+
+		// any recent runs
+		err = executeInQuery(ctx, tx, deleteRecentRuns, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error deleting recent runs: %s", err.Error())
+		}
+
+		// unlink any parents
+		err = executeInQuery(ctx, tx, unlinkParents, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error unliking parent runs: %s", err.Error())
+		}
+
+		// finally, delete our runs
+		err = executeInQuery(ctx, tx, deleteRuns, batchIDs)
+		if err != nil {
+			return fmt.Errorf("error deleting runs: %s", err.Error())
+		}
+
+		// commit our transaction
+		err = tx.Commit()
+		if err != nil {
+			return fmt.Errorf("error committing run delete transaction: %s", err.Error())
+		}
+
+		log.WithFields(logrus.Fields{
+			"elapsed": time.Since(start),
+			"count":   len(batchIDs),
+		}).Debug("deleted batch of runs")
+
+		cancel()
+	}
+
+	outer, cancel = context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	deletionDate := time.Now()
+
+	// all went well! mark our archive as no longer needing deletion
+	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletionDate)
+	if err != nil {
+		return fmt.Errorf("error setting archive as deleted: %s", err.Error())
+	}
+	archive.NeedsDeletion = false
+	archive.DeletionDate = &deletionDate
+
+	logrus.WithFields(logrus.Fields{
+		"elapsed": time.Since(start),
+	}).Info("completed deleting runs")
+
+	return nil
+}
+
 // DeleteArchivedOrgRecords deletes all the records for the passeg in org based on archives already created
 func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
 	// get all the archives that haven't yet been deleted
@@ -1243,21 +1450,26 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 			"period":     a.Period,
 		})
 
-		if a.ArchiveType == MessageType {
-			start := time.Now()
+		start := time.Now()
 
-			err := DeleteArchivedMessages(ctx, config, db, s3Client, a)
-			if err != nil {
-				log.WithError(err).Error("Error deleting archive messages")
-				continue
-			}
-
-			deleted = append(deleted, a)
-
-			log.WithFields(logrus.Fields{
-				"elapsed": time.Since(start),
-			}).Info("deleted archive messages")
+		switch a.ArchiveType {
+		case MessageType:
+			err = DeleteArchivedMessages(ctx, config, db, s3Client, a)
+		case RunType:
+			err = DeleteArchivedRuns(ctx, config, db, s3Client, a)
+		default:
+			err = fmt.Errorf("unknown archive type: %s", a.ArchiveType)
 		}
+
+		if err != nil {
+			log.WithError(err).Error("Error deleting archive")
+			continue
+		}
+
+		deleted = append(deleted, a)
+		log.WithFields(logrus.Fields{
+			"elapsed": time.Since(start),
+		}).Info("deleted archive records")
 	}
 
 	return deleted, nil

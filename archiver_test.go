@@ -405,12 +405,14 @@ func TestArchiveOrgRuns(t *testing.T) {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
 	loader.MustLoad()
 
+	config.DeleteRecords = true
+
 	// AWS S3 config in the environment needed to download from S3
 	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
-		created, _, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
+		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
 		assert.NoError(t, err)
 
 		assert.Equal(t, 12, len(created))
@@ -437,5 +439,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 		assert.Equal(t, 1, created[11].RecordCount)
 		assert.Equal(t, int64(385), created[11].Size)
 		assert.Equal(t, "e4ac24080ca5a05539d058cd7fe63291", created[11].Hash)
+
+		assert.Equal(t, 12, len(deleted))
 	}
 }
