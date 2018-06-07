@@ -498,7 +498,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 `
 
 const lookupFlowRuns = `
-SELECT row_to_json(rec)
+SELECT rec.exited_on, row_to_json(rec)
 FROM (
    SELECT
      fr.id,
@@ -615,6 +615,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 
 	recordCount := 0
 	var record, visibility string
+	var exitedOn *time.Time
 	for rows.Next() {
 		if archive.ArchiveType == MessageType {
 			err = rows.Scan(&visibility, &record)
@@ -627,7 +628,13 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 				continue
 			}
 		} else if archive.ArchiveType == RunType {
-			err = rows.Scan(&record)
+			err = rows.Scan(&exitedOn, &record)
+
+			// shouldn't be archiving an active run, that's an error
+			if exitedOn == nil {
+				return fmt.Errorf("run still active, cannot archive: %s", record)
+			}
+
 			if err != nil {
 				return err
 			}
@@ -1240,6 +1247,12 @@ WHERE id IN(?)
 const deleteWebhookEvents = `
 DELETE FROM api_webhookevent
 WHERE run_id IN(?)
+RETURNING id
+`
+
+const deleteWebhookResults = `
+DELETE FROM api_webhookresult
+WHERE event_id IN(?)
 `
 
 const deleteRecentRuns = `
@@ -1360,10 +1373,25 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 			return fmt.Errorf("error updating delete reason: %s", err.Error())
 		}
 
-		// now delete any webhook events
-		err = executeInQuery(ctx, tx, deleteWebhookEvents, batchIDs)
+		// delete our webhooks, getting back any dependent results
+		var hookIDs []int64
+		q, vs, err := sqlx.In(deleteWebhookEvents, batchIDs)
 		if err != nil {
+			return err
+		}
+		q = tx.Rebind(q)
+		err = tx.SelectContext(ctx, &hookIDs, q, vs...)
+		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("error removing webhook events: %s", err.Error())
+		}
+
+		// if there are associated results, delete those too
+		if len(hookIDs) > 0 {
+			err = executeInQuery(ctx, tx, deleteWebhookResults, hookIDs)
+			if err != nil {
+				return fmt.Errorf("error removing webhook results: %s", err.Error())
+			}
 		}
 
 		// any action logs

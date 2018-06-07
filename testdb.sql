@@ -114,6 +114,7 @@ CREATE TABLE flows_flow (
     name character varying(128) NOT NULL
 );
 
+DROP TABLE IF EXISTS api_webhookresult CASCADE;
 DROP TABLE IF EXISTS api_webhookevent CASCADE;
 DROP TABLE IF EXISTS flows_flowpathrecentrun CASCADE;
 DROP TABLE IF EXISTS flows_actionlog CASCADE;
@@ -162,17 +163,22 @@ CREATE TABLE channels_channellog (
 
 CREATE TABLE api_webhookevent (
     id serial primary key,
-    run_id integer NOT NULL references flows_flowrun(id)
+    run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE api_webhookresult (
+    id serial primary key,
+    event_id integer NOT NULL references api_webhookevent(id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE flows_flowpathrecentrun (
     id serial primary key,
-    run_id integer NOT NULL references flows_flowrun(id)
+    run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE flows_actionlog (
     id serial primary key,
-    run_id integer NOT NULL references flows_flowrun(id)
+    run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
 );
 
 INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES
@@ -284,3 +290,15 @@ INSERT INTO flows_flowrun(id, uuid, responded, contact_id, flow_id, org_id, resu
 '[{"uuid": "babf4fc8-e12c-4bb9-a9dd-61178a118b5a", "node_uuid": "accbc6e2-b0df-46cd-9a76-bff0fdf4d753", "arrived_on": "2017-10-12T15:07:24.049815+02:00", "exit_uuid": "8249e2dc-c893-4200-b6d2-398d07a459bc"}]', 
 '[{"msg": {"urn": "tel:+12076661212", "text": "hi hi", "uuid": "543d2c4b-ff0b-4b87-a9a4-b2d6745cf470", "channel": {"name": "1223", "uuid": "d6597e08-8285-428c-8e7e-97c68adfa073"}}, "type": "msg_created", "step_uuid": "3a5014dd-7b14-4b7a-be52-0419c09340a6", "created_on": "2018-10-12T15:06:47.357682+00:00"}]',
 '2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00', 'C');
+
+INSERT INTO api_webhookevent(id, run_id) VALUES 
+(1, 3);
+
+INSERT INTO api_webhookresult(id, event_id) VALUES 
+(1, 1);
+
+INSERT INTO flows_flowpathrecentrun(id, run_id) VALUES 
+(1, 3);
+
+INSERT INTO flows_actionlog(id, run_id) VALUES 
+(1, 3);
