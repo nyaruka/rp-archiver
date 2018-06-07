@@ -1293,7 +1293,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		"archive_type": archive.ArchiveType,
 		"total_count":  archive.RecordCount,
 	})
-	log.Info("deleting messages")
+	log.Info("deleting runs")
 
 	// first things first, make sure our file is present on S3
 	md5, err := GetS3FileETAG(outer, s3Client, archive.URL)

@@ -486,7 +486,6 @@ func TestArchiveOrgRuns(t *testing.T) {
 		assert.Equal(t, 2, count)
 
 		// more recent run unaffected (even though it was parent)
-		// as is our newer message which was replied to
 		count, err = getCountInRange(
 			db,
 			getRunCount,
