@@ -1,3 +1,7 @@
+v0.0.18
+----------
+ * add deletion of runs
+
 v0.0.17
 ----------
  * add support for multipart uploads and archives > 5 gigs
