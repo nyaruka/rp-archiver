@@ -1,3 +1,7 @@
+v0.0.19
+----------
+ * increase timeout for calculation of all run ids in an archive
+
 v0.0.18
 ----------
  * add deletion of runs
