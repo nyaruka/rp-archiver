@@ -1347,7 +1347,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		return fmt.Errorf("more runs in the database: %d than in archive: %d", runCount, archive.RecordCount)
 	}
 
-	// ok, delete our runs in batchs, we do this in transactions as it spans a few different queries
+	// ok, delete our runs in batches, we do this in transactions as it spans a few different queries
 	for startIdx := 0; startIdx < len(runIDs); startIdx += deleteTransactionSize {
 		// no single batch should take more than a few minutes
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
