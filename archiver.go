@@ -1281,7 +1281,7 @@ WHERE id IN(?)
 //
 // Upon completion it updates the needs_deletion flag on the archive
 func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
-	outer, cancel := context.WithTimeout(ctx, time.Minute*15)
+	outer, cancel := context.WithTimeout(ctx, time.Hour)
 	defer cancel()
 
 	start := time.Now()
