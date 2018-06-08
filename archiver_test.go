@@ -267,9 +267,9 @@ FROM msgs_msg
 WHERE org_id = $1 and created_on >= $2 and created_on < $3
 `
 
-func getMessageCountForOrg(db *sqlx.DB, orgID int, start time.Time, end time.Time) (int, error) {
+func getCountInRange(db *sqlx.DB, query string, orgID int, start time.Time, end time.Time) (int, error) {
 	var count int
-	err := db.Get(&count, getMsgCount, orgID, start, end)
+	err := db.Get(&count, query, orgID, start, end)
 	if err != nil {
 		return -1, err
 	}
@@ -352,7 +352,13 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 		// shouldn't have any messages remaining for this org for those periods
 		for _, d := range deleted {
-			count, err := getMessageCountForOrg(db, orgs[1].ID, d.StartDate, d.endDate())
+			count, err := getCountInRange(
+				db,
+				getMsgCount,
+				orgs[1].ID,
+				d.StartDate,
+				d.endDate(),
+			)
 			assert.NoError(t, err)
 			assert.Equal(t, 0, count)
 			assert.False(t, d.NeedsDeletion)
@@ -360,8 +366,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 		}
 
 		// our one message in our existing archive (but that had an invalid URL) should still exist however
-		count, err := getMessageCountForOrg(
+		count, err := getCountInRange(
 			db,
+			getMsgCount,
 			orgs[1].ID,
 			time.Date(2017, 10, 8, 0, 0, 0, 0, time.UTC),
 			time.Date(2017, 10, 9, 0, 0, 0, 0, time.UTC),
@@ -370,8 +377,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, 1, count)
 
 		// and messages on our other orgs should be unaffected
-		count, err = getMessageCountForOrg(
+		count, err = getCountInRange(
 			db,
+			getMsgCount,
 			orgs[2].ID,
 			time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC),
 			time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC),
@@ -380,8 +388,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, 1, count)
 
 		// as is our newer message which was replied to
-		count, err = getMessageCountForOrg(
+		count, err = getCountInRange(
 			db,
+			getMsgCount,
 			orgs[1].ID,
 			time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
 			time.Date(2018, 2, 1, 0, 0, 0, 0, time.UTC),
@@ -390,6 +399,12 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, 1, count)
 	}
 }
+
+const getRunCount = `
+SELECT COUNT(*) 
+FROM flows_flowrun 
+WHERE org_id = $1 and modified_on >= $2 and modified_on < $3
+`
 
 func TestArchiveOrgRuns(t *testing.T) {
 	db := setup(t)
@@ -405,37 +420,80 @@ func TestArchiveOrgRuns(t *testing.T) {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
 	loader.MustLoad()
 
+	config.DeleteRecords = true
+
 	// AWS S3 config in the environment needed to download from S3
 	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
-		created, _, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
+		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
 		assert.NoError(t, err)
 
 		assert.Equal(t, 12, len(created))
+
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[0].StartDate)
 		assert.Equal(t, MonthPeriod, created[0].Period)
-
-		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[1].StartDate)
-		assert.Equal(t, MonthPeriod, created[1].Period)
-
-		assert.Equal(t, time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), created[2].StartDate)
-		assert.Equal(t, DayPeriod, created[2].Period)
-
-		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[11].StartDate)
-		assert.Equal(t, DayPeriod, created[11].Period)
-
 		assert.Equal(t, 1, created[0].RecordCount)
 		assert.Equal(t, int64(393), created[0].Size)
 		assert.Equal(t, "4f3beb90ee4dc586db7b04ddc7e0117d", created[0].Hash)
 
+		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[1].StartDate)
+		assert.Equal(t, MonthPeriod, created[1].Period)
 		assert.Equal(t, 0, created[1].RecordCount)
 		assert.Equal(t, int64(23), created[1].Size)
 		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[1].Hash)
 
+		assert.Equal(t, time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), created[2].StartDate)
+		assert.Equal(t, DayPeriod, created[2].Period)
+		assert.Equal(t, 0, created[2].RecordCount)
+		assert.Equal(t, int64(23), created[2].Size)
+		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[2].Hash)
+
+		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[11].StartDate)
+		assert.Equal(t, DayPeriod, created[11].Period)
 		assert.Equal(t, 1, created[11].RecordCount)
 		assert.Equal(t, int64(385), created[11].Size)
 		assert.Equal(t, "e4ac24080ca5a05539d058cd7fe63291", created[11].Hash)
+
+		assert.Equal(t, 12, len(deleted))
+
+		// no runs remaining
+		for _, d := range deleted {
+			count, err := getCountInRange(
+				db,
+				getRunCount,
+				orgs[2].ID,
+				d.StartDate,
+				d.endDate(),
+			)
+			assert.NoError(t, err)
+			assert.Equal(t, 0, count)
+
+			assert.False(t, d.NeedsDeletion)
+			assert.NotNil(t, d.DeletionDate)
+		}
+
+		// other org runs unaffected
+		count, err := getCountInRange(
+			db,
+			getRunCount,
+			orgs[1].ID,
+			time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, count)
+
+		// more recent run unaffected (even though it was parent)
+		count, err = getCountInRange(
+			db,
+			getRunCount,
+			orgs[2].ID,
+			time.Date(2017, 12, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, count)
 	}
 }

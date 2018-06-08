@@ -114,9 +114,14 @@ CREATE TABLE flows_flow (
     name character varying(128) NOT NULL
 );
 
+DROP TABLE IF EXISTS api_webhookresult CASCADE;
+DROP TABLE IF EXISTS api_webhookevent CASCADE;
+DROP TABLE IF EXISTS flows_flowpathrecentrun CASCADE;
+DROP TABLE IF EXISTS flows_actionlog CASCADE;
 DROP TABLE IF EXISTS flows_flowrun CASCADE;
 CREATE TABLE flows_flowrun (
     id serial primary key,
+    is_active boolean NOT NULL DEFAULT FALSE,
     uuid character varying(36) NOT NULL,
     responded boolean NOT NULL,
     contact_id integer NOT NULL references contacts_contact(id),
@@ -125,10 +130,12 @@ CREATE TABLE flows_flowrun (
     results text NOT NULL,
     path text NOT NULL,
     events jsonb NOT NULL,
+    parent_id integer NULL references flows_flowrun(id),
     created_on timestamp with time zone NOT NULL,
     modified_on timestamp with time zone NOT NULL,
     exited_on timestamp with time zone NULL,
-    exit_type varchar(1) NULL
+    exit_type varchar(1) NULL,
+    delete_reason char(1) NULL
 );
 
 DROP TABLE IF EXISTS archives_archive CASCADE;
@@ -152,6 +159,26 @@ CREATE TABLE archives_archive (
 CREATE TABLE channels_channellog (
     id serial primary key,
     msg_id integer NOT NULL references msgs_msg(id)
+);
+
+CREATE TABLE api_webhookevent (
+    id serial primary key,
+    run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE api_webhookresult (
+    id serial primary key,
+    event_id integer NOT NULL references api_webhookevent(id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE flows_flowpathrecentrun (
+    id serial primary key,
+    run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE flows_actionlog (
+    id serial primary key,
+    run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
 );
 
 INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES
@@ -182,7 +209,8 @@ INSERT INTO contacts_contact(id, is_active, created_by_id, created_on, modified_
 (8,  TRUE, -1, '2015-03-27 13:39:43.995812+00', -1, '2015-03-27 13:39:43.995812+00', 2, FALSE, NULL, FALSE, NULL, 'b46f6e18-95b4-4984-9926-dded047f4eb3', FALSE),
 (9,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 2, FALSE, NULL, FALSE, NULL, '9195c8b7-6138-4d84-ac56-5192cc3d8ceb', FALSE),
 (10, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 2, FALSE, NULL, FALSE, NULL, '2b8bd28d-43e0-4c34-a4bb-0f10b11fdb8a', FALSE),
-(11, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 2, FALSE, NULL, TRUE, NULL, '83639c02-e158-4b54-9f12-0c97950f2b25', FALSE);
+(11, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 2, FALSE, NULL, TRUE, NULL, '83639c02-e158-4b54-9f12-0c97950f2b25', FALSE),
+(12, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 3, FALSE, NULL, TRUE, NULL, '85ae20d1-ad57-4797-91f1-2e45f8e30f3f', FALSE);
 
 INSERT INTO contacts_contacturn(id, contact_id, scheme, org_id, priority, path, display, identity) VALUES
 (1, 1, 'tel', 1, 50, '+12067791111', NULL, 'tel:+12067791111'),
@@ -246,20 +274,36 @@ INSERT INTO flows_flow(id, uuid, name) VALUES
 (3, '3914b88e-625b-4603-bd9f-9319dc331c6b', 'Flow 3'),
 (4, 'cfa2371d-2f06-481d-84b2-d974f3803bb0', 'Flow 4');
 
-INSERT INTO flows_flowrun(id, uuid, responded, contact_id, flow_id, org_id, results, path, events, created_on, modified_on, exited_on, exit_type) VALUES
-(1, '4ced1260-9cfe-4b7f-81dd-b637108f15b9', TRUE, 6, 1, 2, '{}', '[]', '[]', '2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C'),
+INSERT INTO flows_flowrun(id, uuid, responded, contact_id, flow_id, org_id, results, path, events, created_on, modified_on, exited_on, exit_type, parent_id) VALUES
+(1, '4ced1260-9cfe-4b7f-81dd-b637108f15b9', TRUE, 6, 1, 2, '{}', '[]', '[]', '2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C', NULL),
 (2, '7d68469c-0494-498a-bdf3-bac68321fd6d', TRUE, 6, 1, 2, 
 '{"agree": {"category": "Strongly agree", "node_uuid": "a0434c54-3e26-4eb0-bafc-46cdeaf435ac", "name": "Do you agree?", "value": "A", "created_on": "2017-05-03T12:25:21.714339+00:00", "input": "A"}}',
 '[{"uuid": "c3d0b417-db75-417c-8050-33776ec8f620", "node_uuid": "10896d63-8df7-4022-88dd-a9d93edf355b", "arrived_on": "2017-08-12T15:07:24.049815+02:00", "exit_uuid": "2f890507-2ad2-4bd1-92fc-0ca031155fca"}]', 
 '[{"msg": {"urn": "tel:+12076661212", "text": "hola", "uuid": "cf05c58f-31fb-4ce8-9e65-4ecc9fd47cbe", "channel": {"name": "1223", "uuid": "bbfe2e9c-cf69-4d0a-b42e-00ac3dc0b0b8"}}, "type": "msg_created", "step_uuid": "659cdae5-1f29-4a58-9437-10421f724268", "created_on": "2018-01-22T15:06:47.357682+00:00"}]',
-'2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C'),
+'2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C', NULL),
 (3, 'de782b35-a398-46ed-8550-34c66053841b', TRUE, 7, 2, 3, 
 '{"agree": {"category": "Strongly agree", "node_uuid": "084c8cf1-715d-4d0a-b38d-a616ed74e638", "name": "Agree", "value": "A", "created_on": "2017-05-03T12:25:21.714339+00:00", "input": "A"}}',
 '[{"uuid": "600ac5b4-4895-4161-ad97-6e2f1bb48bcb", "node_uuid": "accbc6e2-b0df-46cd-9a76-bff0fdf4d753", "arrived_on": "2017-08-12T15:07:24.049815+02:00", "exit_uuid": "8249e2dc-c893-4200-b6d2-398d07a459bc"}]', 
 '[{"msg": {"urn": "tel:+12076661212", "text": "hola", "uuid": "9ea50923-0888-4596-9a9d-4890994934a9", "channel": {"name": "1223", "uuid": "d6597e08-8285-428c-8e7e-97c68adfa073"}}, "type": "msg_created", "step_uuid": "ae067248-df92-41c8-bb29-92506e984259", "created_on": "2018-01-22T15:06:47.357682+00:00"}]',
-'2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00', 'C'),
+'2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00', 'C', NULL),
 (4, 'de782b35-a398-46ed-8550-34c66053841b', TRUE, 7, 2, 3, 
 '{"agree": {"category": "Disagree", "node_uuid": "084c8cf1-715d-4d0a-b38d-a616ed74e638", "name": "Agree", "value": "B", "created_on": "2017-10-10T12:25:21.714339+00:00", "input": "B"}}',
 '[{"uuid": "babf4fc8-e12c-4bb9-a9dd-61178a118b5a", "node_uuid": "accbc6e2-b0df-46cd-9a76-bff0fdf4d753", "arrived_on": "2017-10-12T15:07:24.049815+02:00", "exit_uuid": "8249e2dc-c893-4200-b6d2-398d07a459bc"}]', 
 '[{"msg": {"urn": "tel:+12076661212", "text": "hi hi", "uuid": "543d2c4b-ff0b-4b87-a9a4-b2d6745cf470", "channel": {"name": "1223", "uuid": "d6597e08-8285-428c-8e7e-97c68adfa073"}}, "type": "msg_created", "step_uuid": "3a5014dd-7b14-4b7a-be52-0419c09340a6", "created_on": "2018-10-12T15:06:47.357682+00:00"}]',
-'2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00', 'C');
+'2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00', 'C', NULL),
+(5, 'e1fb45de-512d-4e7e-adcd-134533218a1a', TRUE, 12, 2, 3, '{}', '[]', '[]', 
+'2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C', NULL),
+(6, '6262eefe-a6e9-4201-9b76-a7f25e3b7f29', TRUE, 7, 2, 3, '{}', '[]', '[]', 
+'2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00', 'C', 4);
+
+INSERT INTO api_webhookevent(id, run_id) VALUES 
+(1, 3);
+
+INSERT INTO api_webhookresult(id, event_id) VALUES 
+(1, 1);
+
+INSERT INTO flows_flowpathrecentrun(id, run_id) VALUES 
+(1, 3);
+
+INSERT INTO flows_actionlog(id, run_id) VALUES 
+(1, 3);
