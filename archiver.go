@@ -937,9 +937,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 			continue
 		}
 
-		// purge records that were archived
-
-		if config.DeleteAfterUpload == true {
+		if !config.KeepFiles {
 			err := DeleteArchiveFile(archive)
 			if err != nil {
 				log.WithError(err).Error("error deleting temporary file")
@@ -1004,7 +1002,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			continue
 		}
 
-		if config.DeleteAfterUpload == true {
+		if !config.KeepFiles {
 			err := DeleteArchiveFile(archive)
 			if err != nil {
 				log.WithError(err).Error("error deleting temporary file")
@@ -1515,7 +1513,7 @@ func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB,
 
 	// finally delete any archives not yet actually archived
 	deleted := make([]*Archive, 0, 1)
-	if config.DeleteRecords {
+	if config.Delete {
 		deleted, err = DeleteArchivedOrgRecords(ctx, now, config, db, s3Client, org, archiveType)
 		if err != nil {
 			return created, deleted, err

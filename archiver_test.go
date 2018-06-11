@@ -291,7 +291,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
 	loader.MustLoad()
 
-	config.DeleteRecords = true
+	config.Delete = true
 
 	// AWS S3 config in the environment needed to download from S3
 	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
@@ -420,7 +420,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
 	loader.MustLoad()
 
-	config.DeleteRecords = true
+	config.Delete = true
 
 	// AWS S3 config in the environment needed to download from S3
 	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {

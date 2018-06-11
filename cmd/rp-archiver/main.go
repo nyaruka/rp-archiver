@@ -20,7 +20,7 @@ func main() {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", []string{"archiver.toml"})
 	loader.MustLoad()
 
-	if config.DeleteAfterUpload && !config.UploadToS3 {
+	if config.KeepFiles && !config.UploadToS3 {
 		logrus.Fatal("cannot delete archives and also not upload to s3")
 	}
 
