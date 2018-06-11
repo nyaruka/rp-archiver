@@ -291,7 +291,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
 	loader.MustLoad()
 
-	config.DeleteRecords = true
+	config.Delete = true
 
 	// AWS S3 config in the environment needed to download from S3
 	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
@@ -362,7 +362,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, 0, count)
 			assert.False(t, d.NeedsDeletion)
-			assert.NotNil(t, d.DeletionDate)
+			assert.NotNil(t, d.DeletedOn)
 		}
 
 		// our one message in our existing archive (but that had an invalid URL) should still exist however
@@ -420,7 +420,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
 	loader.MustLoad()
 
-	config.DeleteRecords = true
+	config.Delete = true
 
 	// AWS S3 config in the environment needed to download from S3
 	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
@@ -471,7 +471,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 			assert.Equal(t, 0, count)
 
 			assert.False(t, d.NeedsDeletion)
-			assert.NotNil(t, d.DeletionDate)
+			assert.NotNil(t, d.DeletedOn)
 		}
 
 		// other org runs unaffected

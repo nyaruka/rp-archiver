@@ -72,7 +72,7 @@ type Archive struct {
 	BuildTime   int    `db:"build_time"`
 
 	NeedsDeletion bool       `db:"needs_deletion"`
-	DeletionDate  *time.Time `db:"deletion_date"`
+	DeletedOn     *time.Time `db:"deleted_date"`
 	Rollup        *int       `db:"rollup_id"`
 
 	Org         Org
@@ -937,9 +937,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 			continue
 		}
 
-		// purge records that were archived
-
-		if config.DeleteAfterUpload == true {
+		if !config.KeepFiles {
 			err := DeleteArchiveFile(archive)
 			if err != nil {
 				log.WithError(err).Error("error deleting temporary file")
@@ -1004,7 +1002,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			continue
 		}
 
-		if config.DeleteAfterUpload == true {
+		if !config.KeepFiles {
 			err := DeleteArchiveFile(archive)
 			if err != nil {
 				log.WithError(err).Error("error deleting temporary file")
@@ -1060,7 +1058,7 @@ WHERE id IN(?)
 
 const setArchiveDeleted = `
 UPDATE archives_archive 
-SET needs_deletion = FALSE, deletion_date = $2
+SET needs_deletion = FALSE, deleted_on = $2
 WHERE id = $1
 `
 
@@ -1213,15 +1211,15 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	outer, cancel = context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	deletionDate := time.Now()
+	deletedOn := time.Now()
 
 	// all went well! mark our archive as no longer needing deletion
-	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletionDate)
+	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletedOn)
 	if err != nil {
 		return fmt.Errorf("error setting archive as deleted: %s", err.Error())
 	}
 	archive.NeedsDeletion = false
-	archive.DeletionDate = &deletionDate
+	archive.DeletedOn = &deletedOn
 
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
@@ -1435,15 +1433,15 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	outer, cancel = context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	deletionDate := time.Now()
+	deletedOn := time.Now()
 
 	// all went well! mark our archive as no longer needing deletion
-	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletionDate)
+	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletedOn)
 	if err != nil {
 		return fmt.Errorf("error setting archive as deleted: %s", err.Error())
 	}
 	archive.NeedsDeletion = false
-	archive.DeletionDate = &deletionDate
+	archive.DeletedOn = &deletedOn
 
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
@@ -1515,7 +1513,7 @@ func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB,
 
 	// finally delete any archives not yet actually archived
 	deleted := make([]*Archive, 0, 1)
-	if config.DeleteRecords {
+	if config.Delete {
 		deleted, err = DeleteArchivedOrgRecords(ctx, now, config, db, s3Client, org, archiveType)
 		if err != nil {
 			return created, deleted, err

@@ -20,7 +20,7 @@ func main() {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", []string{"archiver.toml"})
 	loader.MustLoad()
 
-	if config.DeleteAfterUpload && !config.UploadToS3 {
+	if config.KeepFiles && !config.UploadToS3 {
 		logrus.Fatal("cannot delete archives and also not upload to s3")
 	}
 
@@ -74,32 +74,55 @@ func main() {
 	}
 
 	// ensure that we can actually write to the temp directory
-	ctx := context.Background()
 	err = archiver.EnsureTempArchiveDirectory(config.TempDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("cannot write to temp directory")
 	}
 
-	// get our active orgs
-	orgs, err := archiver.GetActiveOrgs(ctx, db)
-	if err != nil {
-		logrus.Fatal(err)
-	}
+	for {
+		start := time.Now().In(time.UTC)
 
-	// for each org, do our export
-	for _, org := range orgs {
-		log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
-		if config.ArchiveMessages {
-			_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.MessageType)
-			if err != nil {
-				log.WithError(err).Error()
-			}
+		// get our active orgs
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		orgs, err := archiver.GetActiveOrgs(ctx, db)
+		cancel()
+
+		if err != nil {
+			logrus.WithError(err).Error("error getting active orgs")
+			time.Sleep(time.Minute * 5)
+			continue
 		}
-		if config.ArchiveRuns {
-			_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.RunType)
-			if err != nil {
-				log.WithError(err).Error()
+
+		// for each org, do our export
+		for _, org := range orgs {
+			// no single org should take more than 12 hours
+			ctx, cancel := context.WithTimeout(context.Background(), time.Hour*12)
+			log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
+
+			if config.ArchiveMessages {
+				_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.MessageType)
+				if err != nil {
+					log.WithError(err).Error()
+				}
 			}
+			if config.ArchiveRuns {
+				_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.RunType)
+				if err != nil {
+					log.WithError(err).Error()
+				}
+			}
+
+			cancel()
+		}
+
+		// ok, we did all our work for our orgs, sleep until the next day
+		nextDay := start.AddDate(0, 0, 1)
+		nextDay = time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), 0, 1, 0, 0, time.UTC)
+		napTime := nextDay.Sub(start)
+
+		if napTime > time.Duration(0) {
+			logrus.WithField("time", napTime).Info("Sleeping until next UTC day")
+			time.Sleep(napTime)
 		}
 	}
 }
