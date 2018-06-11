@@ -1,3 +1,9 @@
+v0.0.20
+----------
+ * update docs, more consistent command line
+ * turn archiver into service
+ * deletion_date->deleted_on
+
 v0.0.19
 ----------
  * increase timeout for calculation of all run ids in an archive
