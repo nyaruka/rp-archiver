@@ -362,7 +362,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, 0, count)
 			assert.False(t, d.NeedsDeletion)
-			assert.NotNil(t, d.DeletionDate)
+			assert.NotNil(t, d.DeletedOn)
 		}
 
 		// our one message in our existing archive (but that had an invalid URL) should still exist however
@@ -471,7 +471,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 			assert.Equal(t, 0, count)
 
 			assert.False(t, d.NeedsDeletion)
-			assert.NotNil(t, d.DeletionDate)
+			assert.NotNil(t, d.DeletedOn)
 		}
 
 		// other org runs unaffected
