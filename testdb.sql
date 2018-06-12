@@ -1,7 +1,10 @@
+CREATE EXTENSION IF NOT EXISTS HSTORE;
+
 DROP TABLE IF EXISTS orgs_org CASCADE;
 CREATE TABLE orgs_org (
     id serial primary key,
     name character varying(255) NOT NULL,
+    language character varying(3),
     is_anon boolean NOT NULL,
     is_active boolean NOT NULL,
     created_on timestamp with time zone NOT NULL
@@ -93,13 +96,28 @@ CREATE TABLE msgs_msg (
     response_to_id integer NULL references msgs_msg(id)
 );
 
+DROP TABLE IF EXISTS msgs_broadcast_recipients;
+DROP TABLE IF EXISTS msgs_broadcast;
+CREATE TABLE msgs_broadcast (
+    id serial primary key,
+    "text" hstore NOT NULL,
+    purged BOOLEAN NOT NULL,
+    created_on timestamp with time zone NOT NULL,
+    org_id integer NOT NULL references orgs_org(id) on delete cascade
+);
+
+CREATE TABLE msgs_broadcast_recipients (
+    id serial primary key,
+    broadcast_id integer NOT NULL references msgs_broadcast(id) on delete cascade,
+    contact_id integer NOT NULL references contacts_contact(id) on delete cascade
+);
+
 DROP TABLE IF EXISTS msgs_label CASCADE;
 CREATE TABLE msgs_label (
     id serial primary key,
     uuid character varying(36) NULL,
     name character varying(64)
 );
-
 
 CREATE TABLE msgs_msg_labels (
     id serial primary key,
@@ -181,11 +199,11 @@ CREATE TABLE flows_actionlog (
     run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
 );
 
-INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES
-(1, 'Org 1', TRUE, FALSE, '2017-11-10 21:11:59.890662+00'),
-(2, 'Org 2', TRUE, FALSE, '2017-08-10 21:11:59.890662+00'),
-(3, 'Org 3', TRUE, TRUE, '2017-08-10 21:11:59.890662+00'),
-(4, 'Org 4', FALSE, TRUE, '2017-08-10 21:11:59.890662+00');
+INSERT INTO orgs_org(id, name, is_active, is_anon, created_on, language) VALUES
+(1, 'Org 1', TRUE, FALSE, '2017-11-10 21:11:59.890662+00', 'eng'),
+(2, 'Org 2', TRUE, FALSE, '2017-08-10 21:11:59.890662+00', 'eng'),
+(3, 'Org 3', TRUE, TRUE, '2017-08-10 21:11:59.890662+00', 'eng'),
+(4, 'Org 4', FALSE, TRUE, '2017-08-10 21:11:59.890662+00', 'eng');
 
 INSERT INTO channels_channel(id, uuid, name, org_id) VALUES
 (1, '8c1223c3-bd43-466b-81f1-e7266a9f4465', 'Channel 1', 1),
@@ -206,9 +224,9 @@ INSERT INTO contacts_contact(id, is_active, created_by_id, created_on, modified_
 (5,  TRUE, -1, '2015-03-27 07:39:28.955051+00', -1, '2015-03-27 07:39:28.955051+00', 1, FALSE, 'John Doe', FALSE, NULL, '51762bba-01a2-4c4e-b5cd-b182d0405cd4', FALSE),
 (6,  TRUE, -1, '2015-10-30 19:42:27.001837+00', -1, '2015-10-30 19:42:27.001837+00', 2, FALSE, 'Ajodinabiff Dane', FALSE, NULL, '3e814add-e614-41f7-8b5d-a07f670a698f', FALSE),
 (7,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 3, FALSE, 'Joanne Stone', FALSE, NULL, '7051dff0-0a27-49d7-af1f-4494239139e6', FALSE),
-(8,  TRUE, -1, '2015-03-27 13:39:43.995812+00', -1, '2015-03-27 13:39:43.995812+00', 2, FALSE, NULL, FALSE, NULL, 'b46f6e18-95b4-4984-9926-dded047f4eb3', FALSE),
+(8,  TRUE, -1, '2015-03-27 13:39:43.995812+00', -1, '2015-03-27 13:39:43.995812+00', 2, FALSE, NULL, FALSE, 'fre', 'b46f6e18-95b4-4984-9926-dded047f4eb3', FALSE),
 (9,  TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', 2, FALSE, NULL, FALSE, NULL, '9195c8b7-6138-4d84-ac56-5192cc3d8ceb', FALSE),
-(10, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 2, FALSE, NULL, FALSE, NULL, '2b8bd28d-43e0-4c34-a4bb-0f10b11fdb8a', FALSE),
+(10, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 2, FALSE, 'John Arbies', FALSE, NULL, '2b8bd28d-43e0-4c34-a4bb-0f10b11fdb8a', FALSE),
 (11, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 2, FALSE, NULL, TRUE, NULL, '83639c02-e158-4b54-9f12-0c97950f2b25', FALSE),
 (12, TRUE, -1, '2016-08-22 14:20:05.690311+00', -1, '2016-08-22 14:20:05.690311+00', 3, FALSE, NULL, TRUE, NULL, '85ae20d1-ad57-4797-91f1-2e45f8e30f3f', FALSE);
 
@@ -267,6 +285,17 @@ INSERT INTO channels_channellog(id, msg_id) VALUES
 (5, 5),
 (6, 6);
 
+INSERT INTO msgs_broadcast(id, text, created_on, purged, org_id) VALUES
+(1, 'eng=>"hello",fre=>"bonjour"'::hstore, '2017-08-12 22:11:59.890662+02:00', TRUE, 2),
+(2, 'base=>"hola"'::hstore, '2017-08-12 22:11:59.890662+02:00', TRUE, 2),
+(3, 'base=>"not purged"'::hstore, '2017-08-12 19:11:59.890662+02:00', FALSE, 2);
+
+INSERT INTO msgs_broadcast_recipients(id, broadcast_id, contact_id) VALUES 
+(1, 1, 8),
+(2, 1, 11),
+(3, 1, 10),
+(4, 2, 9),
+(5, 3, 9);
 
 INSERT INTO flows_flow(id, uuid, name) VALUES
 (1, '6639286a-9120-45d4-aa39-03ae3942a4a6', 'Flow 1'),
