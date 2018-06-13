@@ -540,7 +540,17 @@ SELECT row_to_json(rec) FROM (
 	NULL AS channel,
 	'out' AS direction,
 	'flow' AS type,
-	'wired' AS status,
+	CASE when br.purged_status = 'I' then 'initializing'
+		WHEN br.purged_status = 'P' then 'queued'
+		WHEN br.purged_status = 'Q' then 'queued'
+		WHEN br.purged_status = 'W' then 'wired'
+		WHEN br.purged_status = 'D' then 'delivered'
+		WHEN br.purged_status = 'H' then 'handled'
+		WHEN br.purged_status = 'E' then 'errored'
+		WHEN br.purged_status = 'F' then 'failed'
+		WHEN br.purged_status = 'R' then 'resent'
+		ELSE 'wired'
+	END as status,
 	'visible' AS visibility,
 	'[]'::jsonb AS attachments,
 	'[]'::jsonb AS labels,
@@ -548,7 +558,7 @@ SELECT row_to_json(rec) FROM (
 	mb.created_on AS sent_on
 	FROM msgs_broadcast_recipients br
 	JOIN LATERAL (select uuid, name, language FROM contacts_contact cc WHERE cc.id = br.contact_id AND cc.is_test = FALSE) AS c ON TRUE
-	LEFT JOIN msgs_broadcast mb ON br.broadcast_id = mb.id
+	JOIN msgs_broadcast mb ON br.broadcast_id = mb.id
 	WHERE br.broadcast_id = ANY (
 	   ARRAY(
 		SELECT id FROM msgs_broadcast 
