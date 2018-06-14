@@ -96,7 +96,12 @@ func (a *Archive) coversDate(d time.Time) bool {
 	return !a.StartDate.After(d) && end.After(d)
 }
 
-const lookupActiveOrgs = `SELECT id, name, language, created_on, is_anon FROM orgs_org WHERE is_active = TRUE order by id`
+const lookupActiveOrgs = `
+SELECT o.id, o.name, l.iso_code as language, o.created_on, o.is_anon 
+FROM orgs_org o 
+LEFT JOIN orgs_language l ON l.id = primary_language_id 
+WHERE o.is_active = TRUE order by o.id
+`
 
 // GetActiveOrgs returns the active organizations sorted by id
 func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
