@@ -52,6 +52,7 @@ type Org struct {
 	Name       string    `db:"name"`
 	CreatedOn  time.Time `db:"created_on"`
 	IsAnon     bool      `db:"is_anon"`
+	Language   *string   `db:"language"`
 	ActiveDays int
 }
 
@@ -95,7 +96,7 @@ func (a *Archive) coversDate(d time.Time) bool {
 	return !a.StartDate.After(d) && end.After(d)
 }
 
-const lookupActiveOrgs = `SELECT id, name, created_on, is_anon FROM orgs_org WHERE is_active = TRUE order by id`
+const lookupActiveOrgs = `SELECT id, name, language, created_on, is_anon FROM orgs_org WHERE is_active = TRUE order by id`
 
 // GetActiveOrgs returns the active organizations sorted by id
 func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
@@ -224,15 +225,15 @@ func GetMissingDailyArchives(ctx context.Context, db *sqlx.DB, now time.Time, or
 
 const lookupMissingDailyArchive = `
 WITH month_days(missing_day) AS (
-  select generate_series($1::timestamp with time zone, $2::timestamp with time zone, '1 day')::date
+  select GENERATE_SERIES($1::timestamp with time zone, $2::timestamp with time zone, '1 day')::date
 ), curr_archives AS (
-  SELECT start_date FROM archives_archive WHERE org_id = $3 and period = $4 and archive_type=$5
+  SELECT start_date FROM archives_archive WHERE org_id = $3 AND period = $4 AND archive_type=$5
 UNION DISTINCT
   -- also get the overlapping days for the monthly rolled up archives
-  SELECT generate_series(start_date, (start_date + '1 month'::interval) - '1 second'::interval, '1 day')::date as start_date
-  FROM archives_archive WHERE org_id = $3 and period = 'M' and archive_type=$5
+  SELECT GENERATE_SERIES(start_date, (start_date + '1 month'::interval) - '1 second'::interval, '1 day')::date AS start_date
+  FROM archives_archive WHERE org_id = $3 AND period = 'M' AND archive_type=$5
 )
-select missing_day::timestamp with time zone from month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_day
+SELECT missing_day::timestamp WITH TIME ZONE FROM month_days LEFT JOIN curr_archives ON curr_archives.start_date = month_days.missing_day
 WHERE curr_archives.start_date IS NULL
 `
 
@@ -446,6 +447,37 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	return nil
 }
 
+// EnsureTempArchiveDirectory checks that we can write to our archive directory, creating it first if needbe
+func EnsureTempArchiveDirectory(path string) error {
+	if len(path) == 0 {
+		return fmt.Errorf("path argument cannot be empty")
+	}
+
+	// check if path is a directory we can write to
+	fileInfo, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return os.MkdirAll(path, 0700)
+	} else if err != nil {
+		return err
+	}
+
+	// is path a directory
+	if !fileInfo.IsDir() {
+		return fmt.Errorf("path '%s' is not a directory", path)
+	}
+
+	testFilePath := filepath.Join(path, ".test_file")
+	testFile, err := os.Create(testFilePath)
+	defer testFile.Close()
+
+	if err != nil {
+		return fmt.Errorf("directory '%s' is not writable", path)
+	}
+
+	err = os.Remove(testFilePath)
+	return err
+}
+
 const lookupMsgs = `
 SELECT rec.visibility, row_to_json(rec) FROM (
 	SELECT
@@ -497,6 +529,94 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	ORDER BY created_on ASC, id ASC) rec; 
 `
 
+const lookupPurgedBroadcasts = `
+SELECT row_to_json(rec) FROM (
+	SELECT
+	NULL AS id,
+	mb.id AS broadcast,
+	jsonb_build_object('uuid', c.uuid, 'name', c.name) as contact,
+	COALESCE(mb.text->c.language, mb.text->$2, mb.text->'base') AS text,
+	NULL AS urn,
+	NULL AS channel,
+	'out' AS direction,
+	'flow' AS type,
+	CASE when br.purged_status = 'I' then 'initializing'
+		WHEN br.purged_status = 'P' then 'queued'
+		WHEN br.purged_status = 'Q' then 'queued'
+		WHEN br.purged_status = 'W' then 'wired'
+		WHEN br.purged_status = 'D' then 'delivered'
+		WHEN br.purged_status = 'H' then 'handled'
+		WHEN br.purged_status = 'E' then 'errored'
+		WHEN br.purged_status = 'F' then 'failed'
+		WHEN br.purged_status = 'R' then 'resent'
+		ELSE 'wired'
+	END as status,
+	'visible' AS visibility,
+	'[]'::jsonb AS attachments,
+	'[]'::jsonb AS labels,
+	mb.created_on AS created_on,
+	mb.created_on AS sent_on
+	FROM msgs_broadcast_recipients br
+	JOIN LATERAL (select uuid, name, language FROM contacts_contact cc WHERE cc.id = br.contact_id AND cc.is_test = FALSE) AS c ON TRUE
+	JOIN msgs_broadcast mb ON br.broadcast_id = mb.id
+	WHERE br.broadcast_id = ANY (
+	   ARRAY(
+		SELECT id FROM msgs_broadcast 
+		WHERE org_id = $1 AND created_on > $3 AND created_on < $4 AND purged = TRUE
+		ORDER by created_on, id
+	  ))
+  ) rec;`
+
+// writeMessageRecords writes the messages in the archive's date range to the passed in writer
+func writeMessageRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer *bufio.Writer) (int, error) {
+	var rows *sqlx.Rows
+	recordCount := 0
+
+	// first write our normal records
+	var record, visibility string
+
+	rows, err := db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, archive.endDate())
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		err = rows.Scan(&visibility, &record)
+		if err != nil {
+			return 0, err
+		}
+
+		if visibility == "deleted" {
+			continue
+		}
+		writer.WriteString(record)
+		writer.WriteString("\n")
+		recordCount++
+	}
+
+	// now write any broadcasts that were purged
+	rows, err = db.QueryxContext(ctx, lookupPurgedBroadcasts, archive.Org.ID, archive.Org.Language, archive.StartDate, archive.endDate())
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		err = rows.Scan(&record)
+		if err != nil {
+			return 0, err
+		}
+
+		writer.WriteString(record)
+		writer.WriteString("\n")
+		recordCount++
+	}
+
+	logrus.WithField("record_count", recordCount).Debug("Done Writing")
+	return recordCount, nil
+}
+
 const lookupFlowRuns = `
 SELECT rec.exited_on, row_to_json(rec)
 FROM (
@@ -542,35 +662,48 @@ FROM (
 ) as rec;
 `
 
-// EnsureTempArchiveDirectory checks that we can write to our archive directory, creating it first if needbe
-func EnsureTempArchiveDirectory(path string) error {
-	if len(path) == 0 {
-		return fmt.Errorf("path argument cannot be empty")
-	}
-
-	// check if path is a directory we can write to
-	fileInfo, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return os.MkdirAll(path, 0700)
-	} else if err != nil {
-		return err
-	}
-
-	// is path a directory
-	if !fileInfo.IsDir() {
-		return fmt.Errorf("path '%s' is not a directory", path)
-	}
-
-	testFilePath := filepath.Join(path, ".test_file")
-	testFile, err := os.Create(testFilePath)
-	defer testFile.Close()
-
+// writeRunRecords writes the runs in the archive's date range to the passed in writer
+func writeRunRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer *bufio.Writer) (int, error) {
+	var rows *sqlx.Rows
+	rows, err := db.QueryxContext(ctx, lookupFlowRuns, archive.Org.IsAnon, archive.Org.ID, archive.StartDate, archive.endDate())
 	if err != nil {
-		return fmt.Errorf("directory '%s' is not writable", path)
+		return 0, err
+	}
+	defer rows.Close()
+
+	recordCount := 0
+	var record, visibility string
+	var exitedOn *time.Time
+	for rows.Next() {
+		if archive.ArchiveType == MessageType {
+			err = rows.Scan(&visibility, &record)
+			if err != nil {
+				return 0, err
+			}
+
+			// skip over deleted rows
+			if visibility == "deleted" {
+				continue
+			}
+		} else if archive.ArchiveType == RunType {
+			err = rows.Scan(&exitedOn, &record)
+
+			// shouldn't be archiving an active run, that's an error
+			if exitedOn == nil {
+				return 0, fmt.Errorf("run still active, cannot archive: %s", record)
+			}
+
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		writer.WriteString(record)
+		writer.WriteString("\n")
+		recordCount++
 	}
 
-	err = os.Remove(testFilePath)
-	return err
+	return recordCount, nil
 }
 
 // CreateArchiveFile is responsible for writing an archive file for the passed in archive from our database
@@ -602,55 +735,18 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		"filename": file.Name(),
 	}).Debug("creating new archive file")
 
-	var rows *sqlx.Rows
-	if archive.ArchiveType == MessageType {
-		rows, err = db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, archive.endDate())
-	} else if archive.ArchiveType == RunType {
-		rows, err = db.QueryxContext(ctx, lookupFlowRuns, archive.Org.IsAnon, archive.Org.ID, archive.StartDate, archive.endDate())
+	recordCount := 0
+	switch archive.ArchiveType {
+	case MessageType:
+		recordCount, err = writeMessageRecords(ctx, db, archive, writer)
+	case RunType:
+		recordCount, err = writeRunRecords(ctx, db, archive, writer)
+	default:
+		err = fmt.Errorf("unknown archive type: %s", archive.ArchiveType)
 	}
+
 	if err != nil {
 		return err
-	}
-	defer rows.Close()
-
-	recordCount := 0
-	var record, visibility string
-	var exitedOn *time.Time
-	for rows.Next() {
-		if archive.ArchiveType == MessageType {
-			err = rows.Scan(&visibility, &record)
-			if err != nil {
-				return err
-			}
-
-			// skip over deleted rows
-			if visibility == "deleted" {
-				continue
-			}
-		} else if archive.ArchiveType == RunType {
-			err = rows.Scan(&exitedOn, &record)
-
-			// shouldn't be archiving an active run, that's an error
-			if exitedOn == nil {
-				return fmt.Errorf("run still active, cannot archive: %s", record)
-			}
-
-			if err != nil {
-				return err
-			}
-		}
-
-		writer.WriteString(record)
-		writer.WriteString("\n")
-		recordCount++
-
-		if recordCount%100000 == 0 {
-			log.WithFields(logrus.Fields{
-				"filename":     file.Name(),
-				"record_count": recordCount,
-				"elapsed":      time.Since(start),
-			}).Debug("writing archive file")
-		}
 	}
 
 	archive.ArchiveFile = file.Name()
