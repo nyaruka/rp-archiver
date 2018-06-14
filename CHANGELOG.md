@@ -1,3 +1,7 @@
+v0.0.21
+----------
+ * create purged messages from broadcasts
+
 v0.0.20
 ----------
  * update docs, more consistent command line
