@@ -1,7 +1,3 @@
-v0.0.23
-----------
- * always select something out of broadcast text
-
 v0.0.22
 ----------
  * use primary_language field for default language for org
