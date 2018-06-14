@@ -1,3 +1,7 @@
+v0.0.24
+----------
+ * revert change to message type, purged messages from broadcasts should be flow
+
 v0.0.22
 ----------
  * use primary_language field for default language for org
