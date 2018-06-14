@@ -1,3 +1,7 @@
+v0.0.22
+----------
+ * use primary_language field for default language for org
+
 v0.0.21
 ----------
  * create purged messages from broadcasts
