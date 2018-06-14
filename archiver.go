@@ -540,7 +540,7 @@ SELECT row_to_json(rec) FROM (
 	NULL AS id,
 	mb.id AS broadcast,
 	jsonb_build_object('uuid', c.uuid, 'name', c.name) as contact,
-	COALESCE(mb.text->c.language, mb.text->$2, mb.text->'base', avals(mb.text))[1]) AS text,
+	COALESCE(mb.text->c.language, mb.text->$2, mb.text->'base', (avals(mb.text))[1]) AS text,
 	NULL AS urn,
 	NULL AS channel,
 	'out' AS direction,
