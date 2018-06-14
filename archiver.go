@@ -544,7 +544,7 @@ SELECT row_to_json(rec) FROM (
 	NULL AS urn,
 	NULL AS channel,
 	'out' AS direction,
-	NULL AS type,
+	'flow' AS type,
 	CASE when br.purged_status = 'I' then 'initializing'
 		WHEN br.purged_status = 'P' then 'queued'
 		WHEN br.purged_status = 'Q' then 'queued'
