@@ -197,8 +197,8 @@ func TestCreateRunArchive(t *testing.T) {
 
 	// should have two record
 	assert.Equal(t, 2, task.RecordCount)
-	assert.Equal(t, int64(581), task.Size)
-	assert.Equal(t, "d2111b94c94756147838129ca0618f38", task.Hash)
+	assert.Equal(t, int64(594), task.Size)
+	assert.Equal(t, "43d11b7fea6501854e9ff53c2e6614b8", task.Hash)
 	assertArchiveFile(t, task, "runs1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -217,8 +217,8 @@ func TestCreateRunArchive(t *testing.T) {
 
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
-	assert.Equal(t, int64(393), task.Size)
-	assert.Equal(t, "4f3beb90ee4dc586db7b04ddc7e0117d", task.Hash)
+	assert.Equal(t, int64(415), task.Size)
+	assert.Equal(t, "175f42809ea12bcd8123a5142c625247", task.Hash)
 	assertArchiveFile(t, task, "runs2.jsonl")
 
 	DeleteArchiveFile(task)
@@ -435,8 +435,8 @@ func TestArchiveOrgRuns(t *testing.T) {
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[0].StartDate)
 		assert.Equal(t, MonthPeriod, created[0].Period)
 		assert.Equal(t, 1, created[0].RecordCount)
-		assert.Equal(t, int64(393), created[0].Size)
-		assert.Equal(t, "4f3beb90ee4dc586db7b04ddc7e0117d", created[0].Hash)
+		assert.Equal(t, int64(415), created[0].Size)
+		assert.Equal(t, "175f42809ea12bcd8123a5142c625247", created[0].Hash)
 
 		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[1].StartDate)
 		assert.Equal(t, MonthPeriod, created[1].Period)
@@ -453,8 +453,8 @@ func TestArchiveOrgRuns(t *testing.T) {
 		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[11].StartDate)
 		assert.Equal(t, DayPeriod, created[11].Period)
 		assert.Equal(t, 1, created[11].RecordCount)
-		assert.Equal(t, int64(385), created[11].Size)
-		assert.Equal(t, "e4ac24080ca5a05539d058cd7fe63291", created[11].Hash)
+		assert.Equal(t, int64(399), created[11].Size)
+		assert.Equal(t, "b74131193c0febea96e32b50fbc1b598", created[11].Hash)
 
 		assert.Equal(t, 12, len(deleted))
 

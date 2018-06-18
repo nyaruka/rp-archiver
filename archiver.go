@@ -646,7 +646,7 @@ FROM (
 	 END AS events,
      fr.created_on,
      fr.modified_on,
-     fr.exited_on,
+	 fr.exited_on,
      CASE
         WHEN exit_type = 'C'
           THEN 'completed'
@@ -656,9 +656,11 @@ FROM (
           THEN 'expired'
         ELSE
           null
-     END as exit_type
+	 END as exit_type,
+ 	 a.username as submitted_by
 
    FROM flows_flowrun fr
+     LEFT JOIN auth_user a ON a.id = fr.submitted_by_id
      JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
      JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id AND cc.is_test = FALSE) AS contact_struct ON True
    
