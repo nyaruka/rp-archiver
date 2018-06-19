@@ -38,6 +38,7 @@ func TestGetMissingDayArchives(t *testing.T) {
 	assert.NoError(t, err)
 
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
+	testNow = now
 
 	// org 1 is too new, no tasks
 	tasks, err := GetMissingDailyArchives(ctx, db, now, orgs[0], MessageType)
@@ -69,6 +70,7 @@ func TestGetMissingMonthArchives(t *testing.T) {
 	assert.NoError(t, err)
 
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
+	testNow = now
 
 	// org 1 is too new, no tasks
 	tasks, err := GetMissingMonthlyArchives(ctx, db, now, orgs[0], MessageType)
@@ -99,6 +101,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	orgs, err := GetActiveOrgs(ctx, db)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
+	testNow = now
 
 	tasks, err := GetMissingDailyArchives(ctx, db, now, orgs[1], MessageType)
 	assert.NoError(t, err)
@@ -175,6 +178,7 @@ func TestCreateRunArchive(t *testing.T) {
 	orgs, err := GetActiveOrgs(ctx, db)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
+	testNow = now
 
 	tasks, err := GetMissingDailyArchives(ctx, db, now, orgs[1], RunType)
 	assert.NoError(t, err)
@@ -231,6 +235,7 @@ func TestWriteArchiveToDB(t *testing.T) {
 	orgs, err := GetActiveOrgs(ctx, db)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
+	testNow = now
 
 	existing, err := GetCurrentArchives(ctx, db, orgs[2], MessageType)
 	assert.NoError(t, err)
@@ -284,6 +289,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 	orgs, err := GetActiveOrgs(ctx, db)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
+	testNow = now
 
 	config := NewConfig()
 	os.Args = []string{"rp-archiver"}
@@ -298,7 +304,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
-		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
+		created, _, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
 		assert.NoError(t, err)
 
 		assert.Equal(t, 63, len(created))
@@ -345,6 +351,11 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[62].Hash)
 
 		// no rollup for october since that had one invalid daily archive
+
+		now = now.Add(time.Hour * 25)
+		testNow = now
+		_, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
+		assert.NoError(t, err)
 
 		assert.Equal(t, 63, len(deleted))
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
@@ -413,6 +424,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 	orgs, err := GetActiveOrgs(ctx, db)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
+	testNow = now
 
 	config := NewConfig()
 	os.Args = []string{"rp-archiver"}
@@ -427,7 +439,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
-		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
+		created, _, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
 		assert.NoError(t, err)
 
 		assert.Equal(t, 12, len(created))
@@ -456,6 +468,10 @@ func TestArchiveOrgRuns(t *testing.T) {
 		assert.Equal(t, int64(399), created[11].Size)
 		assert.Equal(t, "b74131193c0febea96e32b50fbc1b598", created[11].Hash)
 
+		now = now.Add(time.Hour * 25)
+		testNow = now
+		_, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
+		assert.NoError(t, err)
 		assert.Equal(t, 12, len(deleted))
 
 		// no runs remaining

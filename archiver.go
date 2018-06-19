@@ -96,6 +96,25 @@ func (a *Archive) coversDate(d time.Time) bool {
 	return !a.StartDate.After(d) && end.After(d)
 }
 
+var nilTime = time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC)
+var testNow = nilTime
+
+// used so that we can change "now" in our tests
+func localNow() time.Time {
+	if testNow == nilTime {
+		return time.Now()
+	}
+	testNow = testNow.Add(time.Second)
+	return testNow
+}
+
+func localSince(start time.Time) time.Duration {
+	if testNow == nilTime {
+		return time.Since(start)
+	}
+	return time.Second
+}
+
 const lookupActiveOrgs = `
 SELECT o.id, o.name, l.iso_code as language, o.created_on, o.is_anon 
 FROM orgs_org o 
@@ -129,7 +148,7 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 
 const lookupOrgArchives = `
 SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id, needs_deletion
-FROM archives_archive WHERE org_id = $1 AND archive_type = $2 
+FROM archives_archive WHERE org_id = $1 AND archive_type = $2
 ORDER BY start_date asc, period desc
 `
 
@@ -149,7 +168,7 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 
 const lookupArchivesNeedingDeletion = `
 SELECT id, org_id, start_date::timestamp with time zone as start_date, period, archive_type, hash, size, record_count, url, rollup_id, needs_deletion 
-FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
+FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND created_on < $3 AND needs_deletion = TRUE
 ORDER BY start_date asc, period desc
 `
 
@@ -158,8 +177,11 @@ func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archi
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	archives := make([]*Archive, 0, 1)
-	err := db.SelectContext(ctx, &archives, lookupArchivesNeedingDeletion, org.ID, archiveType)
+	// we only delete archives that were created at least a day ago
+	dayAgo := localNow().AddDate(0, 0, -1)
+
+	archives := make([]*Archive, 0, 2)
+	err := db.SelectContext(ctx, &archives, lookupArchivesNeedingDeletion, org.ID, archiveType, dayAgo)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -333,7 +355,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	ctx, cancel := context.WithTimeout(ctx, time.Hour)
 	defer cancel()
 
-	start := time.Now()
+	start := localNow()
 
 	log := logrus.WithFields(logrus.Fields{
 		"org_id":       monthlyArchive.Org.ID,
@@ -445,7 +467,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	}
 	monthlyArchive.Size = stat.Size()
 	monthlyArchive.RecordCount = recordCount
-	monthlyArchive.BuildTime = int(time.Since(start) / time.Millisecond)
+	monthlyArchive.BuildTime = int(localSince(start) / time.Millisecond)
 	monthlyArchive.Dailies = dailies
 	monthlyArchive.NeedsDeletion = false
 
@@ -718,7 +740,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	ctx, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
-	start := time.Now()
+	start := localNow()
 
 	log := logrus.WithFields(logrus.Fields{
 		"org_id":       archive.Org.ID,
@@ -780,14 +802,14 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 
 	archive.Size = stat.Size()
 	archive.RecordCount = recordCount
-	archive.BuildTime = int(time.Since(start) / time.Millisecond)
+	archive.BuildTime = int(localSince(start) / time.Millisecond)
 
 	log.WithFields(logrus.Fields{
 		"record_count": recordCount,
 		"filename":     file.Name(),
 		"file_size":    archive.Size,
 		"file_hash":    archive.Hash,
-		"elapsed":      time.Since(start),
+		"elapsed":      localSince(start),
 	}).Debug("completed writing archive file")
 	return nil
 }
@@ -850,7 +872,8 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error 
 	defer cancel()
 
 	archive.OrgID = archive.Org.ID
-	archive.CreatedOn = time.Now()
+	archive.CreatedOn = localNow()
+	logrus.Debugf("%vvv\n", archive)
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -935,7 +958,7 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 		"org_id": org.ID,
 	})
 	records := 0
-	start := time.Now()
+	start := localNow()
 
 	archiveCount, err := GetCurrentArchiveCount(ctx, db, org, archiveType)
 	if err != nil {
@@ -993,7 +1016,7 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	}
 
 	if len(archives) > 0 {
-		elapsed := time.Since(start)
+		elapsed := localSince(start)
 		rate := float32(records) / (float32(elapsed) / float32(time.Second))
 		log.WithFields(logrus.Fields{
 			"elapsed":            elapsed,
@@ -1018,7 +1041,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 			"archive_type": archive.ArchiveType,
 		})
 		log.Info("starting archive")
-		start := time.Now()
+		start := localNow()
 
 		err := CreateArchiveFile(ctx, db, archive, config.TempDir)
 		if err != nil {
@@ -1048,7 +1071,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 			}
 		}
 
-		elapsed := time.Since(start)
+		elapsed := localSince(start)
 		log.WithFields(logrus.Fields{
 			"id":           archive.ID,
 			"record_count": archive.RecordCount,
@@ -1082,7 +1105,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			"start_date":   archive.StartDate,
 			"archive_type": archive.ArchiveType,
 		})
-		start := time.Now()
+		start := localNow()
 		log.Info("starting rollup")
 
 		err = BuildRollupArchive(ctx, db, config, s3Client, archive, now, org, archiveType)
@@ -1116,7 +1139,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 		log.WithFields(logrus.Fields{
 			"id":           archive.ID,
 			"record_count": archive.RecordCount,
-			"elapsed":      time.Since(start),
+			"elapsed":      localSince(start),
 		}).Info("rollup complete")
 		created = append(created, archive)
 	}
@@ -1190,7 +1213,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	outer, cancel := context.WithTimeout(ctx, time.Minute*15)
 	defer cancel()
 
-	start := time.Now()
+	start := localNow()
 	log := logrus.WithFields(logrus.Fields{
 		"id":           archive.ID,
 		"org_id":       archive.OrgID,
@@ -1253,7 +1276,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
 		defer cancel()
 
-		start := time.Now()
+		start := localNow()
 
 		endIdx := startIdx + deleteTransactionSize
 		if endIdx > len(msgIDs) {
@@ -1304,7 +1327,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		}
 
 		log.WithFields(logrus.Fields{
-			"elapsed": time.Since(start),
+			"elapsed": localSince(start),
 			"count":   len(batchIDs),
 		}).Debug("deleted batch of messages")
 
@@ -1314,7 +1337,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	outer, cancel = context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	deletedOn := time.Now()
+	deletedOn := localNow()
 
 	// all went well! mark our archive as no longer needing deletion
 	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletedOn)
@@ -1325,7 +1348,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	archive.DeletedOn = &deletedOn
 
 	logrus.WithFields(logrus.Fields{
-		"elapsed": time.Since(start),
+		"elapsed": localSince(start),
 	}).Info("completed deleting messages")
 
 	return nil
@@ -1385,7 +1408,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	outer, cancel := context.WithTimeout(ctx, time.Hour)
 	defer cancel()
 
-	start := time.Now()
+	start := localNow()
 	log := logrus.WithFields(logrus.Fields{
 		"id":           archive.ID,
 		"org_id":       archive.OrgID,
@@ -1454,7 +1477,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
 		defer cancel()
 
-		start := time.Now()
+		start := localNow()
 
 		endIdx := startIdx + deleteTransactionSize
 		if endIdx > len(runIDs) {
@@ -1526,7 +1549,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		}
 
 		log.WithFields(logrus.Fields{
-			"elapsed": time.Since(start),
+			"elapsed": localSince(start),
 			"count":   len(batchIDs),
 		}).Debug("deleted batch of runs")
 
@@ -1536,7 +1559,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	outer, cancel = context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	deletedOn := time.Now()
+	deletedOn := localNow()
 
 	// all went well! mark our archive as no longer needing deletion
 	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletedOn)
@@ -1547,7 +1570,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	archive.DeletedOn = &deletedOn
 
 	logrus.WithFields(logrus.Fields{
-		"elapsed": time.Since(start),
+		"elapsed": localSince(start),
 	}).Info("completed deleting runs")
 
 	return nil
@@ -1573,7 +1596,7 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 			"period":     a.Period,
 		})
 
-		start := time.Now()
+		start := localNow()
 
 		switch a.ArchiveType {
 		case MessageType:
@@ -1591,7 +1614,7 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 
 		deleted = append(deleted, a)
 		log.WithFields(logrus.Fields{
-			"elapsed": time.Since(start),
+			"elapsed": localSince(start),
 		}).Info("deleted archive records")
 	}
 
