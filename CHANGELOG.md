@@ -1,3 +1,8 @@
+v0.0.26
+----------
+ * make sure sent status is written for messages
+ * fix run.values export format
+
 v0.0.25
 ----------
  * add submitted_by to flow runs, populate with username of user that submitted
