@@ -511,6 +511,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 		WHEN status = 'H' then 'handled'
 		WHEN status = 'E' then 'errored'
 		WHEN status = 'F' then 'failed'
+		WHEN status = 'S' then 'sent'
 		WHEN status = 'R' then 'resent'
 		ELSE NULL
 	  END as status,
