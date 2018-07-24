@@ -526,7 +526,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	  labels_agg.data as labels,
 	  mm.created_on as created_on,
 	  sent_on,
-	  modified_on
+	  mm.modified_on as modified_on
 	FROM msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id AND cc.is_test = FALSE) as contact ON True
 	  LEFT JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
