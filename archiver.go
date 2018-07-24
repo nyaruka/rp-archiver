@@ -525,7 +525,8 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	  (select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?):(.*)$') attachment) as attach_data) as attach_row) as attachments,
 	  labels_agg.data as labels,
 	  mm.created_on as created_on,
-	  sent_on
+	  sent_on,
+	  modified_on
 	FROM msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id AND cc.is_test = FALSE) as contact ON True
 	  LEFT JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
@@ -561,7 +562,8 @@ SELECT row_to_json(rec) FROM (
 	'[]'::jsonb AS attachments,
 	'[]'::jsonb AS labels,
 	mb.created_on AS created_on,
-	mb.created_on AS sent_on
+	mb.created_on AS sent_on,
+	mb.created_on as modified_on
 	FROM msgs_broadcast_recipients br
 	JOIN LATERAL (select uuid, name, language FROM contacts_contact cc WHERE cc.id = br.contact_id AND cc.is_test = FALSE) AS c ON TRUE
 	JOIN msgs_broadcast mb ON br.broadcast_id = mb.id

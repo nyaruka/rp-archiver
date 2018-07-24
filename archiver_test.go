@@ -123,9 +123,9 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have two records, second will have attachments
 	assert.Equal(t, 5, task.RecordCount)
-	assert.Equal(t, int64(616), task.Size)
+	assert.Equal(t, int64(633), task.Size)
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
-	assert.Equal(t, "fb7dc730914e8481732a411e68dd9e14", task.Hash)
+	assert.Equal(t, "079ac762aad71d5489a5dbcc97aef36a", task.Hash)
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -143,8 +143,8 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
-	assert.Equal(t, int64(283), task.Size)
-	assert.Equal(t, "d03b1ab8d3312b37d5e0ae38b88e1ea7", task.Hash)
+	assert.Equal(t, int64(290), task.Size)
+	assert.Equal(t, "a719c7ec64c516a6e159d26a70cb4225", task.Hash)
 	assertArchiveFile(t, task, "messages2.jsonl")
 
 	DeleteArchiveFile(task)
@@ -317,14 +317,14 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), created[2].StartDate)
 		assert.Equal(t, DayPeriod, created[2].Period)
 		assert.Equal(t, 5, created[2].RecordCount)
-		assert.Equal(t, int64(616), created[2].Size)
-		assert.Equal(t, "fb7dc730914e8481732a411e68dd9e14", created[2].Hash)
+		assert.Equal(t, int64(633), created[2].Size)
+		assert.Equal(t, "079ac762aad71d5489a5dbcc97aef36a", created[2].Hash)
 
 		assert.Equal(t, time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), created[3].StartDate)
 		assert.Equal(t, DayPeriod, created[3].Period)
 		assert.Equal(t, 1, created[3].RecordCount)
-		assert.Equal(t, int64(299), created[3].Size)
-		assert.Equal(t, "3683faa7b3a546b47b0bac1ec150f8af", created[3].Hash)
+		assert.Equal(t, int64(306), created[3].Size)
+		assert.Equal(t, "7ece4401d3afac9c08a913398f213ffa", created[3].Hash)
 
 		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[60].StartDate)
 		assert.Equal(t, DayPeriod, created[60].Period)
@@ -335,8 +335,8 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[61].StartDate)
 		assert.Equal(t, MonthPeriod, created[61].Period)
 		assert.Equal(t, 6, created[61].RecordCount)
-		assert.Equal(t, int64(640), created[61].Size)
-		assert.Equal(t, "2e9d7a9c3bc5e8057e0e4f0d926d196e", created[61].Hash)
+		assert.Equal(t, int64(657), created[61].Size)
+		assert.Equal(t, "fbeb0de984b76bf24609bf2139cf8553", created[61].Hash)
 
 		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[62].StartDate)
 		assert.Equal(t, MonthPeriod, created[62].Period)
