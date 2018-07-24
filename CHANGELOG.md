@@ -1,3 +1,8 @@
+v1.0.0
+----------
+* 1.0 release
+* be more specific in our reference to modified_on
+
 v0.0.27
 ----------
  * add modified-on to message archives
