@@ -1,3 +1,7 @@
+v0.0.27
+----------
+ * add modified-on to message archives
+
 v0.0.26
 ----------
  * make sure sent status is written for messages
