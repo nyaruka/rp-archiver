@@ -1,3 +1,7 @@
+v1.0.1
+----------
+ * add uuid to run archives
+
 v1.0.0
 ----------
 * 1.0 release
