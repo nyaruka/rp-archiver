@@ -629,7 +629,8 @@ const lookupFlowRuns = `
 SELECT rec.exited_on, row_to_json(rec)
 FROM (
    SELECT
-     fr.id,
+	 fr.id as id,
+	 fr.uuid as uuid,
      row_to_json(flow_struct) AS flow,
      row_to_json(contact_struct) AS contact,
      fr.responded,
