@@ -1191,7 +1191,7 @@ var deleteTransactionSize = 100
 //
 // Upon completion it updates the needs_deletion flag on the archive
 func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
-	outer, cancel := context.WithTimeout(ctx, time.Minute*15)
+	outer, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
 	start := time.Now()
@@ -1254,7 +1254,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	// ok, delete our messages in batches, we do this in transactions as it spans a few different queries
 	for startIdx := 0; startIdx < len(msgIDs); startIdx += deleteTransactionSize {
 		// no single batch should take more than a few minutes
-		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
 		start := time.Now()
@@ -1386,7 +1386,7 @@ WHERE id IN(?)
 //
 // Upon completion it updates the needs_deletion flag on the archive
 func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
-	outer, cancel := context.WithTimeout(ctx, time.Hour)
+	outer, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
 	start := time.Now()
@@ -1455,7 +1455,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	// ok, delete our runs in batches, we do this in transactions as it spans a few different queries
 	for startIdx := 0; startIdx < len(runIDs); startIdx += deleteTransactionSize {
 		// no single batch should take more than a few minutes
-		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
 		start := time.Now()
