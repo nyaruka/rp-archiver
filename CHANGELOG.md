@@ -1,3 +1,7 @@
+v1.0.2
+----------
+ * give ourselves up to 3 hours per archive deletion, 15 mins per transaction
+
 v1.0.1
 ----------
  * add uuid to run archives
