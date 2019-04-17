@@ -26,8 +26,8 @@ before_install:
   - sudo -E service postgresql restart $PGDB
   
 before_script:
-  - psql -U postgres -c "CREATE USER travis;"
-  - psql -U postgres -c "ALTER ROLE travis WITH SUPERUSER;"  
+  - psql -U postgres -c "CREATE USER travis;" || true
+  - psql -U postgres -c "ALTER ROLE travis WITH SUPERUSER;" || true
   - psql -U postgres -c "CREATE DATABASE archiver_test;"
 
 script:
