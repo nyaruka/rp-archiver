@@ -6,6 +6,7 @@
 *.dylib
 *~
 .vscode
+dist/
 
 *.py
 *.pyc
