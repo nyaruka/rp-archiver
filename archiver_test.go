@@ -122,10 +122,10 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.NoError(t, err)
 
 	// should have two records, second will have attachments
-	assert.Equal(t, 5, task.RecordCount)
-	assert.Equal(t, int64(633), task.Size)
+	assert.Equal(t, 6, task.RecordCount)
+	assert.Equal(t, int64(646), task.Size)
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
-	assert.Equal(t, "079ac762aad71d5489a5dbcc97aef36a", task.Hash)
+	assert.Equal(t, "5fe5adcd696342367bdc9b877e524f4a", task.Hash)
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -316,9 +316,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 		assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), created[2].StartDate)
 		assert.Equal(t, DayPeriod, created[2].Period)
-		assert.Equal(t, 5, created[2].RecordCount)
-		assert.Equal(t, int64(633), created[2].Size)
-		assert.Equal(t, "079ac762aad71d5489a5dbcc97aef36a", created[2].Hash)
+		assert.Equal(t, 6, created[2].RecordCount)
+		assert.Equal(t, int64(646), created[2].Size)
+		assert.Equal(t, "5fe5adcd696342367bdc9b877e524f4a", created[2].Hash)
 
 		assert.Equal(t, time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), created[3].StartDate)
 		assert.Equal(t, DayPeriod, created[3].Period)
@@ -334,9 +334,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[61].StartDate)
 		assert.Equal(t, MonthPeriod, created[61].Period)
-		assert.Equal(t, 6, created[61].RecordCount)
-		assert.Equal(t, int64(657), created[61].Size)
-		assert.Equal(t, "fbeb0de984b76bf24609bf2139cf8553", created[61].Hash)
+		assert.Equal(t, 7, created[61].RecordCount)
+		assert.Equal(t, int64(670), created[61].Size)
+		assert.Equal(t, "0677e49245b792664d75e9b3aebb4455", created[61].Hash)
 
 		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[62].StartDate)
 		assert.Equal(t, MonthPeriod, created[62].Period)

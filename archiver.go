@@ -527,8 +527,10 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	  mm.created_on as created_on,
 	  sent_on,
 	  mm.modified_on as modified_on
-	FROM msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
+	FROM msgs_msg mm 
+	  JOIN orgs_org oo ON mm.org_id = oo.id
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id AND cc.is_test = FALSE) as contact ON True
+	  LEFT JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id
 	  LEFT JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
 
