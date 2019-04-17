@@ -1,3 +1,9 @@
+v1.0.3
+----------
+ * convert to go module
+ * add testing for pg 10
+ * properly archive surveyor messages
+
 v1.0.2
 ----------
  * give ourselves up to 3 hours per archive deletion, 15 mins per transaction
