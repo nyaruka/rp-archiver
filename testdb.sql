@@ -112,13 +112,6 @@ CREATE TABLE msgs_broadcast (
     org_id integer NOT NULL references orgs_org(id) on delete cascade
 );
 
-CREATE TABLE msgs_broadcast_recipients (
-    id serial primary key,
-    broadcast_id integer NOT NULL references msgs_broadcast(id) on delete cascade,
-    contact_id integer NOT NULL references contacts_contact(id) on delete cascade,
-    purged_status character varying(1)
-);
-
 DROP TABLE IF EXISTS msgs_label CASCADE;
 CREATE TABLE msgs_label (
     id serial primary key,
@@ -307,13 +300,6 @@ INSERT INTO msgs_broadcast(id, text, created_on, purged, org_id) VALUES
 (1, 'eng=>"hello",fre=>"bonjour"'::hstore, '2017-08-12 22:11:59.890662+02:00', TRUE, 2),
 (2, 'base=>"hola"'::hstore, '2017-08-12 22:11:59.890662+02:00', TRUE, 2),
 (3, 'base=>"not purged"'::hstore, '2017-08-12 19:11:59.890662+02:00', FALSE, 2);
-
-INSERT INTO msgs_broadcast_recipients(id, broadcast_id, contact_id, purged_status) VALUES 
-(1, 1, 8, 'D'),
-(2, 1, 11, NULL),
-(3, 1, 10, NULL),
-(4, 2, 9, NULL),
-(5, 3, 9, NULL);
 
 INSERT INTO flows_flow(id, uuid, name) VALUES
 (1, '6639286a-9120-45d4-aa39-03ae3942a4a6', 'Flow 1'),

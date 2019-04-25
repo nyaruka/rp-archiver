@@ -316,9 +316,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 		assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), created[2].StartDate)
 		assert.Equal(t, DayPeriod, created[2].Period)
-		assert.Equal(t, 6, created[2].RecordCount)
-		assert.Equal(t, int64(646), created[2].Size)
-		assert.Equal(t, "5fe5adcd696342367bdc9b877e524f4a", created[2].Hash)
+		assert.Equal(t, 3, created[2].RecordCount)
+		assert.Equal(t, int64(483), created[2].Size)
+		assert.Equal(t, "6fe9265860425cf1f9757ba3d91b1a05", created[2].Hash)
 
 		assert.Equal(t, time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), created[3].StartDate)
 		assert.Equal(t, DayPeriod, created[3].Period)
@@ -334,9 +334,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[61].StartDate)
 		assert.Equal(t, MonthPeriod, created[61].Period)
-		assert.Equal(t, 7, created[61].RecordCount)
-		assert.Equal(t, int64(670), created[61].Size)
-		assert.Equal(t, "0677e49245b792664d75e9b3aebb4455", created[61].Hash)
+		assert.Equal(t, 4, created[61].RecordCount)
+		assert.Equal(t, int64(509), created[61].Size)
+		assert.Equal(t, "9e40be76913bf58655b70ee96dcac25d", created[61].Hash)
 
 		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[62].StartDate)
 		assert.Equal(t, MonthPeriod, created[62].Period)

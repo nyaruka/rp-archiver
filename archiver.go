@@ -538,45 +538,6 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	ORDER BY created_on ASC, id ASC) rec; 
 `
 
-const lookupPurgedBroadcasts = `
-SELECT row_to_json(rec) FROM (
-	SELECT
-	NULL AS id,
-	mb.id AS broadcast,
-	jsonb_build_object('uuid', c.uuid, 'name', c.name) as contact,
-	COALESCE(mb.text->c.language, mb.text->$2, mb.text->'base', (avals(mb.text))[1]) AS text,
-	NULL AS urn,
-	NULL AS channel,
-	'out' AS direction,
-	'flow' AS type,
-	CASE when br.purged_status = 'I' then 'initializing'
-		WHEN br.purged_status = 'P' then 'queued'
-		WHEN br.purged_status = 'Q' then 'queued'
-		WHEN br.purged_status = 'W' then 'wired'
-		WHEN br.purged_status = 'D' then 'delivered'
-		WHEN br.purged_status = 'H' then 'handled'
-		WHEN br.purged_status = 'E' then 'errored'
-		WHEN br.purged_status = 'F' then 'failed'
-		WHEN br.purged_status = 'R' then 'resent'
-		ELSE 'wired'
-	END as status,
-	'visible' AS visibility,
-	'[]'::jsonb AS attachments,
-	'[]'::jsonb AS labels,
-	mb.created_on AS created_on,
-	mb.created_on AS sent_on,
-	mb.created_on as modified_on
-	FROM msgs_broadcast_recipients br
-	JOIN LATERAL (select uuid, name, language FROM contacts_contact cc WHERE cc.id = br.contact_id AND cc.is_test = FALSE) AS c ON TRUE
-	JOIN msgs_broadcast mb ON br.broadcast_id = mb.id
-	WHERE br.broadcast_id = ANY (
-	   ARRAY(
-		SELECT id FROM msgs_broadcast 
-		WHERE org_id = $1 AND created_on > $3 AND created_on < $4 AND purged = TRUE
-		ORDER by created_on, id
-	  ))
-  ) rec;`
-
 // writeMessageRecords writes the messages in the archive's date range to the passed in writer
 func writeMessageRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer *bufio.Writer) (int, error) {
 	var rows *sqlx.Rows
@@ -600,24 +561,6 @@ func writeMessageRecords(ctx context.Context, db *sqlx.DB, archive *Archive, wri
 		if visibility == "deleted" {
 			continue
 		}
-		writer.WriteString(record)
-		writer.WriteString("\n")
-		recordCount++
-	}
-
-	// now write any broadcasts that were purged
-	rows, err = db.QueryxContext(ctx, lookupPurgedBroadcasts, archive.Org.ID, archive.Org.Language, archive.StartDate, archive.endDate())
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		err = rows.Scan(&record)
-		if err != nil {
-			return 0, err
-		}
-
 		writer.WriteString(record)
 		writer.WriteString("\n")
 		recordCount++
