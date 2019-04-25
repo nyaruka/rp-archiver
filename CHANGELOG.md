@@ -1,3 +1,7 @@
+v1.0.6
+----------
+ * fix travis deploy
+
 v1.0.5
 ----------
  * IMPORTANT: you must make sure that all your purged broadcasts have been archived before
