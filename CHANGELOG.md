@@ -1,3 +1,9 @@
+v1.0.5
+----------
+ * IMPORTANT: you must make sure that all your purged broadcasts have been archived before
+   removing the recipients table (in RapidPro release)
+ * remove archival of purged broadcasts in preparation of removal of recipients table
+
 v1.0.4
 ----------
  * IMPORTANT: you must make sure that all your purged broadcasts have been archived before
