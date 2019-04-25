@@ -122,10 +122,10 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.NoError(t, err)
 
 	// should have two records, second will have attachments
-	assert.Equal(t, 6, task.RecordCount)
-	assert.Equal(t, int64(646), task.Size)
+	assert.Equal(t, 3, task.RecordCount)
+	assert.Equal(t, int64(483), task.Size)
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
-	assert.Equal(t, "5fe5adcd696342367bdc9b877e524f4a", task.Hash)
+	assert.Equal(t, "6fe9265860425cf1f9757ba3d91b1a05", task.Hash)
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveFile(task)
