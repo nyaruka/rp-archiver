@@ -16,7 +16,7 @@ require (
 	github.com/naoina/go-stringutil v0.1.0
 	github.com/naoina/toml v0.1.1
 	github.com/nyaruka/ezconf v0.2.1
-	github.com/pkg/errors v0.8.0
+	github.com/pkg/errors v0.8.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/sirupsen/logrus v1.0.5
 	github.com/stretchr/testify v1.2.1
