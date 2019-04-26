@@ -1393,6 +1393,7 @@ WHERE
 ORDER BY 
 	created_on ASC,
 	id ASC
+LIMIT 1000000;
 `
 
 const selectOrgRunsInRange = `
