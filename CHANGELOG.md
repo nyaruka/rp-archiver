@@ -1,3 +1,7 @@
+v1.0.8
+----------
+ * up max connections to two since we need cursor when deleting broadcasts
+
 v1.0.7
 ----------
  * delete broadcasts which no longer have any active messages
