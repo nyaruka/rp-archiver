@@ -1,3 +1,7 @@
+v1.0.7
+----------
+ * delete broadcasts which no longer have any active messages
+
 v1.0.6
 ----------
  * fix travis deploy
