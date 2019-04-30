@@ -298,6 +298,8 @@ func TestArchiveOrgMessages(t *testing.T) {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
+		assertCount(t, db, 4, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
+
 		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
 		assert.NoError(t, err)
 
@@ -397,6 +399,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 		)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, count)
+
+		// one broadcast still exists because it has a schedule, the other because it still has msgs, the last because it is new
+		assertCount(t, db, 3, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
 	}
 }
 
@@ -405,6 +410,13 @@ SELECT COUNT(*)
 FROM flows_flowrun 
 WHERE org_id = $1 and modified_on >= $2 and modified_on < $3
 `
+
+func assertCount(t *testing.T, db *sqlx.DB, expected int, query string, args ...interface{}) {
+	var count int
+	err := db.Get(&count, query, args...)
+	assert.NoError(t, err, "error executing query: %s", query)
+	assert.Equal(t, expected, count, "counts mismatch for query %s", query)
+}
 
 func TestArchiveOrgRuns(t *testing.T) {
 	db := setup(t)

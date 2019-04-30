@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -1280,6 +1281,121 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	return nil
 }
 
+// DeleteBroadcasts deletes all broadcasts older than 90 days for the passed in org which have no active messages on them
+func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, org Org) error {
+	start := time.Now()
+	threshhold := now.AddDate(0, 0, -org.ActiveDays)
+
+	rows, err := db.QueryxContext(ctx, selectOldOrgBroadcasts, org.ID, threshhold)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		if count == 0 {
+			logrus.WithField("org_id", org.ID).Info("deleting broadcasts")
+		}
+
+		// been deleting this org more than an hour? thats enough for today, exit out
+		if time.Since(start) > time.Hour {
+			break
+		}
+
+		var broadcastID int64
+		err := rows.Scan(&broadcastID)
+		if err != nil {
+			return errors.Wrap(err, "unable to get broadcast id")
+		}
+
+		// make sure we have no active messages
+		var msgCount int64
+		err = db.Get(&msgCount, `SELECT count(*) FROM msgs_msg WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			return errors.Wrapf(err, "unable to select number of msgs for broadcast: %d", broadcastID)
+		}
+
+		if msgCount != 0 {
+			logrus.WithField("broadcast_id", broadcastID).WithField("org_id", org.ID).WithField("msg_count", msgCount).Warn("unable to delete broadcast, has messages still")
+			continue
+		}
+
+		// we delete broadcasts in a transaction per broadcast
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return errors.Wrapf(err, "error starting transaction while deleting broadcast: %d", broadcastID)
+		}
+
+		// delete contacts M2M
+		_, err = tx.Exec(`DELETE from msgs_broadcast_contacts WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting related contacts for broadcast: %d", broadcastID)
+		}
+
+		// delete groups M2M
+		_, err = tx.Exec(`DELETE from msgs_broadcast_groups WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting related groups for broadcast: %d", broadcastID)
+		}
+
+		// delete URNs M2M
+		_, err = tx.Exec(`DELETE from msgs_broadcast_urns WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting related urns for broadcast: %d", broadcastID)
+		}
+
+		// delete counts associated with this broadcast
+		_, err = tx.Exec(`DELETE from msgs_broadcastmsgcount WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting counts for broadcast: %d", broadcastID)
+		}
+
+		// finally, delete our broadcast
+		_, err = tx.Exec(`DELETE from msgs_broadcast WHERE id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting broadcast: %d", broadcastID)
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return errors.Wrapf(err, "error deleting broadcast: %d", broadcastID)
+		}
+
+		count++
+	}
+
+	if count > 0 {
+		logrus.WithFields(logrus.Fields{
+			"elapsed": time.Since(start),
+			"count":   count,
+			"org_id":  org.ID,
+		}).Info("completed deleting broadcasts")
+	}
+
+	return nil
+}
+
+const selectOldOrgBroadcasts = `
+SELECT 
+	id
+FROM 
+	msgs_broadcast
+WHERE 
+	org_id = $1 AND
+	created_on < $2 AND
+	schedule_id IS NULL
+ORDER BY 
+	created_on ASC,
+	id ASC
+LIMIT 1000000;
+`
+
 const selectOrgRunsInRange = `
 SELECT fr.id, fr.is_active, cc.is_test
 FROM flows_flowrun fr
@@ -1527,6 +1643,10 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 		switch a.ArchiveType {
 		case MessageType:
 			err = DeleteArchivedMessages(ctx, config, db, s3Client, a)
+			if err == nil {
+				err = DeleteBroadcasts(ctx, now, config, db, org)
+			}
+
 		case RunType:
 			err = DeleteArchivedRuns(ctx, config, db, s3Client, a)
 		default:
