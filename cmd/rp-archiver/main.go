@@ -63,7 +63,7 @@ func main() {
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(2)
 
 	var s3Client s3iface.S3API
 	if config.UploadToS3 {
