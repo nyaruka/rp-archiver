@@ -1,6 +1,74 @@
 # RapidPro Archiver [![Build Status](https://travis-ci.org/nyaruka/rp-archiver.svg?branch=master)](https://travis-ci.org/nyaruka/rp-archiver) [![codecov](https://codecov.io/gh/nyaruka/rp-archiver/branch/master/graph/badge.svg)](https://codecov.io/gh/nyaruka/rp-archiver) [![Go Report Card](https://goreportcard.com/badge/github.com/nyaruka/rp-archiver)](https://goreportcard.com/report/github.com/nyaruka/rp-archiver)
 
-Simple service for archiving messages and runs to S3 from the RapidPro database.
+RP-Archiver is the [RapidPro](https://github.com/rapidpro/rapidpro) component responsible for the archiving of
+old runs and messages. It interacts directly with the RapidPro database and writes archive files to an 
+S3 compatible endpoint.
+
+# Deploying
+
+As Archiver is a go application, it compiles to a binary and that binary along with the config file is all
+you need to run it on your server. You can find bundles for each platform in the
+[releases directory](https://github.com/nyaruka/rp-archiver/releases). You should only run a single archiver
+instance for a deployment.
+
+# Configuration
+
+Archiver uses a tiered configuration system, each option takes precendence over the ones above it:
+ 1. The configuration file
+ 2. Environment variables starting with `ARCHIVER_` 
+ 3. Command line parameters
+
+We recommend running Archiver with no changes to the configuration and no parameters, using only
+environment variables to configure it. You can use `% rp-archiver --help` to see a list of the
+environment variables and parameters and for more details on each option.
+
+# RapidPro Configuration
+
+For use with RapidPro, you will want to configure these settings:
+
+ * `ARCHIVER_DB`: URL describing how to connect to the RapidPro database (default "postgres://temba:temba@localhost/temba?sslmode=disable")
+ * `ARCHIVER_TEMP_DIR`: The directory that temporary archives will be written before upload (default "/tmp")
+ * `ARCHIVER_DELETE`: Whether to delete messages and runs after they are archived, we recommend setting this to true for large installations (default false)
+ 
+For writing of archives, Archiver needs access to an S3 bucket, you can configure access to your bucket via:
+
+ * `ARCHIVER_S3_REGION`: The region for your S3 bucket (ex: `ew-west-1`)
+ * `ARCHIVER_S3_BUCKET`: The name of your S3 bucket (ex: `dl-archiver-test"`)
+ * `ARCHIVER_S3_ENDPOINT`: The S3 endpoint we will write archives to (default "https://s3.amazonaws.com")
+ * `ARCHIVER_AWS_ACCESS_KEY_ID`: The AWS access key id used to authenticate to AWS
+ * `ARCHIVER_AWS_SECRET_ACCESS_KEY` The AWS secret access key used to authenticate to AWS
+
+Recommended settings for error reporting:
+
+ * `ARCHIVER_SENTRY_DSN`: The DSN to use when logging errors to Sentry
+
+# Development
+
+Install Archiver source in your workspace with:
+
+```
+go get github.com/nyaruka/rp-archiver
+```
+
+Build Archiver with:
+
+```
+go build github.com/nyaruka/rp-archiver/cmd/rp-archiver
+```
+
+This will create a new executable in your current directory `rp-archiver`
+
+To run the tests you need to create the test database:
+
+```
+$ createdb archiver_test
+```
+
+To run all of the tests:
+
+```
+go test github.com/nyaruka/rp-archiver/... -p=1
+```
 
 ## Usage
 
