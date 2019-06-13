@@ -530,7 +530,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	  mm.modified_on as modified_on
 	FROM msgs_msg mm 
 	  JOIN orgs_org oo ON mm.org_id = oo.id
-	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id AND cc.is_test = FALSE) as contact ON True
+	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
 	  LEFT JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id
 	  LEFT JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
@@ -612,7 +612,7 @@ FROM (
    FROM flows_flowrun fr
      LEFT JOIN auth_user a ON a.id = fr.submitted_by_id
      JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
-     JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id AND cc.is_test = FALSE) AS contact_struct ON True
+     JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id) AS contact_struct ON True
    
    WHERE fr.org_id = $2 AND fr.modified_on >= $3 AND fr.modified_on < $4
    ORDER BY fr.modified_on ASC, id ASC
@@ -1075,7 +1075,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 }
 
 const selectOrgMessagesInRange = `
-SELECT mm.id, mm.visibility, cc.is_test
+SELECT mm.id, mm.visibility
 FROM msgs_msg mm
 LEFT JOIN contacts_contact cc ON cc.id = mm.contact_id
 WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
@@ -1172,17 +1172,16 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	visibleCount := 0
 	var msgID int64
 	var visibility string
-	var isTest bool
 	msgIDs := make([]int64, 0, archive.RecordCount)
 	for rows.Next() {
-		err = rows.Scan(&msgID, &visibility, &isTest)
+		err = rows.Scan(&msgID, &visibility)
 		if err != nil {
 			return err
 		}
 		msgIDs = append(msgIDs, msgID)
 
-		// keep track of the number of visible messages, ie, not deleted and not for test contacts
-		if visibility != "D" && !isTest {
+		// keep track of the number of visible messages, ie, not deleted
+		if visibility != "D" {
 			visibleCount++
 		}
 	}
@@ -1397,7 +1396,7 @@ LIMIT 1000000;
 `
 
 const selectOrgRunsInRange = `
-SELECT fr.id, fr.is_active, cc.is_test
+SELECT fr.id, fr.is_active
 FROM flows_flowrun fr
 LEFT JOIN contacts_contact cc ON cc.id = fr.contact_id
 WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
@@ -1480,12 +1479,11 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	defer rows.Close()
 
 	var runID int64
-	var isTest bool
 	var isActive bool
 	runCount := 0
 	runIDs := make([]int64, 0, archive.RecordCount)
 	for rows.Next() {
-		err = rows.Scan(&runID, &isActive, &isTest)
+		err = rows.Scan(&runID, &isActive)
 		if err != nil {
 			return err
 		}
@@ -1495,11 +1493,8 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 			return fmt.Errorf("run %d in archive is still active", runID)
 		}
 
-		// if this run isn't a test contact, increment it
-		if !isTest {
-			runCount++
-		}
-
+		// increment our count
+		runCount++
 		runIDs = append(runIDs, runID)
 	}
 	rows.Close()
