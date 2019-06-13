@@ -1,3 +1,7 @@
+v2.0.0
+----------
+ * remove reading is_test on contact
+
 v1.0.8
 ----------
  * up max connections to two since we need cursor when deleting broadcasts
