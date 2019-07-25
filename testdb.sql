@@ -214,22 +214,7 @@ CREATE TABLE channels_channellog (
     msg_id integer NOT NULL references msgs_msg(id)
 );
 
-CREATE TABLE api_webhookevent (
-    id serial primary key,
-    run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
-);
-
-CREATE TABLE api_webhookresult (
-    id serial primary key,
-    event_id integer NOT NULL references api_webhookevent(id) DEFERRABLE INITIALLY DEFERRED
-);
-
 CREATE TABLE flows_flowpathrecentrun (
-    id serial primary key,
-    run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
-);
-
-CREATE TABLE flows_actionlog (
     id serial primary key,
     run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
 );
@@ -352,14 +337,5 @@ INSERT INTO flows_flowrun(id, uuid, responded, contact_id, flow_id, org_id, resu
 (6, '6262eefe-a6e9-4201-9b76-a7f25e3b7f29', TRUE, 7, 2, 3, '{}', '[]', '[]', 
 '2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00', 'C', 4, NULL);
 
-INSERT INTO api_webhookevent(id, run_id) VALUES 
-(1, 3);
-
-INSERT INTO api_webhookresult(id, event_id) VALUES 
-(1, 1);
-
 INSERT INTO flows_flowpathrecentrun(id, run_id) VALUES 
-(1, 3);
-
-INSERT INTO flows_actionlog(id, run_id) VALUES 
 (1, 3);
