@@ -1,3 +1,7 @@
+v2.0.1
+----------
+ * update table references according to v5.2 schema, use wrapf for errors
+
 v2.0.0
 ----------
  * remove reading is_test on contact
