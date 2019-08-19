@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -110,7 +111,7 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 
 	rows, err := db.QueryxContext(ctx, lookupActiveOrgs)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "error fetching active orgs")
 	}
 	defer rows.Close()
 
@@ -119,7 +120,7 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 		org := Org{ActiveDays: 90}
 		err = rows.StructScan(&org)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "error scanning active org")
 		}
 		orgs = append(orgs, org)
 	}
@@ -141,7 +142,7 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 	archives := make([]*Archive, 0, 1)
 	err := db.SelectContext(ctx, &archives, lookupOrgArchives, org.ID, archiveType)
 	if err != nil && err != sql.ErrNoRows {
-		return nil, err
+		return nil, errors.Wrapf(err, "error selecting current archives for org: %d and type: %s", org.ID, archiveType)
 	}
 
 	return archives, nil
@@ -161,7 +162,7 @@ func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archi
 	archives := make([]*Archive, 0, 1)
 	err := db.SelectContext(ctx, &archives, lookupArchivesNeedingDeletion, org.ID, archiveType)
 	if err != nil && err != sql.ErrNoRows {
-		return nil, err
+		return nil, errors.Wrapf(err, "error selecting archives needing deletion for org: %d and type: %s", org.ID, archiveType)
 	}
 
 	return archives, nil
@@ -173,21 +174,17 @@ FROM archives_archive
 WHERE org_id = $1 AND archive_type = $2
 `
 
-// GetCurrentArchiveCount returns all the current archives for the passed in org and record type
+// GetCurrentArchiveCount returns the archive count for the passed in org and record type
 func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	var archiveCount int
 
-	rows, err := db.QueryxContext(ctx, lookupCountOrgArchives, org.ID, archiveType)
+	err := db.GetContext(ctx, &archiveCount, lookupCountOrgArchives, org.ID, archiveType)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrapf(err, "error querying archive count for org: %d and type: %s", org.ID, archiveType)
 	}
-	defer rows.Close()
-
-	rows.Next()
-	err = rows.Scan(&archiveCount)
 
 	return archiveCount, nil
 }
@@ -209,7 +206,7 @@ func GetDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, org Org, arc
 
 	err := db.SelectContext(ctx, &existingArchives, lookupOrgDailyArchivesForDateRange, org.ID, archiveType, DayPeriod, startDate, endDate)
 	if err != nil && err != sql.ErrNoRows {
-		return nil, err
+		return nil, errors.Wrapf(err, "error selecting daily archives for org: %d and type: %s", org.ID, archiveType)
 	}
 
 	return existingArchives, nil
@@ -251,7 +248,7 @@ func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, start
 
 	rows, err := db.QueryxContext(ctx, lookupMissingDailyArchive, startDate, endDate, org.ID, DayPeriod, archiveType)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "error getting missing daily archives for org: %d and type: %s", org.ID, archiveType)
 	}
 	defer rows.Close()
 
@@ -260,7 +257,7 @@ func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, start
 
 		err = rows.Scan(&missingDay)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "error scanning missing daily archive for org: %d and type: %s", org.ID, archiveType)
 		}
 		archive := Archive{
 			Org:         org,
@@ -303,7 +300,7 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 
 	rows, err := db.QueryxContext(ctx, lookupMissingMonthlyArchive, startDate, endDate, org.ID, MonthPeriod, archiveType)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "error getting missing monthly archive for org: %d and type: %s", org.ID, archiveType)
 	}
 	defer rows.Close()
 
@@ -312,7 +309,7 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 
 		err = rows.Scan(&missingMonth)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "error scanning missing monthly archive for org: %d and type: %s", org.ID, archiveType)
 		}
 		archive := Archive{
 			Org:         org,
@@ -334,13 +331,6 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	defer cancel()
 
 	start := time.Now()
-
-	log := logrus.WithFields(logrus.Fields{
-		"org_id":       monthlyArchive.Org.ID,
-		"archive_type": monthlyArchive.ArchiveType,
-		"start_date":   monthlyArchive.StartDate,
-		"period":       monthlyArchive.Period,
-	})
 
 	// figure out the first day in the monthlyArchive we'll archive
 	startDate := monthlyArchive.StartDate
@@ -364,8 +354,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	filename := fmt.Sprintf("%s_%d_%s_%d_%02d_", monthlyArchive.ArchiveType, monthlyArchive.Org.ID, monthlyArchive.Period, monthlyArchive.StartDate.Year(), monthlyArchive.StartDate.Month())
 	file, err := ioutil.TempFile(conf.TempDir, filename)
 	if err != nil {
-		log.WithError(err).Error("error creating temp file")
-		return err
+		return errors.Wrapf(err, "error creating temp file: %s", filename)
 	}
 	writerHash := md5.New()
 	gzWriter := gzip.NewWriter(io.MultiWriter(file, writerHash))
@@ -394,8 +383,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 
 		reader, err := GetS3File(ctx, s3Client, daily.URL)
 		if err != nil {
-			log.WithError(err).Error("error getting daily S3 file")
-			return err
+			return errors.Wrapf(err, "error reading S3 URL: %s", daily.URL)
 		}
 
 		// set up our reader to calculate our hash along the way
@@ -403,15 +391,13 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 		teeReader := io.TeeReader(reader, readerHash)
 		gzipReader, err := gzip.NewReader(teeReader)
 		if err != nil {
-			log.WithError(err).Error("error creating gzip reader")
-			return err
+			return errors.Wrapf(err, "error creating gzip reader")
 		}
 
 		// copy this daily file (uncompressed) to our new monthly file
 		_, err = io.Copy(writer, gzipReader)
 		if err != nil {
-			log.WithError(err).Error("error copying from s3 to disk")
-			return err
+			return errors.Wrapf(err, "error copying from s3 to disk for URL: %s", daily.URL)
 		}
 
 		reader.Close()
@@ -441,7 +427,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	monthlyArchive.Hash = hex.EncodeToString(writerHash.Sum(nil))
 	stat, err := file.Stat()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error statting file: %s", file.Name())
 	}
 	monthlyArchive.Size = stat.Size()
 	monthlyArchive.RecordCount = recordCount
@@ -463,7 +449,7 @@ func EnsureTempArchiveDirectory(path string) error {
 	if os.IsNotExist(err) {
 		return os.MkdirAll(path, 0700)
 	} else if err != nil {
-		return err
+		return errors.Wrapf(err, "error statting temp dir: %s", path)
 	}
 
 	// is path a directory
@@ -527,53 +513,16 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	  mm.created_on as created_on,
 	  sent_on,
 	  mm.modified_on as modified_on
-	FROM msgs_msg mm JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id JOIN orgs_org oo ON ccu.org_id = oo.id
-	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id AND cc.is_test = FALSE) as contact ON True
+	FROM msgs_msg mm 
+	  JOIN orgs_org oo ON mm.org_id = oo.id
+	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
+	  LEFT JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id
 	  LEFT JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
 
 	  WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
 	ORDER BY created_on ASC, id ASC) rec; 
 `
-
-const lookupPurgedBroadcasts = `
-SELECT row_to_json(rec) FROM (
-	SELECT
-	NULL AS id,
-	mb.id AS broadcast,
-	jsonb_build_object('uuid', c.uuid, 'name', c.name) as contact,
-	COALESCE(mb.text->c.language, mb.text->$2, mb.text->'base', (avals(mb.text))[1]) AS text,
-	NULL AS urn,
-	NULL AS channel,
-	'out' AS direction,
-	'flow' AS type,
-	CASE when br.purged_status = 'I' then 'initializing'
-		WHEN br.purged_status = 'P' then 'queued'
-		WHEN br.purged_status = 'Q' then 'queued'
-		WHEN br.purged_status = 'W' then 'wired'
-		WHEN br.purged_status = 'D' then 'delivered'
-		WHEN br.purged_status = 'H' then 'handled'
-		WHEN br.purged_status = 'E' then 'errored'
-		WHEN br.purged_status = 'F' then 'failed'
-		WHEN br.purged_status = 'R' then 'resent'
-		ELSE 'wired'
-	END as status,
-	'visible' AS visibility,
-	'[]'::jsonb AS attachments,
-	'[]'::jsonb AS labels,
-	mb.created_on AS created_on,
-	mb.created_on AS sent_on,
-	mb.created_on as modified_on
-	FROM msgs_broadcast_recipients br
-	JOIN LATERAL (select uuid, name, language FROM contacts_contact cc WHERE cc.id = br.contact_id AND cc.is_test = FALSE) AS c ON TRUE
-	JOIN msgs_broadcast mb ON br.broadcast_id = mb.id
-	WHERE br.broadcast_id = ANY (
-	   ARRAY(
-		SELECT id FROM msgs_broadcast 
-		WHERE org_id = $1 AND created_on > $3 AND created_on < $4 AND purged = TRUE
-		ORDER by created_on, id
-	  ))
-  ) rec;`
 
 // writeMessageRecords writes the messages in the archive's date range to the passed in writer
 func writeMessageRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer *bufio.Writer) (int, error) {
@@ -585,37 +534,19 @@ func writeMessageRecords(ctx context.Context, db *sqlx.DB, archive *Archive, wri
 
 	rows, err := db.QueryxContext(ctx, lookupMsgs, archive.Org.ID, archive.StartDate, archive.endDate())
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrapf(err, "error querying messages for org: %d", archive.Org.ID)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		err = rows.Scan(&visibility, &record)
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "error scanning message row for org: %d", archive.Org.ID)
 		}
 
 		if visibility == "deleted" {
 			continue
 		}
-		writer.WriteString(record)
-		writer.WriteString("\n")
-		recordCount++
-	}
-
-	// now write any broadcasts that were purged
-	rows, err = db.QueryxContext(ctx, lookupPurgedBroadcasts, archive.Org.ID, archive.Org.Language, archive.StartDate, archive.endDate())
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		err = rows.Scan(&record)
-		if err != nil {
-			return 0, err
-		}
-
 		writer.WriteString(record)
 		writer.WriteString("\n")
 		recordCount++
@@ -629,7 +560,8 @@ const lookupFlowRuns = `
 SELECT rec.exited_on, row_to_json(rec)
 FROM (
    SELECT
-     fr.id,
+	 fr.id as id,
+	 fr.uuid as uuid,
      row_to_json(flow_struct) AS flow,
      row_to_json(contact_struct) AS contact,
      fr.responded,
@@ -665,7 +597,7 @@ FROM (
    FROM flows_flowrun fr
      LEFT JOIN auth_user a ON a.id = fr.submitted_by_id
      JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
-     JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id AND cc.is_test = FALSE) AS contact_struct ON True
+     JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id) AS contact_struct ON True
    
    WHERE fr.org_id = $2 AND fr.modified_on >= $3 AND fr.modified_on < $4
    ORDER BY fr.modified_on ASC, id ASC
@@ -677,35 +609,23 @@ func writeRunRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer 
 	var rows *sqlx.Rows
 	rows, err := db.QueryxContext(ctx, lookupFlowRuns, archive.Org.IsAnon, archive.Org.ID, archive.StartDate, archive.endDate())
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrapf(err, "error querying run records for org: %d", archive.Org.ID)
 	}
 	defer rows.Close()
 
 	recordCount := 0
-	var record, visibility string
+	var record string
 	var exitedOn *time.Time
 	for rows.Next() {
-		if archive.ArchiveType == MessageType {
-			err = rows.Scan(&visibility, &record)
-			if err != nil {
-				return 0, err
-			}
+		err = rows.Scan(&exitedOn, &record)
 
-			// skip over deleted rows
-			if visibility == "deleted" {
-				continue
-			}
-		} else if archive.ArchiveType == RunType {
-			err = rows.Scan(&exitedOn, &record)
+		// shouldn't be archiving an active run, that's an error
+		if exitedOn == nil {
+			return 0, fmt.Errorf("run still active, cannot archive: %s", record)
+		}
 
-			// shouldn't be archiving an active run, that's an error
-			if exitedOn == nil {
-				return 0, fmt.Errorf("run still active, cannot archive: %s", record)
-			}
-
-			if err != nil {
-				return 0, err
-			}
+		if err != nil {
+			return 0, errors.Wrapf(err, "error scanning run record for org: %d", archive.Org.ID)
 		}
 
 		writer.WriteString(record)
@@ -734,7 +654,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	filename := fmt.Sprintf("%s_%d_%s%d%02d%02d_", archive.ArchiveType, archive.Org.ID, archive.Period, archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day())
 	file, err := ioutil.TempFile(archivePath, filename)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error creating temp file: %s", file.Name())
 	}
 	hash := md5.New()
 	gzWriter := gzip.NewWriter(io.MultiWriter(file, hash))
@@ -756,25 +676,25 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	}
 
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error writing archive")
 	}
 
 	archive.ArchiveFile = file.Name()
 	err = writer.Flush()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error flushing archive file")
 	}
 
 	err = gzWriter.Close()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error closing archive gzip writer")
 	}
 
 	// calculate our size and hash
 	archive.Hash = hex.EncodeToString(hash.Sum(nil))
 	stat, err := file.Stat()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error calculating archive hash")
 	}
 
 	if stat.Size() > 5e9 {
@@ -817,7 +737,7 @@ func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, a
 
 	err := UploadToS3(ctx, s3Client, bucket, archivePath, archive)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error uploading archive to S3")
 	}
 
 	archive.NeedsDeletion = true
@@ -857,23 +777,20 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error 
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		logrus.WithError(err).Error("error starting transaction")
-		return err
+		return errors.Wrapf(err, "error starting transaction")
 	}
 
 	rows, err := tx.NamedQuery(insertArchive, archive)
 	if err != nil {
-		logrus.WithError(err).Error("error inserting archive")
 		tx.Rollback()
-		return err
+		return errors.Wrapf(err, "error inserting archive")
 	}
 
 	rows.Next()
 	err = rows.Scan(&archive.ID)
 	if err != nil {
-		logrus.WithError(err).Error("error reading new archive id")
 		tx.Rollback()
-		return err
+		return errors.Wrapf(err, "error reading new archive id")
 	}
 	rows.Close()
 
@@ -887,29 +804,26 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error 
 
 		result, err := tx.ExecContext(ctx, updateRollups, archive.ID, pq.Array(childIDs))
 		if err != nil {
-			logrus.WithError(err).Error("error updating rollup ids")
 			tx.Rollback()
-			return err
+			return errors.Wrapf(err, "error updating rollup ids")
 		}
 		affected, err := result.RowsAffected()
 		if err != nil {
-			logrus.WithError(err).Error("error getting number rollup ids updated")
 			tx.Rollback()
-			return err
+			return errors.Wrapf(err, "error getting number of rollup ids updated")
 		}
 		if int(affected) != len(childIDs) {
-			logrus.Error("mismatch in number of children and number of rows updated")
 			tx.Rollback()
-			return fmt.Errorf("mismatch in number of children updated")
+			return fmt.Errorf("mismatch in number of children updated and number of rows updated")
 		}
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		logrus.WithError(err).Error("error comitting new archive")
 		tx.Rollback()
+		return errors.Wrapf(err, "error committing new archive transaction")
 	}
-	return err
+	return nil
 }
 
 // DeleteArchiveFile removes our own disk archive file
@@ -917,7 +831,7 @@ func DeleteArchiveFile(archive *Archive) error {
 	err := os.Remove(archive.ArchiveFile)
 
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error deleting temp archive file: %s", archive.ArchiveFile)
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -942,53 +856,39 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 
 	archiveCount, err := GetCurrentArchiveCount(ctx, db, org, archiveType)
 	if err != nil {
-		return nil, fmt.Errorf("error getting current archives")
+		return nil, errors.Wrapf(err, "error getting current archive count")
 	}
 
-	var archives []*Archive
+	archives := make([]*Archive, 0)
+
+	// no existing archives means this might be a backfill, figure out if there are full months we can build first
 	if archiveCount == 0 {
-		// no existing archives means this might be a backfill, figure out if there are full monthes we can build first
 		archives, err = GetMissingMonthlyArchives(ctx, db, now, org, archiveType)
 		if err != nil {
-			log.WithError(err).Error("error calculating missing monthly archives")
-			return nil, err
+			return nil, errors.Wrapf(err, "error getting missing monthly archives")
 		}
 
 		// we first create monthly archives
 		err = createArchives(ctx, db, config, s3Client, org, archives)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "error creating new monthly archives")
 		}
-
-		// then add in daily archives taking into account the monthly that have been built
-		daily, err := GetMissingDailyArchives(ctx, db, now, org, archiveType)
-		if err != nil {
-			log.WithError(err).Error("error calculating missing daily archives")
-			return nil, err
-		}
-		// we then create missing daily archives
-		err = createArchives(ctx, db, config, s3Client, org, daily)
-		if err != nil {
-			return nil, err
-		}
-
-		// append daily archives to the monthly archives
-		archives = append(archives, daily...)
-		defer ctx.Done()
-	} else {
-		// figure out any missing day archives
-		archives, err = GetMissingDailyArchives(ctx, db, now, org, archiveType)
-		if err != nil {
-			log.WithError(err).Error("error calculating missing daily archives")
-			return nil, err
-		}
-
-		err = createArchives(ctx, db, config, s3Client, org, archives)
-		if err != nil {
-			return nil, err
-		}
-
 	}
+
+	// then add in daily archives taking into account the monthly that have been built
+	daily, err := GetMissingDailyArchives(ctx, db, now, org, archiveType)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error getting missing daily archives")
+	}
+	// we then create missing daily archives
+	err = createArchives(ctx, db, config, s3Client, org, daily)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error creating new daily archives")
+	}
+
+	// append daily archives to any monthly archives
+	archives = append(archives, daily...)
+	defer ctx.Done()
 
 	// sum all records in the archives
 	for _, archive := range archives {
@@ -1033,7 +933,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 			err = UploadArchive(ctx, s3Client, config.S3Bucket, archive)
 			if err != nil {
 				log.WithError(err).Error("error writing archive to s3")
-				return err
+				continue
 			}
 		}
 
@@ -1076,7 +976,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	// get our missing monthly archives
 	archives, err := GetMissingMonthlyArchives(ctx, db, now, org, archiveType)
 	if err != nil {
-		return nil, fmt.Errorf("error calculating missing monthly archives for type '%s'", archiveType)
+		return nil, err
 	}
 
 	// build them from rollups
@@ -1128,7 +1028,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 }
 
 const selectOrgMessagesInRange = `
-SELECT mm.id, mm.visibility, cc.is_test
+SELECT mm.id, mm.visibility
 FROM msgs_msg mm
 LEFT JOIN contacts_contact cc ON cc.id = mm.contact_id
 WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
@@ -1190,7 +1090,7 @@ var deleteTransactionSize = 100
 //
 // Upon completion it updates the needs_deletion flag on the archive
 func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
-	outer, cancel := context.WithTimeout(ctx, time.Minute*15)
+	outer, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
 	start := time.Now()
@@ -1225,17 +1125,16 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	visibleCount := 0
 	var msgID int64
 	var visibility string
-	var isTest bool
 	msgIDs := make([]int64, 0, archive.RecordCount)
 	for rows.Next() {
-		err = rows.Scan(&msgID, &visibility, &isTest)
+		err = rows.Scan(&msgID, &visibility)
 		if err != nil {
 			return err
 		}
 		msgIDs = append(msgIDs, msgID)
 
-		// keep track of the number of visible messages, ie, not deleted and not for test contacts
-		if visibility != "D" && !isTest {
+		// keep track of the number of visible messages, ie, not deleted
+		if visibility != "D" {
 			visibleCount++
 		}
 	}
@@ -1253,7 +1152,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	// ok, delete our messages in batches, we do this in transactions as it spans a few different queries
 	for startIdx := 0; startIdx < len(msgIDs); startIdx += deleteTransactionSize {
 		// no single batch should take more than a few minutes
-		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
 		start := time.Now()
@@ -1334,8 +1233,123 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	return nil
 }
 
+// DeleteBroadcasts deletes all broadcasts older than 90 days for the passed in org which have no active messages on them
+func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, org Org) error {
+	start := time.Now()
+	threshhold := now.AddDate(0, 0, -org.ActiveDays)
+
+	rows, err := db.QueryxContext(ctx, selectOldOrgBroadcasts, org.ID, threshhold)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		if count == 0 {
+			logrus.WithField("org_id", org.ID).Info("deleting broadcasts")
+		}
+
+		// been deleting this org more than an hour? thats enough for today, exit out
+		if time.Since(start) > time.Hour {
+			break
+		}
+
+		var broadcastID int64
+		err := rows.Scan(&broadcastID)
+		if err != nil {
+			return errors.Wrap(err, "unable to get broadcast id")
+		}
+
+		// make sure we have no active messages
+		var msgCount int64
+		err = db.Get(&msgCount, `SELECT count(*) FROM msgs_msg WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			return errors.Wrapf(err, "unable to select number of msgs for broadcast: %d", broadcastID)
+		}
+
+		if msgCount != 0 {
+			logrus.WithField("broadcast_id", broadcastID).WithField("org_id", org.ID).WithField("msg_count", msgCount).Warn("unable to delete broadcast, has messages still")
+			continue
+		}
+
+		// we delete broadcasts in a transaction per broadcast
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return errors.Wrapf(err, "error starting transaction while deleting broadcast: %d", broadcastID)
+		}
+
+		// delete contacts M2M
+		_, err = tx.Exec(`DELETE from msgs_broadcast_contacts WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting related contacts for broadcast: %d", broadcastID)
+		}
+
+		// delete groups M2M
+		_, err = tx.Exec(`DELETE from msgs_broadcast_groups WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting related groups for broadcast: %d", broadcastID)
+		}
+
+		// delete URNs M2M
+		_, err = tx.Exec(`DELETE from msgs_broadcast_urns WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting related urns for broadcast: %d", broadcastID)
+		}
+
+		// delete counts associated with this broadcast
+		_, err = tx.Exec(`DELETE from msgs_broadcastmsgcount WHERE broadcast_id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting counts for broadcast: %d", broadcastID)
+		}
+
+		// finally, delete our broadcast
+		_, err = tx.Exec(`DELETE from msgs_broadcast WHERE id = $1`, broadcastID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting broadcast: %d", broadcastID)
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return errors.Wrapf(err, "error deleting broadcast: %d", broadcastID)
+		}
+
+		count++
+	}
+
+	if count > 0 {
+		logrus.WithFields(logrus.Fields{
+			"elapsed": time.Since(start),
+			"count":   count,
+			"org_id":  org.ID,
+		}).Info("completed deleting broadcasts")
+	}
+
+	return nil
+}
+
+const selectOldOrgBroadcasts = `
+SELECT 
+	id
+FROM 
+	msgs_broadcast
+WHERE 
+	org_id = $1 AND
+	created_on < $2 AND
+	schedule_id IS NULL
+ORDER BY 
+	created_on ASC,
+	id ASC
+LIMIT 1000000;
+`
+
 const selectOrgRunsInRange = `
-SELECT fr.id, fr.is_active, cc.is_test
+SELECT fr.id, fr.is_active
 FROM flows_flowrun fr
 LEFT JOIN contacts_contact cc ON cc.id = fr.contact_id
 WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
@@ -1348,24 +1362,8 @@ SET delete_reason = 'A'
 WHERE id IN(?)
 `
 
-const deleteWebhookEvents = `
-DELETE FROM api_webhookevent
-WHERE run_id IN(?)
-RETURNING id
-`
-
-const deleteWebhookResults = `
-DELETE FROM api_webhookresult
-WHERE event_id IN(?)
-`
-
 const deleteRecentRuns = `
 DELETE FROM flows_flowpathrecentrun 
-WHERE run_id IN(?)
-`
-
-const deleteActionLogs = `
-DELETE FROM flows_actionlog
 WHERE run_id IN(?)
 `
 
@@ -1385,7 +1383,7 @@ WHERE id IN(?)
 //
 // Upon completion it updates the needs_deletion flag on the archive
 func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
-	outer, cancel := context.WithTimeout(ctx, time.Hour)
+	outer, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
 	start := time.Now()
@@ -1418,12 +1416,11 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	defer rows.Close()
 
 	var runID int64
-	var isTest bool
 	var isActive bool
 	runCount := 0
 	runIDs := make([]int64, 0, archive.RecordCount)
 	for rows.Next() {
-		err = rows.Scan(&runID, &isActive, &isTest)
+		err = rows.Scan(&runID, &isActive)
 		if err != nil {
 			return err
 		}
@@ -1433,11 +1430,8 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 			return fmt.Errorf("run %d in archive is still active", runID)
 		}
 
-		// if this run isn't a test contact, increment it
-		if !isTest {
-			runCount++
-		}
-
+		// increment our count
+		runCount++
 		runIDs = append(runIDs, runID)
 	}
 	rows.Close()
@@ -1454,7 +1448,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	// ok, delete our runs in batches, we do this in transactions as it spans a few different queries
 	for startIdx := 0; startIdx < len(runIDs); startIdx += deleteTransactionSize {
 		// no single batch should take more than a few minutes
-		ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
 		start := time.Now()
@@ -1475,33 +1469,6 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		err = executeInQuery(ctx, tx, setRunDeleteReason, batchIDs)
 		if err != nil {
 			return fmt.Errorf("error updating delete reason: %s", err.Error())
-		}
-
-		// delete our webhooks, getting back any dependent results
-		var hookIDs []int64
-		q, vs, err := sqlx.In(deleteWebhookEvents, batchIDs)
-		if err != nil {
-			return err
-		}
-		q = tx.Rebind(q)
-		err = tx.SelectContext(ctx, &hookIDs, q, vs...)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("error removing webhook events: %s", err.Error())
-		}
-
-		// if there are associated results, delete those too
-		if len(hookIDs) > 0 {
-			err = executeInQuery(ctx, tx, deleteWebhookResults, hookIDs)
-			if err != nil {
-				return fmt.Errorf("error removing webhook results: %s", err.Error())
-			}
-		}
-
-		// any action logs
-		err = executeInQuery(ctx, tx, deleteActionLogs, batchIDs)
-		if err != nil {
-			return fmt.Errorf("error removing action logs: %s", err.Error())
 		}
 
 		// any recent runs
@@ -1581,6 +1548,10 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 		switch a.ArchiveType {
 		case MessageType:
 			err = DeleteArchivedMessages(ctx, config, db, s3Client, a)
+			if err == nil {
+				err = DeleteBroadcasts(ctx, now, config, db, org)
+			}
+
 		case RunType:
 			err = DeleteArchivedRuns(ctx, config, db, s3Client, a)
 		default:
@@ -1588,7 +1559,7 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 		}
 
 		if err != nil {
-			log.WithError(err).Error("Error deleting archive")
+			log.WithError(err).Error("error deleting archive")
 			continue
 		}
 
@@ -1605,12 +1576,12 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, error) {
 	created, err := CreateOrgArchives(ctx, now, config, db, s3Client, org, archiveType)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrapf(err, "error creating archives")
 	}
 
 	monthlies, err := RollupOrgArchives(ctx, now, config, db, s3Client, org, archiveType)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrapf(err, "error rolling up archives")
 	}
 
 	for _, m := range monthlies {
@@ -1622,7 +1593,7 @@ func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB,
 	if config.Delete {
 		deleted, err = DeleteArchivedOrgRecords(ctx, now, config, db, s3Client, org, archiveType)
 		if err != nil {
-			return created, deleted, err
+			return created, deleted, errors.Wrapf(err, "error deleting archived records")
 		}
 	}
 

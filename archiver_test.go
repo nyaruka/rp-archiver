@@ -122,10 +122,10 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.NoError(t, err)
 
 	// should have two records, second will have attachments
-	assert.Equal(t, 5, task.RecordCount)
-	assert.Equal(t, int64(633), task.Size)
+	assert.Equal(t, 3, task.RecordCount)
+	assert.Equal(t, int64(483), task.Size)
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
-	assert.Equal(t, "079ac762aad71d5489a5dbcc97aef36a", task.Hash)
+	assert.Equal(t, "6fe9265860425cf1f9757ba3d91b1a05", task.Hash)
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -197,8 +197,8 @@ func TestCreateRunArchive(t *testing.T) {
 
 	// should have two record
 	assert.Equal(t, 2, task.RecordCount)
-	assert.Equal(t, int64(590), task.Size)
-	assert.Equal(t, "342988c3a2c05ceee800a81151cb1aa4", task.Hash)
+	assert.Equal(t, int64(642), task.Size)
+	assert.Equal(t, "f793f863f5e060b9d67c5688a555da6a", task.Hash)
 	assertArchiveFile(t, task, "runs1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -217,8 +217,8 @@ func TestCreateRunArchive(t *testing.T) {
 
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
-	assert.Equal(t, int64(473), task.Size)
-	assert.Equal(t, "d52b7b0dba8ad10b9a636a849319c2a0", task.Hash)
+	assert.Equal(t, int64(497), task.Size)
+	assert.Equal(t, "074de71dfb619c78dbac5b6709dd66c2", task.Hash)
 	assertArchiveFile(t, task, "runs2.jsonl")
 
 	DeleteArchiveFile(task)
@@ -298,6 +298,8 @@ func TestArchiveOrgMessages(t *testing.T) {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
+		assertCount(t, db, 4, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
+
 		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
 		assert.NoError(t, err)
 
@@ -316,9 +318,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 		assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), created[2].StartDate)
 		assert.Equal(t, DayPeriod, created[2].Period)
-		assert.Equal(t, 5, created[2].RecordCount)
-		assert.Equal(t, int64(633), created[2].Size)
-		assert.Equal(t, "079ac762aad71d5489a5dbcc97aef36a", created[2].Hash)
+		assert.Equal(t, 3, created[2].RecordCount)
+		assert.Equal(t, int64(483), created[2].Size)
+		assert.Equal(t, "6fe9265860425cf1f9757ba3d91b1a05", created[2].Hash)
 
 		assert.Equal(t, time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), created[3].StartDate)
 		assert.Equal(t, DayPeriod, created[3].Period)
@@ -334,9 +336,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[61].StartDate)
 		assert.Equal(t, MonthPeriod, created[61].Period)
-		assert.Equal(t, 6, created[61].RecordCount)
-		assert.Equal(t, int64(657), created[61].Size)
-		assert.Equal(t, "fbeb0de984b76bf24609bf2139cf8553", created[61].Hash)
+		assert.Equal(t, 4, created[61].RecordCount)
+		assert.Equal(t, int64(509), created[61].Size)
+		assert.Equal(t, "9e40be76913bf58655b70ee96dcac25d", created[61].Hash)
 
 		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[62].StartDate)
 		assert.Equal(t, MonthPeriod, created[62].Period)
@@ -397,6 +399,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 		)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, count)
+
+		// one broadcast still exists because it has a schedule, the other because it still has msgs, the last because it is new
+		assertCount(t, db, 3, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
 	}
 }
 
@@ -405,6 +410,13 @@ SELECT COUNT(*)
 FROM flows_flowrun 
 WHERE org_id = $1 and modified_on >= $2 and modified_on < $3
 `
+
+func assertCount(t *testing.T, db *sqlx.DB, expected int, query string, args ...interface{}) {
+	var count int
+	err := db.Get(&count, query, args...)
+	assert.NoError(t, err, "error executing query: %s", query)
+	assert.Equal(t, expected, count, "counts mismatch for query %s", query)
+}
 
 func TestArchiveOrgRuns(t *testing.T) {
 	db := setup(t)
@@ -435,8 +447,8 @@ func TestArchiveOrgRuns(t *testing.T) {
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[0].StartDate)
 		assert.Equal(t, MonthPeriod, created[0].Period)
 		assert.Equal(t, 1, created[0].RecordCount)
-		assert.Equal(t, int64(473), created[0].Size)
-		assert.Equal(t, "d52b7b0dba8ad10b9a636a849319c2a0", created[0].Hash)
+		assert.Equal(t, int64(497), created[0].Size)
+		assert.Equal(t, "074de71dfb619c78dbac5b6709dd66c2", created[0].Hash)
 
 		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[1].StartDate)
 		assert.Equal(t, MonthPeriod, created[1].Period)
@@ -453,8 +465,8 @@ func TestArchiveOrgRuns(t *testing.T) {
 		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[11].StartDate)
 		assert.Equal(t, DayPeriod, created[11].Period)
 		assert.Equal(t, 1, created[11].RecordCount)
-		assert.Equal(t, int64(402), created[11].Size)
-		assert.Equal(t, "ad859848519c3eacb8690809908e5949", created[11].Hash)
+		assert.Equal(t, int64(427), created[11].Size)
+		assert.Equal(t, "bf08041cef314492fee2910357ec4189", created[11].Hash)
 
 		assert.Equal(t, 12, len(deleted))
 

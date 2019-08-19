@@ -63,7 +63,7 @@ func main() {
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(2)
 
 	var s3Client s3iface.S3API
 	if config.UploadToS3 {
@@ -102,13 +102,13 @@ func main() {
 			if config.ArchiveMessages {
 				_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.MessageType)
 				if err != nil {
-					log.WithError(err).Error()
+					log.WithError(err).WithField("archive_type", archiver.MessageType).Error("error archiving org messages")
 				}
 			}
 			if config.ArchiveRuns {
 				_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.RunType)
 				if err != nil {
-					log.WithError(err).Error()
+					log.WithError(err).WithField("archive_type", archiver.RunType).Error("error archiving org runs")
 				}
 			}
 

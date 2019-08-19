@@ -1,3 +1,49 @@
+v2.0.1
+----------
+ * update table references according to v5.2 schema, use wrapf for errors
+
+v2.0.0
+----------
+ * remove reading is_test on contact
+
+v1.0.8
+----------
+ * up max connections to two since we need cursor when deleting broadcasts
+
+v1.0.7
+----------
+ * delete broadcasts which no longer have any active messages
+
+v1.0.6
+----------
+ * fix travis deploy
+
+v1.0.5
+----------
+ * IMPORTANT: you must make sure that all your purged broadcasts have been archived before
+   removing the recipients table (in RapidPro release)
+ * remove archival of purged broadcasts in preparation of removal of recipients table
+
+v1.0.4
+----------
+ * IMPORTANT: you must make sure that all your purged broadcasts have been archived before
+   removing the recipients table (in RapidPro release)
+ * remove archival of purged broadcasts in preparation of removal of recipients table
+
+v1.0.3
+----------
+ * convert to go module
+ * add testing for pg 10
+ * properly archive surveyor messages
+
+v1.0.2
+----------
+ * give ourselves up to 3 hours per archive deletion, 15 mins per transaction
+
+v1.0.1
+----------
+ * add uuid to run archives
+
 v1.0.0
 ----------
 * 1.0 release
