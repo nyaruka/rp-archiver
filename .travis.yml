@@ -1,18 +1,27 @@
 sudo: required
-dist: trusty
 
 language: go
 
 go:
 - "1.12"
 
+matrix:
+  include:
+    - name: "Postgres 9.6"
+      distro: trusty
+      env:
+        - PGDB=9.6 RELEASE=true PGIS=2.4
+    - name: "Postgres 10"
+      distro: trusty
+      env:
+        - PGDB=10 PGIS=2.4
+    - name: "Postgres 11"
+      distro: bionic
+      env:
+        - PGDB=11 PGIS=2.5
 env:
   global:
     - GO111MODULE=on
-  matrix:
-    - PGDB=9.6 RELEASE=true PGIS=2.4
-    - PGDB=10 PGIS=2.4
-    - PGDB=11 PGIS=2.5
 
 before_install:
   # setup postgresql
