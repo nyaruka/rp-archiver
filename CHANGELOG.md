@@ -1,3 +1,8 @@
+v5.2.0
+----------
+ * Sync release with RapidPro 5.2
+ * Add PostgreSQL 11 tests
+
 v2.0.1
 ----------
  * update table references according to v5.2 schema, use wrapf for errors
