@@ -1,5 +1,5 @@
+dist: xenial
 sudo: required
-dist: trusty
 
 language: go
 
@@ -10,8 +10,9 @@ env:
   global:
     - GO111MODULE=on
   matrix:
-    - PGDB=9.6 RELEASE=true
-    - PGDB=10
+    - PGDB=9.6 RELEASE=true PGIS=2.4
+    - PGDB=10 PGIS=2.4
+    - PGDB=11 PGIS=2.5
 
 before_install:
   # setup postgresql
@@ -20,7 +21,7 @@ before_install:
   - sudo -E service postgresql stop 9.4
   - sudo -E service postgresql stop 9.5
   - sudo -E service postgresql stop 9.6
-  - sudo -E apt-get -yq --no-install-suggests --no-install-recommends $(travis_apt_get_options) install postgresql-$PGDB postgresql-client-$PGDB postgresql-$PGDB-postgis-2.4 postgresql-$PGDB-postgis-2.4-scripts
+  - sudo -E apt-get -yq --no-install-suggests --no-install-recommends $(travis_apt_get_options) install postgresql-$PGDB postgresql-client-$PGDB postgresql-$PGDB-postgis-$PGIS postgresql-$PGDB-postgis-$PGIS-scripts
   - sudo -E sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
   - sudo -E sed -i 's/port = 5433/port = 5432/' /etc/postgresql/*/main/postgresql.conf
   - sudo -E service postgresql restart $PGDB
