@@ -26,6 +26,9 @@ jobs:
 
     - name: Run tests
       run: go test -p=1 -coverprofile=coverage.text -covermode=atomic ./...
+      env:
+        ARCHIVER_AWS_ACCESS_KEY_ID: ${{ secrets.ARCHIVER_AWS_ACCESS_KEY_ID }}
+        ARCHIVER_AWS_SECRET_ACCESS_KEY: ${{ secrets.ARCHIVER_AWS_SECRET_ACCESS_KEY }}
 
     - name: Upload coverage
       if: success()
