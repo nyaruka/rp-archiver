@@ -1,4 +1,4 @@
-# RapidPro Archiver [![Build Status](https://travis-ci.org/nyaruka/rp-archiver.svg?branch=master)](https://travis-ci.org/nyaruka/rp-archiver) [![codecov](https://codecov.io/gh/nyaruka/rp-archiver/branch/master/graph/badge.svg)](https://codecov.io/gh/nyaruka/rp-archiver) [![Go Report Card](https://goreportcard.com/badge/github.com/nyaruka/rp-archiver)](https://goreportcard.com/report/github.com/nyaruka/rp-archiver)
+# RapidPro Archiver [![Build Status](https://github.com/nyaruka/rp-archiver/workflows/CI/badge.svg)](https://github.com/nyaruka/rp-archiver/actions?query=workflow%3ACI) [![codecov](https://codecov.io/gh/nyaruka/rp-archiver/branch/master/graph/badge.svg)](https://codecov.io/gh/nyaruka/rp-archiver) [![Go Report Card](https://goreportcard.com/badge/github.com/nyaruka/rp-archiver)](https://goreportcard.com/report/github.com/nyaruka/rp-archiver)
 
 RP-Archiver is the [RapidPro](https://github.com/rapidpro/rapidpro) component responsible for the archiving of
 old runs and messages. It interacts directly with the RapidPro database and writes archive files to an 
