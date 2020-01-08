@@ -34,7 +34,8 @@ func TestGetMissingDayArchives(t *testing.T) {
 
 	// get the tasks for our org
 	ctx := context.Background()
-	orgs, err := GetActiveOrgs(ctx, db)
+	config := NewConfig()
+	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -65,7 +66,8 @@ func TestGetMissingMonthArchives(t *testing.T) {
 
 	// get the tasks for our org
 	ctx := context.Background()
-	orgs, err := GetActiveOrgs(ctx, db)
+	config := NewConfig()
+	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -96,7 +98,8 @@ func TestCreateMsgArchive(t *testing.T) {
 	err := EnsureTempArchiveDirectory("/tmp")
 	assert.NoError(t, err)
 
-	orgs, err := GetActiveOrgs(ctx, db)
+	config := NewConfig()
+	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
@@ -172,7 +175,8 @@ func TestCreateRunArchive(t *testing.T) {
 	err := EnsureTempArchiveDirectory("/tmp")
 	assert.NoError(t, err)
 
-	orgs, err := GetActiveOrgs(ctx, db)
+	config := NewConfig()
+	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
@@ -228,7 +232,8 @@ func TestWriteArchiveToDB(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	orgs, err := GetActiveOrgs(ctx, db)
+	config := NewConfig()
+	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
@@ -281,11 +286,11 @@ func TestArchiveOrgMessages(t *testing.T) {
 	ctx := context.Background()
 	deleteTransactionSize = 1
 
-	orgs, err := GetActiveOrgs(ctx, db)
+	config := NewConfig()
+	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
-	config := NewConfig()
 	os.Args = []string{"rp-archiver"}
 
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
@@ -422,11 +427,11 @@ func TestArchiveOrgRuns(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	orgs, err := GetActiveOrgs(ctx, db)
+	config := NewConfig()
+	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
-	config := NewConfig()
 	os.Args = []string{"rp-archiver"}
 
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
