@@ -84,7 +84,7 @@ func main() {
 
 		// get our active orgs
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		orgs, err := archiver.GetActiveOrgs(ctx, db)
+		orgs, err := archiver.GetActiveOrgs(ctx, db, config)
 		cancel()
 
 		if err != nil {
