@@ -59,6 +59,22 @@ func TestGetMissingDayArchives(t *testing.T) {
 	assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
 	assert.Equal(t, time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), tasks[21].StartDate)
 	assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), tasks[30].StartDate)
+
+	// org 3 again, but changing the archive period so we have no tasks
+	orgs[2].ActiveDays = 200
+	tasks, err = GetMissingDailyArchives(ctx, db, now, orgs[2], MessageType)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(tasks))
+
+	// org 1 again, but lowering the archive period so we have tasks
+	orgs[0].ActiveDays = 2
+	tasks, err = GetMissingDailyArchives(ctx, db, now, orgs[0], MessageType)
+	assert.NoError(t, err)
+	assert.Equal(t, 58, len(tasks))
+	assert.Equal(t, time.Date(2017, 11, 10, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
+	assert.Equal(t, time.Date(2017, 12, 1, 0, 0, 0, 0, time.UTC), tasks[21].StartDate)
+	assert.Equal(t, time.Date(2017, 12, 10, 0, 0, 0, 0, time.UTC), tasks[30].StartDate)
+
 }
 
 func TestGetMissingMonthArchives(t *testing.T) {
@@ -89,6 +105,7 @@ func TestGetMissingMonthArchives(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(tasks))
 	assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), tasks[0].StartDate)
+
 }
 
 func TestCreateMsgArchive(t *testing.T) {
