@@ -49,12 +49,12 @@ const (
 
 // Org represents the model for an org
 type Org struct {
-	ID         int       `db:"id"`
-	Name       string    `db:"name"`
-	CreatedOn  time.Time `db:"created_on"`
-	IsAnon     bool      `db:"is_anon"`
-	Language   *string   `db:"language"`
-	ActiveDays int
+	ID              int       `db:"id"`
+	Name            string    `db:"name"`
+	CreatedOn       time.Time `db:"created_on"`
+	IsAnon          bool      `db:"is_anon"`
+	Language        *string   `db:"language"`
+	RetentionPeriod int
 }
 
 // Archive represents the model for an archive
@@ -117,7 +117,7 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB, conf *Config) ([]Org, error
 
 	orgs := make([]Org, 0, 10)
 	for rows.Next() {
-		org := Org{ActiveDays: conf.ArchiveLength}
+		org := Org{RetentionPeriod: conf.RetentionPeriod}
 		err = rows.StructScan(&org)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error scanning active org")
@@ -218,7 +218,7 @@ func GetMissingDailyArchives(ctx context.Context, db *sqlx.DB, now time.Time, or
 	defer cancel()
 
 	// our first archive would be active days from today
-	endDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -org.ActiveDays)
+	endDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -org.RetentionPeriod)
 	orgUTC := org.CreatedOn.In(time.UTC)
 	startDate := time.Date(orgUTC.Year(), orgUTC.Month(), orgUTC.Day(), 0, 0, 0, 0, time.UTC)
 
@@ -290,7 +290,7 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
 	defer cancel()
 
-	lastActive := now.AddDate(0, 0, -org.ActiveDays)
+	lastActive := now.AddDate(0, 0, -org.RetentionPeriod)
 	endDate := time.Date(lastActive.Year(), lastActive.Month(), 1, 0, 0, 0, 0, time.UTC)
 
 	orgUTC := org.CreatedOn.In(time.UTC)
@@ -1236,7 +1236,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 // DeleteBroadcasts deletes all broadcasts older than 90 days for the passed in org which have no active messages on them
 func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, org Org) error {
 	start := time.Now()
-	threshhold := now.AddDate(0, 0, -org.ActiveDays)
+	threshhold := now.AddDate(0, 0, -org.RetentionPeriod)
 
 	rows, err := db.QueryxContext(ctx, selectOldOrgBroadcasts, org.ID, threshhold)
 	if err != nil {
