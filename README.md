@@ -96,6 +96,8 @@ Usage of archiver:
     	whether we should keep local archive files after upload (default false)
   -log-level string
     	the log level, one of error, warn, info, debug (default "info")
+  -retention-period int
+    	the number of days to keep before archiving (default 90)
   -s3-bucket string
     	the S3 bucket we will write archives to (default "dl-archiver-test")
   -s3-disable-ssl
@@ -122,6 +124,7 @@ Environment variables:
                              ARCHIVER_DELETE - bool
                          ARCHIVER_KEEP_FILES - bool
                           ARCHIVER_LOG_LEVEL - string
+                   ARCHIVER_RETENTION_PERIOD - int
                           ARCHIVER_S3_BUCKET - string
                      ARCHIVER_S3_DISABLE_SSL - bool
                         ARCHIVER_S3_ENDPOINT - string
