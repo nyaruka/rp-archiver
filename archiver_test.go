@@ -61,13 +61,13 @@ func TestGetMissingDayArchives(t *testing.T) {
 	assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), tasks[30].StartDate)
 
 	// org 3 again, but changing the archive period so we have no tasks
-	orgs[2].ActiveDays = 200
+	orgs[2].RetentionPeriod = 200
 	tasks, err = GetMissingDailyArchives(ctx, db, now, orgs[2], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(tasks))
 
 	// org 1 again, but lowering the archive period so we have tasks
-	orgs[0].ActiveDays = 2
+	orgs[0].RetentionPeriod = 2
 	tasks, err = GetMissingDailyArchives(ctx, db, now, orgs[0], MessageType)
 	assert.NoError(t, err)
 	assert.Equal(t, 58, len(tasks))
