@@ -1,3 +1,7 @@
+v5.4.0
+----------
+ * 5.4 Release
+
 v5.2.0
 ----------
  * Sync release with RapidPro 5.2
