@@ -105,7 +105,7 @@ WHERE o.is_active = TRUE order by o.id
 `
 
 // GetActiveOrgs returns the active organizations sorted by id
-func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
+func GetActiveOrgs(ctx context.Context, db *sqlx.DB, conf *Config) ([]Org, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
@@ -117,7 +117,7 @@ func GetActiveOrgs(ctx context.Context, db *sqlx.DB) ([]Org, error) {
 
 	orgs := make([]Org, 0, 10)
 	for rows.Next() {
-		org := Org{ActiveDays: 90}
+		org := Org{ActiveDays: conf.ArchiveLength}
 		err = rows.StructScan(&org)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error scanning active org")
