@@ -80,7 +80,12 @@ func main() {
 	}
 
 	for {
-		start := time.Now().In(time.UTC)
+		// convert the starttime to time.Time
+		layout := "15:04:05"
+		start, err := time.Parse(layout, config.StartTime)
+		if err != nil {
+			logrus.WithError(err).Fatal("invalid start time supplied")
+		}
 
 		// get our active orgs
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -115,10 +120,12 @@ func main() {
 			cancel()
 		}
 
-		// ok, we did all our work for our orgs, sleep until the next day
+		// ok, we did all our work for our orgs, quit if so configured or sleep until the next day
+		if config.ExitOnCompletion {
+			break
+		}
 		nextDay := start.AddDate(0, 0, 1)
-		nextDay = time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), 0, 1, 0, 0, time.UTC)
-		napTime := nextDay.Sub(start)
+		napTime := nextDay.Sub(time.Now().In(time.UTC))
 
 		if napTime > time.Duration(0) {
 			logrus.WithField("time", napTime).Info("Sleeping until next UTC day")
