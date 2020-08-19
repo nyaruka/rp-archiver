@@ -81,7 +81,7 @@ func main() {
 
 	for {
 		// convert the starttime to time.Time
-		layout := "15:04:05"
+		layout := "15:04"
 		start, err := time.Parse(layout, config.StartTime)
 		if err != nil {
 			logrus.WithError(err).Fatal("invalid start time supplied")

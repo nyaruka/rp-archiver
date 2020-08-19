@@ -24,7 +24,7 @@ type Config struct {
 	RetentionPeriod  int    `help:"the number of days to keep before archiving"`
 	Delete           bool   `help:"whether to delete messages and runs from the db after archival (default false)"`
 	ExitOnCompletion bool   `help:"whether archiver should exit after completing archiving job (default false)"`
-	StartTime        string `help:"what time archive jobs should run in UTC "`
+	StartTime        string `help:"what time archive jobs should run in UTC HH:MM "`
 }
 
 // NewConfig returns a new default configuration object
@@ -51,7 +51,7 @@ func NewConfig() *Config {
 		RetentionPeriod:  90,
 		Delete:           false,
 		ExitOnCompletion: false,
-		StartTime:        "00:01:00",
+		StartTime:        "00:01",
 	}
 
 	return &config
