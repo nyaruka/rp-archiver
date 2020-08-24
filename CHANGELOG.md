@@ -1,3 +1,8 @@
+v5.6.1
+----------
+ * Add switch to configure when archiving starts (thanks resistbot!)
+ * Add switch to exit after build (thanks resistbot!) 
+
 v5.6.0
 ----------
  * 5.6.0 Release
