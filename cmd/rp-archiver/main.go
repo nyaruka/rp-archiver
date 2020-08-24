@@ -84,7 +84,7 @@ func main() {
 		layout := "15:04"
 		start, err := time.Parse(layout, config.StartTime)
 		if err != nil {
-			logrus.WithError(err).Fatal("invalid start time supplied")
+			logrus.WithError(err).Fatal("invalid start time supplied, format: HH:mm")
 		}
 
 		// get our active orgs
