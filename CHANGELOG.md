@@ -1,3 +1,8 @@
+v5.7.0
+----------
+ * Add switch to specify start time of archival builds (thanks resistbot)
+ * Add switch to exit on build completion (thanks resistbot)
+
 v5.6.0
 ----------
  * 5.6.0 Release
