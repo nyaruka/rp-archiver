@@ -1,3 +1,7 @@
+v6.0.0
+----------
+ * Update README
+
 v5.7.0
 ----------
  * Add switch to specify start time of archival builds (thanks resistbot)
