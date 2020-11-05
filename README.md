@@ -44,19 +44,13 @@ Recommended settings for error reporting:
 
 # Development
 
-Install Archiver source in your workspace with:
-
-```
-go get github.com/nyaruka/rp-archiver
-```
-
-Build Archiver with:
+Once you've checked out the code, you can build Archiver with:
 
 ```
 go build github.com/nyaruka/rp-archiver/cmd/rp-archiver
 ```
 
-This will create a new executable in your current directory `rp-archiver`
+This will create a new executable in $GOPATH/bin called `rp-archiver`.
 
 To run the tests you need to create the test database:
 
@@ -67,7 +61,7 @@ $ createdb archiver_test
 To run all of the tests:
 
 ```
-go test github.com/nyaruka/rp-archiver/... -p=1
+go test ./... -p=1
 ```
 
 ## Usage
