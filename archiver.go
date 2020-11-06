@@ -643,8 +643,6 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 
 	start := time.Now()
 
-	success := false
-
 	log := logrus.WithFields(logrus.Fields{
 		"org_id":       archive.Org.ID,
 		"archive_type": archive.ArchiveType,
@@ -659,9 +657,9 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		return errors.Wrapf(err, "error creating temp file: %s", file.Name())
 	}
 
-	// clean up our archive file if we didn't succeed
 	defer func() {
-		if !success {
+		// we only set the archive filename when we succeed
+		if archive.ArchiveFile == "" {
 			err = os.Remove(file.Name())
 			if err != nil {
 				log.WithError(err).WithField("filename", file.Name()).Error("error cleaning up archive file")
@@ -692,7 +690,6 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		return errors.Wrapf(err, "error writing archive")
 	}
 
-	archive.ArchiveFile = file.Name()
 	err = writer.Flush()
 	if err != nil {
 		return errors.Wrapf(err, "error flushing archive file")
@@ -714,10 +711,10 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		return fmt.Errorf("archive too large, must be smaller than 5 gigs, build dailies if possible")
 	}
 
+	archive.ArchiveFile = file.Name()
 	archive.Size = stat.Size()
 	archive.RecordCount = recordCount
 	archive.BuildTime = int(time.Since(start) / time.Millisecond)
-	success = true
 
 	log.WithFields(logrus.Fields{
 		"record_count": recordCount,
