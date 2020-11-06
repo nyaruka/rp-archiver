@@ -643,6 +643,8 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 
 	start := time.Now()
 
+	success := false
+
 	log := logrus.WithFields(logrus.Fields{
 		"org_id":       archive.Org.ID,
 		"archive_type": archive.ArchiveType,
@@ -656,6 +658,17 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	if err != nil {
 		return errors.Wrapf(err, "error creating temp file: %s", file.Name())
 	}
+
+	// clean up our archive file if we didn't succeed
+	defer func() {
+		if !success {
+			err = os.Remove(file.Name())
+			if err != nil {
+				log.WithError(err).WithField("filename", file.Name()).Error("error cleaning up archive file")
+			}
+		}
+	}()
+
 	hash := md5.New()
 	gzWriter := gzip.NewWriter(io.MultiWriter(file, hash))
 	writer := bufio.NewWriter(gzWriter)
@@ -704,6 +717,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	archive.Size = stat.Size()
 	archive.RecordCount = recordCount
 	archive.BuildTime = int(time.Since(start) / time.Millisecond)
+	success = true
 
 	log.WithFields(logrus.Fields{
 		"record_count": recordCount,
@@ -712,6 +726,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		"file_hash":    archive.Hash,
 		"elapsed":      time.Since(start),
 	}).Debug("completed writing archive file")
+
 	return nil
 }
 
@@ -828,6 +843,10 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error 
 
 // DeleteArchiveFile removes our own disk archive file
 func DeleteArchiveFile(archive *Archive) error {
+	if archive.ArchiveFile == "" {
+		return nil
+	}
+
 	err := os.Remove(archive.ArchiveFile)
 
 	if err != nil {
@@ -907,6 +926,36 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	return archives, nil
 }
 
+func createArchive(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3iface.S3API, archive *Archive) error {
+	err := CreateArchiveFile(ctx, db, archive, config.TempDir)
+	if err != nil {
+		return errors.Wrap(err, "error writing archive file")
+	}
+
+	defer func() {
+		if !config.KeepFiles {
+			err := DeleteArchiveFile(archive)
+			if err != nil {
+				logrus.WithError(err).Error("error deleting temporary archive file")
+			}
+		}
+	}()
+
+	if config.UploadToS3 {
+		err = UploadArchive(ctx, s3Client, config.S3Bucket, archive)
+		if err != nil {
+			return errors.Wrap(err, "error writing archive to s3")
+		}
+	}
+
+	err = WriteArchiveToDB(ctx, db, archive)
+	if err != nil {
+		return errors.Wrap(err, "error writing record to db")
+	}
+
+	return nil
+}
+
 func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3iface.S3API, org Org, archives []*Archive) error {
 	log := logrus.WithFields(logrus.Fields{
 		"org":    org.Name,
@@ -914,7 +963,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 	})
 
 	for _, archive := range archives {
-		log = log.WithFields(logrus.Fields{
+		log = logrus.WithFields(logrus.Fields{
 			"start_date":   archive.StartDate,
 			"end_date":     archive.endDate(),
 			"period":       archive.Period,
@@ -923,32 +972,10 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 		log.Info("starting archive")
 		start := time.Now()
 
-		err := CreateArchiveFile(ctx, db, archive, config.TempDir)
+		err := createArchive(ctx, db, config, s3Client, archive)
 		if err != nil {
-			log.WithError(err).Error("error writing archive file")
+			log.WithError(err).Error("error creating archive")
 			continue
-		}
-
-		if config.UploadToS3 {
-			err = UploadArchive(ctx, s3Client, config.S3Bucket, archive)
-			if err != nil {
-				log.WithError(err).Error("error writing archive to s3")
-				continue
-			}
-		}
-
-		err = WriteArchiveToDB(ctx, db, archive)
-		if err != nil {
-			log.WithError(err).Error("error writing record to db")
-			continue
-		}
-
-		if !config.KeepFiles {
-			err := DeleteArchiveFile(archive)
-			if err != nil {
-				log.WithError(err).Error("error deleting temporary file")
-				continue
-			}
 		}
 
 		elapsed := time.Since(start)
