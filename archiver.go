@@ -654,7 +654,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	filename := fmt.Sprintf("%s_%d_%s%d%02d%02d_", archive.ArchiveType, archive.Org.ID, archive.Period, archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day())
 	file, err := ioutil.TempFile(archivePath, filename)
 	if err != nil {
-		return errors.Wrapf(err, "error creating temp file: %s", file.Name())
+		return errors.Wrapf(err, "error creating temp file: %s", filename)
 	}
 	hash := md5.New()
 	gzWriter := gzip.NewWriter(io.MultiWriter(file, hash))
