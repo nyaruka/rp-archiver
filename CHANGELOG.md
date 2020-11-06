@@ -1,3 +1,8 @@
+v6.0.1
+----------
+ * Clean up archive file if there is a problem while uploading to s3 or writing to DB
+ * Fix NPE when out of disk space
+
 v6.0.0
 ----------
  * Update README
