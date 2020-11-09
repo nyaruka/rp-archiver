@@ -1373,7 +1373,7 @@ LIMIT 1000000;
 `
 
 const selectOrgRunsInRange = `
-SELECT fr.id, fr.exit_type
+SELECT fr.id, fr.status
 FROM flows_flowrun fr
 LEFT JOIN contacts_contact cc ON cc.id = fr.contact_id
 WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
@@ -1440,17 +1440,17 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	defer rows.Close()
 
 	var runID int64
-	var exitType string
+	var status string
 	runCount := 0
 	runIDs := make([]int64, 0, archive.RecordCount)
 	for rows.Next() {
-		err = rows.Scan(&runID, &exitType)
+		err = rows.Scan(&runID, &status)
 		if err != nil {
 			return err
 		}
 
 		// if this run is still active, something has gone wrong, throw an error
-		if exitType != "C" && exitType != "E" && exitType != "I" {
+		if status != "C" && status != "E" && status != "I" && status != "F" {
 			return fmt.Errorf("run %d in archive is still active", runID)
 		}
 
