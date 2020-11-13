@@ -139,8 +139,10 @@ func main() {
 		napTime := nextDay.Sub(time.Now().In(time.UTC))
 
 		if napTime > time.Duration(0) {
-			logrus.WithField("time", napTime).Info("Sleeping until next UTC day")
+			logrus.WithField("time", napTime).WithField("next_start", nextDay).Info("Sleeping until next UTC day")
 			time.Sleep(napTime)
+		} else {
+			logrus.WithField("next_start", nextDay).Info("Rebuilding immediately without sleep")
 		}
 	}
 }
