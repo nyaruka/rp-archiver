@@ -1,3 +1,7 @@
+v6.0.2
+----------
+ * Fix next archive building calculation
+
 v6.0.1
 ----------
  * Clean up archive file if there is a problem while uploading to s3 or writing to DB
