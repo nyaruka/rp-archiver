@@ -1,3 +1,7 @@
+v6.0.3
+----------
+ * log next day even when not sleeping
+
 v6.0.2
 ----------
  * Fix next archive building calculation
