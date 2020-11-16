@@ -1449,8 +1449,8 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 			return err
 		}
 
-		// if this run is still active, something has gone wrong, throw an error
-		if status != "C" && status != "E" && status != "I" && status != "F" {
+		// if this run is still active or waiting, something has gone wrong, throw an error
+		if status == "A" || status == "W" {
 			return fmt.Errorf("run %d in archive is still active", runID)
 		}
 
