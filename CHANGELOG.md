@@ -1,3 +1,8 @@
+v6.2.0
+----------
+ * Bump CI testing to PG 11 and 12
+ * 6.2.0 RC
+
 v6.0.3
 ----------
  * log next day even when not sleeping
