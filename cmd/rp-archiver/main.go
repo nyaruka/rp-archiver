@@ -80,11 +80,13 @@ func main() {
 	}
 
 	for {
+		start := time.Now().In(time.UTC)
+
 		// convert the starttime to time.Time
 		layout := "15:04"
-		start, err := time.Parse(layout, config.StartTime)
+		hour, err := time.Parse(layout, config.StartTime)
 		if err != nil {
-			logrus.WithError(err).Fatal("invalid start time supplied")
+			logrus.WithError(err).Fatal("invalid start time supplied, format: HH:mm")
 		}
 
 		// get our active orgs
@@ -124,12 +126,23 @@ func main() {
 		if config.ExitOnCompletion {
 			break
 		}
-		nextDay := start.AddDate(0, 0, 1)
+
+		// build up our next start
+		now := time.Now().In(time.UTC)
+		nextDay := time.Date(now.Year(), now.Month(), now.Day(), hour.Hour(), hour.Minute(), 0, 0, time.UTC)
+
+		// if this time is before our actual start, add a day
+		if nextDay.Before(start) {
+			nextDay = nextDay.AddDate(0, 0, 1)
+		}
+
 		napTime := nextDay.Sub(time.Now().In(time.UTC))
 
 		if napTime > time.Duration(0) {
-			logrus.WithField("time", napTime).Info("Sleeping until next UTC day")
+			logrus.WithField("time", napTime).WithField("next_start", nextDay).Info("Sleeping until next UTC day")
 			time.Sleep(napTime)
+		} else {
+			logrus.WithField("next_start", nextDay).Info("Rebuilding immediately without sleep")
 		}
 	}
 }
