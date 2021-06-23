@@ -53,7 +53,6 @@ type Org struct {
 	Name            string    `db:"name"`
 	CreatedOn       time.Time `db:"created_on"`
 	IsAnon          bool      `db:"is_anon"`
-	Language        *string   `db:"language"`
 	RetentionPeriod int
 }
 
@@ -98,9 +97,8 @@ func (a *Archive) coversDate(d time.Time) bool {
 }
 
 const lookupActiveOrgs = `
-SELECT o.id, o.name, l.iso_code as language, o.created_on, o.is_anon 
+SELECT o.id, o.name, o.created_on, o.is_anon 
 FROM orgs_org o 
-LEFT JOIN orgs_language l ON l.id = primary_language_id 
 WHERE o.is_active = TRUE order by o.id
 `
 

@@ -1,16 +1,9 @@
 CREATE EXTENSION IF NOT EXISTS HSTORE;
 
-DROP TABLE IF EXISTS orgs_language CASCADE;
-CREATE TABLE orgs_language (
-    id serial primary key,
-    iso_code character varying(3)
-);
-
 DROP TABLE IF EXISTS orgs_org CASCADE;
 CREATE TABLE orgs_org (
     id serial primary key,
     name character varying(255) NOT NULL,
-    primary_language_id integer references orgs_language(id) on delete cascade,
     is_anon boolean NOT NULL,
     is_active boolean NOT NULL,
     created_on timestamp with time zone NOT NULL
@@ -219,14 +212,11 @@ CREATE TABLE flows_flowpathrecentrun (
     run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
 );
 
-INSERT INTO orgs_language(id, iso_code) VALUES 
-(1, 'eng');
-
-INSERT INTO orgs_org(id, name, is_active, is_anon, created_on, primary_language_id) VALUES
-(1, 'Org 1', TRUE, FALSE, '2017-11-10 21:11:59.890662+00', 1),
-(2, 'Org 2', TRUE, FALSE, '2017-08-10 21:11:59.890662+00', 1),
-(3, 'Org 3', TRUE, TRUE, '2017-08-10 21:11:59.890662+00', NULL),
-(4, 'Org 4', FALSE, TRUE, '2017-08-10 21:11:59.890662+00', 1);
+INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES
+(1, 'Org 1', TRUE, FALSE, '2017-11-10 21:11:59.890662+00'),
+(2, 'Org 2', TRUE, FALSE, '2017-08-10 21:11:59.890662+00'),
+(3, 'Org 3', TRUE, TRUE, '2017-08-10 21:11:59.890662+00'),
+(4, 'Org 4', FALSE, TRUE, '2017-08-10 21:11:59.890662+00');
 
 INSERT INTO channels_channel(id, uuid, name, org_id) VALUES
 (1, '8c1223c3-bd43-466b-81f1-e7266a9f4465', 'Channel 1', 1),
