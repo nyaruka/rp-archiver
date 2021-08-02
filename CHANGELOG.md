@@ -1,3 +1,46 @@
+v6.4.0
+----------
+ * 6.4.0 Release Candidate
+
+v6.3.0
+----------
+ * Don't try to load org languages
+
+v6.2.0
+----------
+ * Bump CI testing to PG 11 and 12
+ * 6.2.0 RC
+
+v6.0.3
+----------
+ * log next day even when not sleeping
+
+v6.0.2
+----------
+ * Fix next archive building calculation
+
+v6.0.1
+----------
+ * Clean up archive file if there is a problem while uploading to s3 or writing to DB
+ * Fix NPE when out of disk space
+
+v6.0.0
+----------
+ * Update README
+
+v5.7.0
+----------
+ * Add switch to specify start time of archival builds (thanks resistbot)
+ * Add switch to exit on build completion (thanks resistbot)
+
+v5.6.0
+----------
+ * 5.6.0 Release
+
+v5.4.0 
+----------
+ * 5.4 Release
+
 v5.2.0
 ----------
  * Sync release with RapidPro 5.2

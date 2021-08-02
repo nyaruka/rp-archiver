@@ -82,9 +82,16 @@ func main() {
 	for {
 		start := time.Now().In(time.UTC)
 
+		// convert the starttime to time.Time
+		layout := "15:04"
+		hour, err := time.Parse(layout, config.StartTime)
+		if err != nil {
+			logrus.WithError(err).Fatal("invalid start time supplied, format: HH:mm")
+		}
+
 		// get our active orgs
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		orgs, err := archiver.GetActiveOrgs(ctx, db)
+		orgs, err := archiver.GetActiveOrgs(ctx, db, config)
 		cancel()
 
 		if err != nil {
@@ -115,14 +122,27 @@ func main() {
 			cancel()
 		}
 
-		// ok, we did all our work for our orgs, sleep until the next day
-		nextDay := start.AddDate(0, 0, 1)
-		nextDay = time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), 0, 1, 0, 0, time.UTC)
-		napTime := nextDay.Sub(start)
+		// ok, we did all our work for our orgs, quit if so configured or sleep until the next day
+		if config.ExitOnCompletion {
+			break
+		}
+
+		// build up our next start
+		now := time.Now().In(time.UTC)
+		nextDay := time.Date(now.Year(), now.Month(), now.Day(), hour.Hour(), hour.Minute(), 0, 0, time.UTC)
+
+		// if this time is before our actual start, add a day
+		if nextDay.Before(start) {
+			nextDay = nextDay.AddDate(0, 0, 1)
+		}
+
+		napTime := nextDay.Sub(time.Now().In(time.UTC))
 
 		if napTime > time.Duration(0) {
-			logrus.WithField("time", napTime).Info("Sleeping until next UTC day")
+			logrus.WithField("time", napTime).WithField("next_start", nextDay).Info("Sleeping until next UTC day")
 			time.Sleep(napTime)
+		} else {
+			logrus.WithField("next_start", nextDay).Info("Rebuilding immediately without sleep")
 		}
 	}
 }
