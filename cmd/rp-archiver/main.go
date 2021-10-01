@@ -11,12 +11,12 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
-	archiver "github.com/nyaruka/rp-archiver"
+	"github.com/nyaruka/rp-archiver/archives"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	config := archiver.NewConfig()
+	config := archives.NewConfig()
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", []string{"archiver.toml"})
 	loader.MustLoad()
 
@@ -67,14 +67,14 @@ func main() {
 
 	var s3Client s3iface.S3API
 	if config.UploadToS3 {
-		s3Client, err = archiver.NewS3Client(config)
+		s3Client, err = archives.NewS3Client(config)
 		if err != nil {
 			logrus.WithError(err).Fatal("unable to initialize s3 client")
 		}
 	}
 
 	// ensure that we can actually write to the temp directory
-	err = archiver.EnsureTempArchiveDirectory(config.TempDir)
+	err = archives.EnsureTempArchiveDirectory(config.TempDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("cannot write to temp directory")
 	}
@@ -91,7 +91,7 @@ func main() {
 
 		// get our active orgs
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		orgs, err := archiver.GetActiveOrgs(ctx, db, config)
+		orgs, err := archives.GetActiveOrgs(ctx, db, config)
 		cancel()
 
 		if err != nil {
@@ -107,15 +107,15 @@ func main() {
 			log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
 
 			if config.ArchiveMessages {
-				_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.MessageType)
+				_, _, err = archives.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archives.MessageType)
 				if err != nil {
-					log.WithError(err).WithField("archive_type", archiver.MessageType).Error("error archiving org messages")
+					log.WithError(err).WithField("archive_type", archives.MessageType).Error("error archiving org messages")
 				}
 			}
 			if config.ArchiveRuns {
-				_, _, err = archiver.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archiver.RunType)
+				_, _, err = archives.ArchiveOrg(ctx, time.Now(), config, db, s3Client, org, archives.RunType)
 				if err != nil {
-					log.WithError(err).WithField("archive_type", archiver.RunType).Error("error archiving org runs")
+					log.WithError(err).WithField("archive_type", archives.RunType).Error("error archiving org runs")
 				}
 			}
 
