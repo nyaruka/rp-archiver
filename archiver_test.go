@@ -488,7 +488,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 		assert.Equal(t, DayPeriod, created[11].Period)
 		assert.Equal(t, 1, created[11].RecordCount)
 		assert.Equal(t, int64(427), created[11].Size)
-		assert.Equal(t, "bf08041cef314492fee2910357ec4189", created[11].Hash)
+		assert.Equal(t, "ca36409e2623005b12c221cb3502cc30", created[11].Hash)
 
 		assert.Equal(t, 12, len(deleted))
 
