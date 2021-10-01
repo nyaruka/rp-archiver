@@ -1,4 +1,4 @@
-package archiver
+package archives
 
 // Config is our top level configuration object
 type Config struct {
