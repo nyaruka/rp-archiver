@@ -23,7 +23,7 @@ FROM (
      fr.responded,
      (SELECT coalesce(jsonb_agg(path_data), '[]'::jsonb) from (
 		SELECT path_row ->> 'node_uuid' AS node, (path_row ->> 'arrived_on')::timestamptz as time
-		FROM jsonb_array_elements(fr.path::jsonb) AS path_row) as path_data
+		FROM jsonb_array_elements(fr.path::jsonb) AS path_row LIMIT 500) as path_data
      ) as path,
      (SELECT coalesce(jsonb_object_agg(values_data.key, values_data.value), '{}'::jsonb) from (
 		SELECT key, jsonb_build_object('name', value -> 'name', 'value', value -> 'value', 'input', value -> 'input', 'time', (value -> 'created_on')::text::timestamptz, 'category', value -> 'category', 'node', value -> 'node_uuid') as value
