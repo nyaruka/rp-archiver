@@ -1,5 +1,7 @@
 name: CI
 on: [push, pull_request]
+env:
+  go-version: '1.17.x'
 jobs:
   test:
     name: Test
@@ -22,7 +24,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.15.x
+        go-version: ${{ env.go-version }}
 
     - name: Run tests
       run: go test -p=1 -coverprofile=coverage.text -covermode=atomic ./...
@@ -48,7 +50,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.15.x
+        go-version: ${{ env.go-version }}
 
     - name: Publish release
       uses: goreleaser/goreleaser-action@v1

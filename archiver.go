@@ -91,11 +91,6 @@ func (a *Archive) endDate() time.Time {
 	return endDate
 }
 
-func (a *Archive) coversDate(d time.Time) bool {
-	end := a.endDate()
-	return !a.StartDate.After(d) && end.After(d)
-}
-
 const lookupActiveOrgs = `
 SELECT o.id, o.name, o.created_on, o.is_anon 
 FROM orgs_org o 
@@ -457,11 +452,11 @@ func EnsureTempArchiveDirectory(path string) error {
 
 	testFilePath := filepath.Join(path, ".test_file")
 	testFile, err := os.Create(testFilePath)
-	defer testFile.Close()
-
 	if err != nil {
 		return fmt.Errorf("directory '%s' is not writable", path)
 	}
+
+	defer testFile.Close()
 
 	err = os.Remove(testFilePath)
 	return err
@@ -958,13 +953,13 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 	})
 
 	for _, archive := range archives {
-		log = logrus.WithFields(logrus.Fields{
+		log.WithFields(logrus.Fields{
 			"start_date":   archive.StartDate,
 			"end_date":     archive.endDate(),
 			"period":       archive.Period,
 			"archive_type": archive.ArchiveType,
-		})
-		log.Info("starting archive")
+		}).Info("starting archive")
+
 		start := time.Now()
 
 		err := createArchive(ctx, db, config, s3Client, archive)
@@ -1606,9 +1601,7 @@ func ArchiveOrg(ctx context.Context, now time.Time, config *Config, db *sqlx.DB,
 		return nil, nil, errors.Wrapf(err, "error rolling up archives")
 	}
 
-	for _, m := range monthlies {
-		created = append(created, m)
-	}
+	created = append(created, monthlies...)
 
 	// finally delete any archives not yet actually archived
 	deleted := make([]*Archive, 0, 1)
