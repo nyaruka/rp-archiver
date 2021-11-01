@@ -10,7 +10,7 @@ S3 compatible endpoint.
 
 # Deploying
 
-As Archiver is a go application, it compiles to a binary and that binary along with the config file is all
+As Archiver is a Go application, it compiles to a binary and that binary along with the config file is all
 you need to run it on your server. You can find bundles for each platform in the
 [releases directory](https://github.com/nyaruka/rp-archiver/releases). You should only run a single archiver
 instance for a deployment.
