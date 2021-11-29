@@ -180,9 +180,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	}
 	rows.Close()
 
-	log.WithFields(logrus.Fields{
-		"run_count": len(runIDs),
-	}).Debug("found runs")
+	log.WithField("run_count", len(runIDs)).Debug("found runs")
 
 	// verify we don't see more runs than there are in our archive (fewer is ok)
 	if runCount > archive.RecordCount {
@@ -190,18 +188,12 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	}
 
 	// ok, delete our runs in batches, we do this in transactions as it spans a few different queries
-	for startIdx := 0; startIdx < len(runIDs); startIdx += deleteTransactionSize {
+	for _, idBatch := range chunkIDs(runIDs, deleteTransactionSize) {
 		// no single batch should take more than a few minutes
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
 		start := time.Now()
-
-		endIdx := startIdx + deleteTransactionSize
-		if endIdx > len(runIDs) {
-			endIdx = len(runIDs)
-		}
-		batchIDs := runIDs[startIdx:endIdx]
 
 		// start our transaction
 		tx, err := db.BeginTxx(ctx, nil)
@@ -210,25 +202,25 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		}
 
 		// first update our delete_reason
-		err = executeInQuery(ctx, tx, setRunDeleteReason, batchIDs)
+		err = executeInQuery(ctx, tx, setRunDeleteReason, idBatch)
 		if err != nil {
 			return fmt.Errorf("error updating delete reason: %s", err.Error())
 		}
 
 		// any recent runs
-		err = executeInQuery(ctx, tx, deleteRecentRuns, batchIDs)
+		err = executeInQuery(ctx, tx, deleteRecentRuns, idBatch)
 		if err != nil {
 			return fmt.Errorf("error deleting recent runs: %s", err.Error())
 		}
 
 		// unlink any parents
-		err = executeInQuery(ctx, tx, unlinkParents, batchIDs)
+		err = executeInQuery(ctx, tx, unlinkParents, idBatch)
 		if err != nil {
 			return fmt.Errorf("error unliking parent runs: %s", err.Error())
 		}
 
 		// finally, delete our runs
-		err = executeInQuery(ctx, tx, deleteRuns, batchIDs)
+		err = executeInQuery(ctx, tx, deleteRuns, idBatch)
 		if err != nil {
 			return fmt.Errorf("error deleting runs: %s", err.Error())
 		}
@@ -239,10 +231,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 			return fmt.Errorf("error committing run delete transaction: %s", err.Error())
 		}
 
-		log.WithFields(logrus.Fields{
-			"elapsed": time.Since(start),
-			"count":   len(batchIDs),
-		}).Debug("deleted batch of runs")
+		log.WithField("elapsed", time.Since(start)).WithField("count", len(idBatch)).Debug("deleted batch of runs")
 
 		cancel()
 	}
@@ -260,9 +249,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	archive.NeedsDeletion = false
 	archive.DeletedOn = &deletedOn
 
-	logrus.WithFields(logrus.Fields{
-		"elapsed": time.Since(start),
-	}).Info("completed deleting runs")
+	logrus.WithField("elapsed", time.Since(start)).Info("completed deleting runs")
 
 	return nil
 }
