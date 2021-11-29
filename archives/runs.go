@@ -204,31 +204,31 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		// first update our delete_reason
 		err = executeInQuery(ctx, tx, setRunDeleteReason, idBatch)
 		if err != nil {
-			return fmt.Errorf("error updating delete reason: %s", err.Error())
+			return errors.Wrap(err, "error updating delete reason")
 		}
 
 		// any recent runs
 		err = executeInQuery(ctx, tx, deleteRecentRuns, idBatch)
 		if err != nil {
-			return fmt.Errorf("error deleting recent runs: %s", err.Error())
+			return errors.Wrap(err, "error deleting recent runs")
 		}
 
 		// unlink any parents
 		err = executeInQuery(ctx, tx, unlinkParents, idBatch)
 		if err != nil {
-			return fmt.Errorf("error unliking parent runs: %s", err.Error())
+			return errors.Wrap(err, "error unliking parent runs")
 		}
 
 		// finally, delete our runs
 		err = executeInQuery(ctx, tx, deleteRuns, idBatch)
 		if err != nil {
-			return fmt.Errorf("error deleting runs: %s", err.Error())
+			return errors.Wrap(err, "error deleting runs")
 		}
 
 		// commit our transaction
 		err = tx.Commit()
 		if err != nil {
-			return fmt.Errorf("error committing run delete transaction: %s", err.Error())
+			return errors.Wrap(err, "error committing run delete transaction")
 		}
 
 		log.WithField("elapsed", time.Since(start)).WithField("count", len(idBatch)).Debug("deleted batch of runs")
@@ -244,7 +244,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	// all went well! mark our archive as no longer needing deletion
 	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletedOn)
 	if err != nil {
-		return fmt.Errorf("error setting archive as deleted: %s", err.Error())
+		return errors.Wrap(err, "error setting archive as deleted")
 	}
 	archive.NeedsDeletion = false
 	archive.DeletedOn = &deletedOn

@@ -213,37 +213,37 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		// first update our delete_reason
 		err = executeInQuery(ctx, tx, setMessageDeleteReason, idBatch)
 		if err != nil {
-			return fmt.Errorf("error updating delete reason: %s", err.Error())
+			return errors.Wrap(err, "error updating delete reason")
 		}
 
 		// now delete any channel logs
 		err = executeInQuery(ctx, tx, deleteMessageLogs, idBatch)
 		if err != nil {
-			return fmt.Errorf("error removing channel logs: %s", err.Error())
+			return errors.Wrap(err, "error removing channel logs")
 		}
 
 		// then any labels
 		err = executeInQuery(ctx, tx, deleteMessageLabels, idBatch)
 		if err != nil {
-			return fmt.Errorf("error removing message labels: %s", err.Error())
+			return errors.Wrap(err, "error removing message labels")
 		}
 
 		// unlink any responses
 		err = executeInQuery(ctx, tx, unlinkResponses, idBatch)
 		if err != nil {
-			return fmt.Errorf("error unlinking responses: %s", err.Error())
+			return errors.Wrap(err, "error unlinking responses")
 		}
 
 		// finally, delete our messages
 		err = executeInQuery(ctx, tx, deleteMessages, idBatch)
 		if err != nil {
-			return fmt.Errorf("error deleting messages: %s", err.Error())
+			return errors.Wrap(err, "error deleting messages")
 		}
 
 		// commit our transaction
 		err = tx.Commit()
 		if err != nil {
-			return fmt.Errorf("error committing message delete transaction: %s", err.Error())
+			return errors.Wrap(err, "error committing message delete transaction")
 		}
 
 		log.WithField("elapsed", time.Since(start)).WithField("count", len(idBatch)).Debug("deleted batch of messages")
@@ -259,7 +259,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	// all went well! mark our archive as no longer needing deletion
 	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletedOn)
 	if err != nil {
-		return fmt.Errorf("error setting archive as deleted: %s", err.Error())
+		return errors.Wrap(err, "error setting archive as deleted")
 	}
 	archive.NeedsDeletion = false
 	archive.DeletedOn = &deletedOn
