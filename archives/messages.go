@@ -123,12 +123,6 @@ DELETE FROM msgs_msg_labels
 WHERE msg_id IN(?)
 `
 
-const unlinkResponses = `
-UPDATE msgs_msg 
-SET response_to_id = NULL 
-WHERE response_to_id IN(?)
-`
-
 const deleteMessages = `
 DELETE FROM msgs_msg 
 WHERE id IN(?)
@@ -226,12 +220,6 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		err = executeInQuery(ctx, tx, deleteMessageLabels, idBatch)
 		if err != nil {
 			return errors.Wrap(err, "error removing message labels")
-		}
-
-		// unlink any responses
-		err = executeInQuery(ctx, tx, unlinkResponses, idBatch)
-		if err != nil {
-			return errors.Wrap(err, "error unlinking responses")
 		}
 
 		// finally, delete our messages
