@@ -1,3 +1,7 @@
+v7.1.0
+----------
+ * Remove msgs_msg.response_to_id
+
 v7.0.0
 ----------
  * Test on PG12 and 13
