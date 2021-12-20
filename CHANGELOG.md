@@ -1,3 +1,7 @@
+v7.1.1
+----------
+ * Remove references to flowrun.parent_id which is no longer set by mailroom
+
 v7.1.0
 ----------
  * Remove msgs_msg.response_to_id
