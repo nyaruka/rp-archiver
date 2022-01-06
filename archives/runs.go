@@ -12,6 +12,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	RunStatusActive      = "A"
+	RunStatusWaiting     = "W"
+	RunStatusCompleted   = "C"
+	RunStatusExpired     = "X"
+	RunStatusInterrupted = "I"
+	RunStatusFailed      = "F"
+)
+
 const lookupFlowRuns = `
 SELECT rec.exited_on, row_to_json(rec)
 FROM (
@@ -33,14 +42,11 @@ FROM (
      fr.modified_on,
 	 fr.exited_on,
      CASE
-        WHEN exit_type = 'C'
-          THEN 'completed'
-        WHEN exit_type = 'I'
-          THEN 'interrupted'
-        WHEN exit_type = 'E'
-          THEN 'expired'
-        ELSE
-          null
+        WHEN status = 'C' THEN 'completed'
+        WHEN status = 'I' THEN 'interrupted'
+        WHEN status = 'X' THEN 'expired'
+        WHEN status = 'F' THEN 'failed'
+        ELSE NULL
 	 END as exit_type,
  	 a.username as submitted_by
 
@@ -87,7 +93,7 @@ func writeRunRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer 
 }
 
 const selectOrgRunsInRange = `
-SELECT fr.id, fr.is_active
+SELECT fr.id, fr.status
 FROM flows_flowrun fr
 LEFT JOIN contacts_contact cc ON cc.id = fr.contact_id
 WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
@@ -148,18 +154,18 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	defer rows.Close()
 
 	var runID int64
-	var isActive bool
+	var status string
 	runCount := 0
 	runIDs := make([]int64, 0, archive.RecordCount)
 	for rows.Next() {
-		err = rows.Scan(&runID, &isActive)
+		err = rows.Scan(&runID, &status)
 		if err != nil {
 			return err
 		}
 
 		// if this run is still active, something has gone wrong, throw an error
-		if isActive {
-			return fmt.Errorf("run %d in archive is still active", runID)
+		if status == RunStatusActive || status == RunStatusWaiting {
+			return fmt.Errorf("run #%d in archive hadn't exited", runID)
 		}
 
 		// increment our count
