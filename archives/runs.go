@@ -29,12 +29,6 @@ FROM (
 		SELECT key, jsonb_build_object('name', value -> 'name', 'value', value -> 'value', 'input', value -> 'input', 'time', (value -> 'created_on')::text::timestamptz, 'category', value -> 'category', 'node', value -> 'node_uuid') as value
 		FROM jsonb_each(fr.results::jsonb)) AS values_data
 	 ) as values,
-	 CASE
-		WHEN $1
-			THEN '[]'::jsonb
-		ELSE
-			coalesce(fr.events, '[]'::jsonb)
-	 END AS events,
      fr.created_on,
      fr.modified_on,
 	 fr.exited_on,
@@ -55,7 +49,7 @@ FROM (
      JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
      JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id) AS contact_struct ON True
    
-   WHERE fr.org_id = $2 AND fr.modified_on >= $3 AND fr.modified_on < $4
+   WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
    ORDER BY fr.modified_on ASC, id ASC
 ) as rec;
 `
@@ -63,7 +57,7 @@ FROM (
 // writeRunRecords writes the runs in the archive's date range to the passed in writer
 func writeRunRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer *bufio.Writer) (int, error) {
 	var rows *sqlx.Rows
-	rows, err := db.QueryxContext(ctx, lookupFlowRuns, archive.Org.IsAnon, archive.Org.ID, archive.StartDate, archive.endDate())
+	rows, err := db.QueryxContext(ctx, lookupFlowRuns, archive.Org.ID, archive.StartDate, archive.endDate())
 	if err != nil {
 		return 0, errors.Wrapf(err, "error querying run records for org: %d", archive.Org.ID)
 	}
