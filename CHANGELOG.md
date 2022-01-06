@@ -1,3 +1,8 @@
+v7.1.2
+----------
+ * Use run status instead of is_active and exit_type
+ * No longer include events in run archives
+
 v7.1.1
 ----------
  * Remove references to flowrun.parent_id which is no longer set by mailroom
