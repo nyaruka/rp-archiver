@@ -106,11 +106,6 @@ SET delete_reason = 'A'
 WHERE id IN(?)
 `
 
-const deleteRecentRuns = `
-DELETE FROM flows_flowpathrecentrun 
-WHERE run_id IN(?)
-`
-
 const deleteRuns = `
 DELETE FROM flows_flowrun
 WHERE id IN(?)
@@ -199,12 +194,6 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		err = executeInQuery(ctx, tx, setRunDeleteReason, idBatch)
 		if err != nil {
 			return errors.Wrap(err, "error updating delete reason")
-		}
-
-		// any recent runs
-		err = executeInQuery(ctx, tx, deleteRecentRuns, idBatch)
-		if err != nil {
-			return errors.Wrap(err, "error deleting recent runs")
 		}
 
 		// finally, delete our runs
