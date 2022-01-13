@@ -159,7 +159,6 @@ CREATE TABLE auth_user (
 );
 
 DROP TABLE IF EXISTS api_webhookevent CASCADE;
-DROP TABLE IF EXISTS flows_flowpathrecentrun CASCADE;
 DROP TABLE IF EXISTS flows_actionlog CASCADE;
 DROP TABLE IF EXISTS flows_flowrun CASCADE;
 CREATE TABLE flows_flowrun (
@@ -202,11 +201,6 @@ CREATE TABLE archives_archive (
 CREATE TABLE channels_channellog (
     id serial primary key,
     msg_id integer NOT NULL references msgs_msg(id)
-);
-
-CREATE TABLE flows_flowpathrecentrun (
-    id serial primary key,
-    run_id integer NOT NULL references flows_flowrun(id) DEFERRABLE INITIALLY DEFERRED
 );
 
 INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES
@@ -323,9 +317,6 @@ INSERT INTO flows_flowrun(id, uuid, responded, contact_id, flow_id, org_id, resu
 '2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00', 'C', NULL),
 (5, 'abed67d2-06b8-4749-8bb9-ecda037b673b', TRUE, 7, 2, 3, '{}', '[]', '[]', '2017-10-10 21:11:59.890663+02:00','2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00', 'C', NULL),
 (6, '6262eefe-a6e9-4201-9b76-a7f25e3b7f29', TRUE, 7, 2, 3, '{}', '[]', '[]', '2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00', 'C', NULL);
-
-INSERT INTO flows_flowpathrecentrun(id, run_id) VALUES 
-(1, 3);
 
 -- update run #5 to have a path longer than 500 steps
 UPDATE flows_flowrun SET path = s.path FROM (
