@@ -1,3 +1,7 @@
+v7.1.3
+----------
+ * Remove deletion of recent runs as these are no longer created
+
 v7.1.2
 ----------
  * Use run status instead of is_active and exit_type
