@@ -20,6 +20,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	  row_to_json(contact) as contact,
 	  CASE WHEN oo.is_anon = False THEN ccu.identity ELSE null END as urn,
 	  row_to_json(channel) as channel,
+	  row_to_json(flow) as flow,
 	  CASE WHEN direction = 'I' THEN 'in'
 		WHEN direction = 'O' THEN 'out'
 		ELSE NULL
@@ -61,6 +62,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 	  JOIN LATERAL (select uuid, name from contacts_contact cc where cc.id = mm.contact_id) as contact ON True
 	  LEFT JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id
 	  LEFT JOIN LATERAL (select uuid, name from channels_channel ch where ch.id = mm.channel_id) as channel ON True
+	  LEFT JOIN LATERAL (select uuid, name from flows_flow f where f.id = mm.flow_id) as flow ON True
 	  LEFT JOIN LATERAL (select coalesce(jsonb_agg(label_row), '[]'::jsonb) as data from (select uuid, name from msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
 
 	  WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
