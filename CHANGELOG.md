@@ -1,3 +1,7 @@
+v7.1.4
+----------
+ * Record flow on msgs
+
 v7.1.3
 ----------
  * Remove deletion of recent runs as these are no longer created
