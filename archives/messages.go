@@ -109,12 +109,6 @@ WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
 ORDER BY mm.created_on ASC, mm.id ASC
 `
 
-const setMessageDeleteReason = `
-UPDATE msgs_msg 
-SET delete_reason = 'A' 
-WHERE id IN(?)
-`
-
 const deleteMessageLogs = `
 DELETE FROM channels_channellog 
 WHERE msg_id IN(?)
@@ -206,13 +200,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 			return err
 		}
 
-		// first update our delete_reason
-		err = executeInQuery(ctx, tx, setMessageDeleteReason, idBatch)
-		if err != nil {
-			return errors.Wrap(err, "error updating delete reason")
-		}
-
-		// now delete any channel logs
+		// first delete any channel logs
 		err = executeInQuery(ctx, tx, deleteMessageLogs, idBatch)
 		if err != nil {
 			return errors.Wrap(err, "error removing channel logs")
