@@ -1,3 +1,7 @@
+v7.1.5
+----------
+ * Stop updating msgs_msg.delete_reason which is no longer needed
+
 v7.1.4
 ----------
  * Record flow on msgs
