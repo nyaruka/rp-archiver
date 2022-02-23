@@ -100,12 +100,6 @@ WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
 ORDER BY fr.modified_on ASC, fr.id ASC
 `
 
-const setRunDeleteReason = `
-UPDATE flows_flowrun
-SET delete_reason = 'A' 
-WHERE id IN(?)
-`
-
 const deleteRuns = `
 DELETE FROM flows_flowrun
 WHERE id IN(?)
@@ -190,13 +184,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 			return err
 		}
 
-		// first update our delete_reason
-		err = executeInQuery(ctx, tx, setRunDeleteReason, idBatch)
-		if err != nil {
-			return errors.Wrap(err, "error updating delete reason")
-		}
-
-		// finally, delete our runs
+		// delete our runs
 		err = executeInQuery(ctx, tx, deleteRuns, idBatch)
 		if err != nil {
 			return errors.Wrap(err, "error deleting runs")
