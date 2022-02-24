@@ -175,7 +175,7 @@ CREATE TABLE flows_flowrun (
     exited_on timestamp with time zone NULL,
     submitted_by_id integer NULL references auth_user(id),
     status varchar(1) NOT NULL,
-    delete_reason char(1) NULL
+    delete_from_results boolean
 );
 
 DROP TABLE IF EXISTS archives_archive CASCADE;
