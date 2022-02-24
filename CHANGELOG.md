@@ -1,3 +1,7 @@
+v7.1.6
+----------
+ * Stop setting delete_reason on runs before deletion
+
 v7.1.5
 ----------
  * Stop updating msgs_msg.delete_reason which is no longer needed
