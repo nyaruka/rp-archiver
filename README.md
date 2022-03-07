@@ -18,6 +18,7 @@ instance for a deployment.
 # Configuration
 
 Archiver uses a tiered configuration system, each option takes precendence over the ones above it:
+
  1. The configuration file
  2. Environment variables starting with `ARCHIVER_` 
  3. Command line parameters
@@ -65,7 +66,7 @@ $ createdb archiver_test
 To run all of the tests:
 
 ```
-go test ./... -p=1
+go test -p=1 ./...
 ```
 
 ## Usage
