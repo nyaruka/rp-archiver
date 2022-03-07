@@ -1,3 +1,7 @@
+v7.2.0
+----------
+ * Tweak README
+
 v7.1.6
 ----------
  * Stop setting delete_reason on runs before deletion
