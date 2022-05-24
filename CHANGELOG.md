@@ -1,3 +1,9 @@
+v7.3.0
+----------
+ * Update to go 1.18 and upgrade dependencies
+ * Add support for Msg.visibility=X (deleted by sender)
+ * Add arm64 as a build target
+
 v7.2.0
 ----------
  * Tweak README
