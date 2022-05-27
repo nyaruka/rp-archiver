@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"strings"
 	"sync"
@@ -14,7 +13,6 @@ import (
 	"github.com/nyaruka/ezconf"
 	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/rp-archiver/archives"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -102,7 +100,7 @@ func main() {
 		}
 
 		// try to archive all active orgs, and if it fails, wait 5 minutes and try again
-		err = archiveActiveOrgs(db, config, s3Client)
+		err = archives.ArchiveActiveOrgs(db, config, s3Client)
 		if err != nil {
 			logrus.WithError(err).Error("error archiving, will retry in 5 minutes")
 			time.Sleep(time.Minute * 5)
@@ -135,47 +133,4 @@ func main() {
 
 	analytics.Stop()
 	wg.Wait()
-}
-
-func archiveActiveOrgs(db *sqlx.DB, cfg *archives.Config, s3Client s3iface.S3API) error {
-	start := time.Now()
-
-	// get our active orgs
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	orgs, err := archives.GetActiveOrgs(ctx, db, cfg)
-	cancel()
-
-	if err != nil {
-		return errors.Wrap(err, "error getting active orgs")
-	}
-
-	// for each org, do our export
-	for _, org := range orgs {
-		// no single org should take more than 12 hours
-		ctx, cancel := context.WithTimeout(context.Background(), time.Hour*12)
-		log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
-
-		if cfg.ArchiveMessages {
-			_, _, err = archives.ArchiveOrg(ctx, time.Now(), cfg, db, s3Client, org, archives.MessageType)
-			if err != nil {
-				log.WithError(err).WithField("archive_type", archives.MessageType).Error("error archiving org messages")
-			}
-		}
-		if cfg.ArchiveRuns {
-			_, _, err = archives.ArchiveOrg(ctx, time.Now(), cfg, db, s3Client, org, archives.RunType)
-			if err != nil {
-				log.WithError(err).WithField("archive_type", archives.RunType).Error("error archiving org runs")
-			}
-		}
-
-		cancel()
-	}
-
-	timeTaken := time.Since(start)
-	logrus.WithField("time_taken", timeTaken).WithField("num_orgs", len(orgs)).Info("archiving of active orgs complete")
-
-	analytics.Gauge("archiver.archive_elapsed", timeTaken.Seconds())
-	analytics.Gauge("archiver.archive_orgs", float64(len(orgs)))
-
-	return nil
 }
