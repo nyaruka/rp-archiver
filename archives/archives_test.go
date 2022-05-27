@@ -34,7 +34,7 @@ func TestGetMissingDayArchives(t *testing.T) {
 
 	// get the tasks for our org
 	ctx := context.Background()
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
@@ -82,7 +82,7 @@ func TestGetMissingMonthArchives(t *testing.T) {
 
 	// get the tasks for our org
 	ctx := context.Background()
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
@@ -115,7 +115,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	err := EnsureTempArchiveDirectory("/tmp")
 	assert.NoError(t, err)
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -192,7 +192,7 @@ func TestCreateRunArchive(t *testing.T) {
 	err := EnsureTempArchiveDirectory("/tmp")
 	assert.NoError(t, err)
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -249,7 +249,7 @@ func TestWriteArchiveToDB(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -303,7 +303,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 	ctx := context.Background()
 	deleteTransactionSize = 1
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -444,7 +444,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
