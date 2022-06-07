@@ -1,5 +1,7 @@
 package archives
 
+import "os"
+
 // Config is our top level configuration object
 type Config struct {
 	DB        string `help:"the connection string for our database"`
@@ -25,10 +27,16 @@ type Config struct {
 	Delete           bool   `help:"whether to delete messages and runs from the db after archival (default false)"`
 	ExitOnCompletion bool   `help:"whether archiver should exit after completing archiving job (default false)"`
 	StartTime        string `help:"what time archive jobs should run in UTC HH:MM "`
+
+	LibratoUsername string `help:"the username that will be used to authenticate to Librato"`
+	LibratoToken    string `help:"the token that will be used to authenticate to Librato"`
+	InstanceName    string `help:"the unique name of this instance used for analytics"`
 }
 
-// NewConfig returns a new default configuration object
-func NewConfig() *Config {
+// NewDefaultConfig returns a new default configuration object
+func NewDefaultConfig() *Config {
+	hostname, _ := os.Hostname()
+
 	config := Config{
 		DB:       "postgres://localhost/archiver_test?sslmode=disable",
 		LogLevel: "info",
@@ -52,6 +60,8 @@ func NewConfig() *Config {
 		Delete:           false,
 		ExitOnCompletion: false,
 		StartTime:        "00:01",
+
+		InstanceName: hostname,
 	}
 
 	return &config
