@@ -1,3 +1,7 @@
+v7.3.3
+----------
+ * Fix parsing start times after midday
+
 v7.3.2
 ----------
  * Don't log entire run JSON on error, just UUID
