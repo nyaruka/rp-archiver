@@ -1,3 +1,8 @@
+v7.3.2
+----------
+ * Don't log entire run JSON on error, just UUID
+ * Make archival happen at configured start time even on first pass
+
 v7.3.1
 ----------
  * Add librato analytics for time elapsed and number of orgs, msgs and runs
