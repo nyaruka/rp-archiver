@@ -12,6 +12,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
 	"github.com/nyaruka/gocommon/analytics"
+	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/archives"
 	"github.com/sirupsen/logrus"
 )
@@ -63,18 +64,36 @@ func main() {
 	db, err := sqlx.Open("postgres", config.DB)
 	if err != nil {
 		logrus.Fatal(err)
+	} else {
+		db.SetMaxOpenConns(2)
+		logrus.WithField("state", "starting").Info("db ok")
 	}
-	db.SetMaxOpenConns(2)
 
 	var s3Client s3iface.S3API
 	if config.UploadToS3 {
 		s3Client, err = archives.NewS3Client(config)
 		if err != nil {
 			logrus.WithError(err).Fatal("unable to initialize s3 client")
+		} else {
+			logrus.WithField("state", "starting").Info("s3 bucket ok")
 		}
 	}
 
 	wg := &sync.WaitGroup{}
+
+	// ensure that we can actually write to the temp directory
+	err = archives.EnsureTempArchiveDirectory(config.TempDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("cannot write to temp directory")
+	} else {
+		logrus.WithField("state", "starting").Info("tmp file access ok")
+	}
+
+	// parse our start time
+	timeOfDay, err := dates.ParseTimeOfDay("hh:mm", config.StartTime)
+	if err != nil {
+		logrus.WithError(err).Fatal("invalid start time supplied, format: HH:MM")
+	}
 
 	// if we have a librato token, configure it
 	if config.LibratoToken != "" {
@@ -83,54 +102,45 @@ func main() {
 
 	analytics.Start()
 
-	// ensure that we can actually write to the temp directory
-	err = archives.EnsureTempArchiveDirectory(config.TempDir)
-	if err != nil {
-		logrus.WithError(err).Fatal("cannot write to temp directory")
-	}
-
 	for {
-		start := time.Now().In(time.UTC)
+		nextArchival := getNextArchivalTime(timeOfDay)
+		napTime := time.Until(nextArchival)
 
-		// convert the start time to time.Time
-		layout := "15:04"
-		hour, err := time.Parse(layout, config.StartTime)
-		if err != nil {
-			logrus.WithError(err).Fatal("invalid start time supplied, format: HH:mm")
-		}
+		logrus.WithField("sleep_time", napTime).WithField("next_archival", nextArchival).Info("sleeping until next archival")
+		time.Sleep(napTime)
 
-		// try to archive all active orgs, and if it fails, wait 5 minutes and try again
-		err = archives.ArchiveActiveOrgs(db, config, s3Client)
-		if err != nil {
-			logrus.WithError(err).Error("error archiving, will retry in 5 minutes")
-			time.Sleep(time.Minute * 5)
-			continue
-		}
+		doArchival(db, config, s3Client)
 
 		// ok, we did all our work for our orgs, quit if so configured or sleep until the next day
 		if config.ExitOnCompletion {
 			break
 		}
-
-		// build up our next start
-		now := time.Now().In(time.UTC)
-		nextDay := time.Date(now.Year(), now.Month(), now.Day(), hour.Hour(), hour.Minute(), 0, 0, time.UTC)
-
-		// if this time is before our actual start, add a day
-		if nextDay.Before(start) {
-			nextDay = nextDay.AddDate(0, 0, 1)
-		}
-
-		napTime := nextDay.Sub(time.Now().In(time.UTC))
-
-		if napTime > time.Duration(0) {
-			logrus.WithField("time", napTime).WithField("next_start", nextDay).Info("sleeping until next UTC day")
-			time.Sleep(napTime)
-		} else {
-			logrus.WithField("next_start", nextDay).Info("rebuilding immediately without sleep")
-		}
 	}
 
 	analytics.Stop()
 	wg.Wait()
+}
+
+func doArchival(db *sqlx.DB, cfg *archives.Config, s3Client s3iface.S3API) {
+	for {
+		// try to archive all active orgs, and if it fails, wait 5 minutes and try again
+		err := archives.ArchiveActiveOrgs(db, cfg, s3Client)
+		if err != nil {
+			logrus.WithError(err).Error("error archiving, will retry in 5 minutes")
+			time.Sleep(time.Minute * 5)
+			continue
+		} else {
+			break
+		}
+	}
+}
+
+func getNextArchivalTime(tod dates.TimeOfDay) time.Time {
+	t := dates.ExtractDate(time.Now().In(time.UTC)).Combine(tod, time.UTC)
+
+	// if this time is in the past, add a day
+	if t.Before(time.Now()) {
+		t = t.Add(time.Hour * 24)
+	}
+	return t
 }
