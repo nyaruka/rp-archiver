@@ -90,7 +90,7 @@ func main() {
 	}
 
 	// parse our start time
-	timeOfDay, err := dates.ParseTimeOfDay("hh:mm", config.StartTime)
+	timeOfDay, err := dates.ParseTimeOfDay("tt:mm", config.StartTime)
 	if err != nil {
 		logrus.WithError(err).Fatal("invalid start time supplied, format: HH:MM")
 	}
