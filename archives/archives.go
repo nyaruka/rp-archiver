@@ -340,7 +340,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 	}
 
 	if len(missingDailies) != 0 {
-		return fmt.Errorf("missing '%d' daily archives", len(missingDailies))
+		return fmt.Errorf("missing %d daily archives", len(missingDailies))
 	}
 
 	// great, we have all the dailies we need, download them
@@ -759,19 +759,10 @@ func createArchive(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3
 }
 
 func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3iface.S3API, org Org, archives []*Archive) error {
-	log := logrus.WithFields(logrus.Fields{
-		"org":    org.Name,
-		"org_id": org.ID,
-	})
+	log := logrus.WithFields(logrus.Fields{"org_id": org.ID, "org_name": org.Name})
 
 	for _, archive := range archives {
-		log.WithFields(logrus.Fields{
-			"start_date":   archive.StartDate,
-			"end_date":     archive.endDate(),
-			"period":       archive.Period,
-			"archive_type": archive.ArchiveType,
-		}).Info("starting archive")
-
+		log.WithFields(logrus.Fields{"start_date": archive.StartDate, "end_date": archive.endDate(), "period": archive.Period, "archive_type": archive.ArchiveType}).Info("starting archive")
 		start := time.Now()
 
 		err := createArchive(ctx, db, config, s3Client, archive)
@@ -780,12 +771,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 			continue
 		}
 
-		elapsed := time.Since(start)
-		log.WithFields(logrus.Fields{
-			"id":           archive.ID,
-			"record_count": archive.RecordCount,
-			"elapsed":      elapsed,
-		}).Info("archive complete")
+		log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": time.Since(start)}).Info("archive complete")
 	}
 
 	return nil
@@ -796,10 +782,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	ctx, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
-	log := logrus.WithFields(logrus.Fields{
-		"org":    org.Name,
-		"org_id": org.ID,
-	})
+	log := logrus.WithFields(logrus.Fields{"org_id": org.ID, "org_name": org.Name, "archive_type": archiveType})
 	created := make([]*Archive, 0, 1)
 
 	// get our missing monthly archives
@@ -810,12 +793,8 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 
 	// build them from rollups
 	for _, archive := range archives {
-		log.WithFields(logrus.Fields{
-			"start_date":   archive.StartDate,
-			"archive_type": archive.ArchiveType,
-		})
+		log := log.WithFields(logrus.Fields{"start_date": archive.StartDate})
 		start := time.Now()
-		log.Info("starting rollup")
 
 		err = BuildRollupArchive(ctx, db, config, s3Client, archive, now, org, archiveType)
 		if err != nil {
@@ -845,11 +824,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			}
 		}
 
-		log.WithFields(logrus.Fields{
-			"id":           archive.ID,
-			"record_count": archive.RecordCount,
-			"elapsed":      time.Since(start),
-		}).Info("rollup complete")
+		log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": time.Since(start)}).Info("rollup created")
 		created = append(created, archive)
 	}
 
@@ -930,7 +905,7 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 
 // ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
 func ArchiveOrg(ctx context.Context, now time.Time, cfg *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, error) {
-	log := logrus.WithFields(logrus.Fields{"org": org.Name, "org_id": org.ID})
+	log := logrus.WithFields(logrus.Fields{"org_id": org.ID, "org_name": org.Name})
 	start := time.Now()
 
 	created, err := CreateOrgArchives(ctx, now, cfg, db, s3Client, org, archiveType)
@@ -982,7 +957,7 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 	for _, org := range orgs {
 		// no single org should take more than 12 hours
 		ctx, cancel := context.WithTimeout(context.Background(), time.Hour*12)
-		log := logrus.WithField("org", org.Name).WithField("org_id", org.ID)
+		log := logrus.WithField("org_id", org.ID).WithField("org_name", org.Name)
 
 		if cfg.ArchiveMessages {
 			created, _, err := ArchiveOrg(ctx, time.Now(), cfg, db, s3Client, org, MessageType)
