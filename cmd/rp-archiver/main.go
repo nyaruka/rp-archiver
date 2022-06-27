@@ -17,6 +17,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var (
+	// https://goreleaser.com/cookbooks/using-main.version
+	version = "dev"
+	date    = "unknown"
+)
+
 func main() {
 	config := archives.NewDefaultConfig()
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", []string{"archiver.toml"})
@@ -26,15 +32,15 @@ func main() {
 		logrus.Fatal("cannot delete archives and also not upload to s3")
 	}
 
-	// configure our logger
-	logrus.SetOutput(os.Stdout)
-	logrus.SetFormatter(&logrus.TextFormatter{})
-
 	level, err := logrus.ParseLevel(config.LogLevel)
 	if err != nil {
 		logrus.Fatalf("Invalid log level '%s'", level)
 	}
+
 	logrus.SetLevel(level)
+	logrus.SetOutput(os.Stdout)
+	logrus.SetFormatter(&logrus.TextFormatter{})
+	logrus.WithField("version", version).WithField("released", date).Info("starting archiver")
 
 	// if we have a DSN entry, try to initialize it
 	if config.SentryDSN != "" {
