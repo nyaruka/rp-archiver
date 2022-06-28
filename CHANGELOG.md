@@ -1,3 +1,8 @@
+v7.3.4
+----------
+ * Rework stats reporting
+ * Log version at startup
+
 v7.3.3
 ----------
  * Fix parsing start times after midday
