@@ -758,7 +758,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 	failed := make([]*Archive, 0, 5)
 
 	for _, archive := range archives {
-		log.WithFields(logrus.Fields{"start_date": archive.StartDate, "end_date": archive.endDate(), "period": archive.Period, "archive_type": archive.ArchiveType}).Info("starting archive")
+		log.WithFields(logrus.Fields{"start_date": archive.StartDate, "end_date": archive.endDate(), "period": archive.Period, "archive_type": archive.ArchiveType}).Debug("starting archive")
 		start := time.Now()
 
 		err := createArchive(ctx, db, config, s3Client, archive)
@@ -766,7 +766,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 			log.WithError(err).Error("error creating archive")
 			failed = append(failed, archive)
 		} else {
-			log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": time.Since(start)}).Info("archive complete")
+			log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": time.Since(start)}).Debug("archive complete")
 			created = append(created, archive)
 		}
 	}
@@ -947,6 +947,7 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 	}
 
 	totalRunsArchived, totalMsgsArchived := 0, 0
+	totalRunsFailedArchives, totalMsgsFailedArchives := 0, 0
 
 	// for each org, do our export
 	for _, org := range orgs {
@@ -978,7 +979,9 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 	analytics.Gauge("archiver.archive_elapsed", timeTaken.Seconds())
 	analytics.Gauge("archiver.orgs_archived", float64(len(orgs)))
 	analytics.Gauge("archiver.msgs_archived", float64(totalMsgsArchived))
+	analytics.Gauge("archiver.msgs_failed_archives", float64(totalMsgsFailedArchives))
 	analytics.Gauge("archiver.runs_archived", float64(totalRunsArchived))
+	analytics.Gauge("archiver.runs_failed_archives", float64(totalRunsFailedArchives))
 
 	return nil
 }
