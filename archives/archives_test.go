@@ -332,14 +332,13 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 312, "32e61b1431217b59fca0170f637d78a3")
 		assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
-		assert.Equal(t, 1, len(dailiesFailed))
+		assert.Equal(t, 0, len(dailiesFailed))
 
 		assert.Equal(t, 2, len(monthliesCreated))
 		assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 553, "156e45e29b6587cb85ccf75e03800b00")
 		assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
-		// no rollup for october since that had one invalid daily archive
-		assert.Equal(t, 1, len(monthliesFailed))
+		assert.Equal(t, 0, len(monthliesFailed))
 
 		assert.Equal(t, 63, len(deleted))
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
@@ -478,7 +477,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 			time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC),
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, count)
+		assert.Equal(t, 3, count)
 
 		// more recent run unaffected (even though it was parent)
 		count, err = getCountInRange(
@@ -490,5 +489,22 @@ func TestArchiveOrgRuns(t *testing.T) {
 		)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, count)
+
+		// org 2 has a run that can't be archived because it's still active - as it has no existing archives
+		// this will manifest itself as a monthly which fails to save
+		dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, _, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], RunType)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 31, len(dailiesCreated))
+		assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+
+		assert.Equal(t, 1, len(dailiesFailed))
+		assertArchive(t, dailiesFailed[0], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
+
+		assert.Equal(t, 1, len(monthliesCreated))
+		assertArchive(t, monthliesCreated[0], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+
+		assert.Equal(t, 1, len(monthliesFailed))
+		assertArchive(t, monthliesFailed[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 0, "")
 	}
 }
