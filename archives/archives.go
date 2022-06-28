@@ -688,44 +688,37 @@ func DeleteArchiveFile(archive *Archive) error {
 }
 
 // CreateOrgArchives builds all the missing archives for the passed in org
-func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, error) {
 	archiveCount, err := GetCurrentArchiveCount(ctx, db, org, archiveType)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error getting current archive count")
+		return nil, nil, nil, nil, errors.Wrapf(err, "error getting current archive count")
 	}
 
-	archives := make([]*Archive, 0)
+	var dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed []*Archive
 
 	// no existing archives means this might be a backfill, figure out if there are full months we can build first
 	if archiveCount == 0 {
-		archives, err = GetMissingMonthlyArchives(ctx, db, now, org, archiveType)
+		archives, err := GetMissingMonthlyArchives(ctx, db, now, org, archiveType)
 		if err != nil {
-			return nil, errors.Wrapf(err, "error getting missing monthly archives")
+			return nil, nil, nil, nil, errors.Wrapf(err, "error getting missing monthly archives")
 		}
 
 		// we first create monthly archives
-		err = createArchives(ctx, db, config, s3Client, org, archives)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error creating new monthly archives")
-		}
+		monthliesCreated, monthliesFailed = createArchives(ctx, db, config, s3Client, org, archives)
 	}
 
 	// then add in daily archives taking into account the monthly that have been built
 	daily, err := GetMissingDailyArchives(ctx, db, now, org, archiveType)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error getting missing daily archives")
-	}
-	// we then create missing daily archives
-	err = createArchives(ctx, db, config, s3Client, org, daily)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error creating new daily archives")
+		return nil, nil, nil, nil, errors.Wrapf(err, "error getting missing daily archives")
 	}
 
-	// append daily archives to any monthly archives
-	archives = append(archives, daily...)
+	// we then create missing daily archives
+	dailiesCreated, dailiesFailed = createArchives(ctx, db, config, s3Client, org, daily)
+
 	defer ctx.Done()
 
-	return archives, nil
+	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil
 }
 
 func createArchive(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3iface.S3API, archive *Archive) error {
@@ -758,23 +751,27 @@ func createArchive(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3
 	return nil
 }
 
-func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3iface.S3API, org Org, archives []*Archive) error {
+func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3iface.S3API, org Org, archives []*Archive) ([]*Archive, []*Archive) {
 	log := logrus.WithFields(logrus.Fields{"org_id": org.ID, "org_name": org.Name})
 
+	created := make([]*Archive, 0, len(archives))
+	failed := make([]*Archive, 0, 5)
+
 	for _, archive := range archives {
-		log.WithFields(logrus.Fields{"start_date": archive.StartDate, "end_date": archive.endDate(), "period": archive.Period, "archive_type": archive.ArchiveType}).Info("starting archive")
+		log.WithFields(logrus.Fields{"start_date": archive.StartDate, "end_date": archive.endDate(), "period": archive.Period, "archive_type": archive.ArchiveType}).Debug("starting archive")
 		start := time.Now()
 
 		err := createArchive(ctx, db, config, s3Client, archive)
 		if err != nil {
 			log.WithError(err).Error("error creating archive")
-			continue
+			failed = append(failed, archive)
+		} else {
+			log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": time.Since(start)}).Debug("archive complete")
+			created = append(created, archive)
 		}
-
-		log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": time.Since(start)}).Info("archive complete")
 	}
 
-	return nil
+	return created, failed
 }
 
 // RollupOrgArchives rolls up monthly archives from our daily archives
@@ -895,47 +892,45 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 		}
 
 		deleted = append(deleted, a)
-		log.WithFields(logrus.Fields{
-			"elapsed": time.Since(start),
-		}).Info("deleted archive records")
+		log.WithFields(logrus.Fields{"elapsed": time.Since(start)}).Info("deleted archive records")
 	}
 
 	return deleted, nil
 }
 
 // ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
-func ArchiveOrg(ctx context.Context, now time.Time, cfg *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, error) {
+func ArchiveOrg(ctx context.Context, now time.Time, cfg *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, []*Archive, error) {
 	log := logrus.WithFields(logrus.Fields{"org_id": org.ID, "org_name": org.Name})
 	start := time.Now()
 
-	created, err := CreateOrgArchives(ctx, now, cfg, db, s3Client, org, archiveType)
+	dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, err := CreateOrgArchives(ctx, now, cfg, db, s3Client, org, archiveType)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "error creating archives")
+		return nil, nil, nil, nil, nil, errors.Wrapf(err, "error creating archives")
 	}
 
-	if len(created) > 0 {
+	if len(dailiesCreated) > 0 {
 		elapsed := time.Since(start)
-		rate := float32(countRecords(created)) / (float32(elapsed) / float32(time.Second))
+		rate := float32(countRecords(dailiesCreated)) / (float32(elapsed) / float32(time.Second))
 		log.WithFields(logrus.Fields{"elapsed": elapsed, "records_per_second": rate}).Info("completed archival for org")
 	}
 
-	monthlies, err := RollupOrgArchives(ctx, now, cfg, db, s3Client, org, archiveType)
+	monthliesRolledUp, err := RollupOrgArchives(ctx, now, cfg, db, s3Client, org, archiveType)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "error rolling up archives")
+		return nil, nil, nil, nil, nil, errors.Wrapf(err, "error rolling up archives")
 	}
 
-	created = append(created, monthlies...)
+	monthliesCreated = append(monthliesCreated, monthliesRolledUp...)
 
 	// finally delete any archives not yet actually archived
-	deleted := make([]*Archive, 0, 1)
+	var deleted []*Archive
 	if cfg.Delete {
 		deleted, err = DeleteArchivedOrgRecords(ctx, now, cfg, db, s3Client, org, archiveType)
 		if err != nil {
-			return created, deleted, errors.Wrapf(err, "error deleting archived records")
+			return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, errors.Wrapf(err, "error deleting archived records")
 		}
 	}
 
-	return created, deleted, nil
+	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, nil
 }
 
 // ArchiveActiveOrgs fetches active orgs and archives messages and runs
@@ -952,6 +947,7 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 	}
 
 	totalRunsArchived, totalMsgsArchived := 0, 0
+	totalRunsFailedArchives, totalMsgsFailedArchives := 0, 0
 
 	// for each org, do our export
 	for _, org := range orgs {
@@ -960,18 +956,18 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 		log := logrus.WithField("org_id", org.ID).WithField("org_name", org.Name)
 
 		if cfg.ArchiveMessages {
-			created, _, err := ArchiveOrg(ctx, time.Now(), cfg, db, s3Client, org, MessageType)
+			dailiesCreated, _, _, _, _, err := ArchiveOrg(ctx, time.Now(), cfg, db, s3Client, org, MessageType)
 			if err != nil {
 				log.WithError(err).WithField("archive_type", MessageType).Error("error archiving org messages")
 			}
-			totalMsgsArchived += countRecords(created)
+			totalMsgsArchived += countRecords(dailiesCreated)
 		}
 		if cfg.ArchiveRuns {
-			created, _, err := ArchiveOrg(ctx, time.Now(), cfg, db, s3Client, org, RunType)
+			dailiesCreated, _, _, _, _, err := ArchiveOrg(ctx, time.Now(), cfg, db, s3Client, org, RunType)
 			if err != nil {
 				log.WithError(err).WithField("archive_type", RunType).Error("error archiving org runs")
 			}
-			totalRunsArchived += countRecords(created)
+			totalRunsArchived += countRecords(dailiesCreated)
 		}
 
 		cancel()
@@ -983,7 +979,9 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 	analytics.Gauge("archiver.archive_elapsed", timeTaken.Seconds())
 	analytics.Gauge("archiver.orgs_archived", float64(len(orgs)))
 	analytics.Gauge("archiver.msgs_archived", float64(totalMsgsArchived))
+	analytics.Gauge("archiver.msgs_failed_archives", float64(totalMsgsFailedArchives))
 	analytics.Gauge("archiver.runs_archived", float64(totalRunsArchived))
+	analytics.Gauge("archiver.runs_failed_archives", float64(totalRunsFailedArchives))
 
 	return nil
 }
