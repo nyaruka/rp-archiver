@@ -322,53 +322,24 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 		assertCount(t, db, 4, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
 
-		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
+		dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
 		assert.NoError(t, err)
 
-		assert.Equal(t, 63, len(created))
-		assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), created[0].StartDate)
-		assert.Equal(t, DayPeriod, created[0].Period)
-		assert.Equal(t, 0, created[0].RecordCount)
-		assert.Equal(t, int64(23), created[0].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[0].Hash)
+		assert.Equal(t, 61, len(dailiesCreated))
+		assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+		assertArchive(t, dailiesCreated[1], time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+		assertArchive(t, dailiesCreated[2], time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), DayPeriod, 3, 528, "b3bf00bf1234ea47f14ffd0171a8ead0")
+		assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 312, "32e61b1431217b59fca0170f637d78a3")
+		assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
-		assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), created[1].StartDate)
-		assert.Equal(t, DayPeriod, created[1].Period)
-		assert.Equal(t, 0, created[1].RecordCount)
-		assert.Equal(t, int64(23), created[1].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[1].Hash)
+		assert.Equal(t, 1, len(dailiesFailed))
 
-		assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), created[2].StartDate)
-		assert.Equal(t, DayPeriod, created[2].Period)
-		assert.Equal(t, 3, created[2].RecordCount)
-		assert.Equal(t, int64(528), created[2].Size)
-		assert.Equal(t, "b3bf00bf1234ea47f14ffd0171a8ead0", created[2].Hash)
-
-		assert.Equal(t, time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), created[3].StartDate)
-		assert.Equal(t, DayPeriod, created[3].Period)
-		assert.Equal(t, 1, created[3].RecordCount)
-		assert.Equal(t, int64(312), created[3].Size)
-		assert.Equal(t, "32e61b1431217b59fca0170f637d78a3", created[3].Hash)
-
-		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[60].StartDate)
-		assert.Equal(t, DayPeriod, created[60].Period)
-		assert.Equal(t, 0, created[60].RecordCount)
-		assert.Equal(t, int64(23), created[60].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[60].Hash)
-
-		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[61].StartDate)
-		assert.Equal(t, MonthPeriod, created[61].Period)
-		assert.Equal(t, 4, created[61].RecordCount)
-		assert.Equal(t, int64(553), created[61].Size)
-		assert.Equal(t, "156e45e29b6587cb85ccf75e03800b00", created[61].Hash)
-
-		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[62].StartDate)
-		assert.Equal(t, MonthPeriod, created[62].Period)
-		assert.Equal(t, 0, created[62].RecordCount)
-		assert.Equal(t, int64(23), created[62].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[62].Hash)
+		assert.Equal(t, 2, len(monthliesCreated))
+		assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 553, "156e45e29b6587cb85ccf75e03800b00")
+		assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
 		// no rollup for october since that had one invalid daily archive
+		assert.Equal(t, 1, len(monthliesFailed))
 
 		assert.Equal(t, 63, len(deleted))
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
@@ -440,6 +411,14 @@ func assertCount(t *testing.T, db *sqlx.DB, expected int, query string, args ...
 	assert.Equal(t, expected, count, "counts mismatch for query %s", query)
 }
 
+func assertArchive(t *testing.T, a *Archive, startDate time.Time, period ArchivePeriod, recordCount int, size int64, hash string) {
+	assert.Equal(t, startDate, a.StartDate)
+	assert.Equal(t, period, a.Period)
+	assert.Equal(t, recordCount, a.RecordCount)
+	assert.Equal(t, size, a.Size)
+	assert.Equal(t, hash, a.Hash)
+}
+
 func TestArchiveOrgRuns(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
@@ -461,34 +440,16 @@ func TestArchiveOrgRuns(t *testing.T) {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
-		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
+		dailiesCreated, _, monthliesCreated, _, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
 		assert.NoError(t, err)
 
-		assert.Equal(t, 12, len(created))
+		assert.Equal(t, 10, len(dailiesCreated))
+		assertArchive(t, dailiesCreated[0], time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+		assertArchive(t, dailiesCreated[9], time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 2, 1984, "869cc00ad4cca0371d07c88d8cf2bf26")
 
-		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[0].StartDate)
-		assert.Equal(t, MonthPeriod, created[0].Period)
-		assert.Equal(t, 1, created[0].RecordCount)
-		assert.Equal(t, int64(490), created[0].Size)
-		assert.Equal(t, "c2138e3c3009a9c09fc55482903d93e4", created[0].Hash)
-
-		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[1].StartDate)
-		assert.Equal(t, MonthPeriod, created[1].Period)
-		assert.Equal(t, 0, created[1].RecordCount)
-		assert.Equal(t, int64(23), created[1].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[1].Hash)
-
-		assert.Equal(t, time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), created[2].StartDate)
-		assert.Equal(t, DayPeriod, created[2].Period)
-		assert.Equal(t, 0, created[2].RecordCount)
-		assert.Equal(t, int64(23), created[2].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[2].Hash)
-
-		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[11].StartDate)
-		assert.Equal(t, DayPeriod, created[11].Period)
-		assert.Equal(t, 2, created[11].RecordCount)
-		assert.Equal(t, int64(1984), created[11].Size)
-		assert.Equal(t, "869cc00ad4cca0371d07c88d8cf2bf26", created[11].Hash)
+		assert.Equal(t, 2, len(monthliesCreated))
+		assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 1, 490, "c2138e3c3009a9c09fc55482903d93e4")
+		assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
 		assert.Equal(t, 12, len(deleted))
 
