@@ -517,7 +517,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 			time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC),
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, count)
+		assert.Equal(t, 3, count)
 
 		// more recent run unaffected (even though it was parent)
 		count, err = getCountInRange(
@@ -529,5 +529,21 @@ func TestArchiveOrgRuns(t *testing.T) {
 		)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, count)
+
+		// org 2 has a run that can't be archived because it's still active - as it has no existing archives
+		// this will manifest itself as a monthly which fails to save
+		created, deleted, err = ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], RunType)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 34, len(created))
+		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[0].StartDate)
+		assert.Equal(t, MonthPeriod, created[0].Period)
+		assert.Equal(t, "", created[0].ArchiveFile) // failed to create
+		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[1].StartDate)
+		assert.Equal(t, MonthPeriod, created[1].Period)
+		assert.NotEqual(t, "", created[1].ArchiveFile)
+
+		assert.Equal(t, DayPeriod, created[2].Period)
+		assert.Equal(t, DayPeriod, created[33].Period)
 	}
 }
