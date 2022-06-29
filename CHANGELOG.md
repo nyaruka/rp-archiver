@@ -1,3 +1,7 @@
+v7.3.5
+----------
+ * Improve librato analytics and add tests
+
 v7.3.4
 ----------
  * Rework stats reporting
