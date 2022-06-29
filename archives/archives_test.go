@@ -11,6 +11,8 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
+	"github.com/nyaruka/gocommon/analytics"
+	"github.com/nyaruka/gocommon/dates"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -507,4 +509,45 @@ func TestArchiveOrgRuns(t *testing.T) {
 		assert.Equal(t, 1, len(monthliesFailed))
 		assertArchive(t, monthliesFailed[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 0, "")
 	}
+}
+
+func TestArchiveActiveOrgs(t *testing.T) {
+	db := setup(t)
+	config := NewDefaultConfig()
+
+	os.Args = []string{"rp-archiver"}
+	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
+	loader.MustLoad()
+
+	mockAnalytics := analytics.NewMock()
+	analytics.RegisterBackend(mockAnalytics)
+	analytics.Start()
+
+	dates.SetNowSource(dates.NewSequentialNowSource(time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)))
+	defer dates.SetNowSource(dates.DefaultNowSource)
+
+	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
+		s3Client, err := NewS3Client(config)
+		assert.NoError(t, err)
+
+		err = ArchiveActiveOrgs(db, config, s3Client)
+		assert.NoError(t, err)
+
+		assert.Equal(t, map[string][]float64{
+			"archiver.archive_elapsed":       {848.0},
+			"archiver.orgs_archived":         {3},
+			"archiver.msgs_records_archived": {5},
+			"archiver.msgs_archives_created": {92},
+			"archiver.msgs_archives_failed":  {0},
+			"archiver.msgs_rollups_created":  {3},
+			"archiver.msgs_rollups_failed":   {0},
+			"archiver.runs_records_archived": {4},
+			"archiver.runs_archives_created": {41},
+			"archiver.runs_archives_failed":  {1},
+			"archiver.runs_rollups_created":  {3},
+			"archiver.runs_rollups_failed":   {1},
+		}, mockAnalytics.Gauges)
+	}
+
+	analytics.Stop()
 }

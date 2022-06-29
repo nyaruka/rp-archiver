@@ -142,10 +142,10 @@ func doArchival(db *sqlx.DB, cfg *archives.Config, s3Client s3iface.S3API) {
 }
 
 func getNextArchivalTime(tod dates.TimeOfDay) time.Time {
-	t := dates.ExtractDate(time.Now().In(time.UTC)).Combine(tod, time.UTC)
+	t := dates.ExtractDate(dates.Now().In(time.UTC)).Combine(tod, time.UTC)
 
 	// if this time is in the past, add a day
-	if t.Before(time.Now()) {
+	if t.Before(dates.Now()) {
 		t = t.Add(time.Hour * 24)
 	}
 	return t
