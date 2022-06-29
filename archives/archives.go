@@ -947,9 +947,11 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 		return errors.Wrap(err, "error getting active orgs")
 	}
 
-	totalRunsArchived, totalMsgsArchived := 0, 0
+	totalRunsRecordsArchived, totalMsgsRecordsArchived := 0, 0
 	totalRunsArchivesCreated, totalMsgsArchivesCreated := 0, 0
 	totalRunsArchivesFailed, totalMsgsArchivesFailed := 0, 0
+	totalRunsRollupsCreated, totalMsgsRollupsCreated := 0, 0
+	totalRunsRollupsFailed, totalMsgsRollupsFailed := 0, 0
 
 	// for each org, do our export
 	for _, org := range orgs {
@@ -958,22 +960,26 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 		log := logrus.WithField("org_id", org.ID).WithField("org_name", org.Name)
 
 		if cfg.ArchiveMessages {
-			dailiesCreated, dailiesFailed, _, _, _, err := ArchiveOrg(ctx, start, cfg, db, s3Client, org, MessageType)
+			dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, _, err := ArchiveOrg(ctx, start, cfg, db, s3Client, org, MessageType)
 			if err != nil {
 				log.WithError(err).WithField("archive_type", MessageType).Error("error archiving org messages")
 			}
-			totalMsgsArchived += countRecords(dailiesCreated)
+			totalMsgsRecordsArchived += countRecords(dailiesCreated)
 			totalMsgsArchivesCreated += len(dailiesCreated)
 			totalMsgsArchivesFailed += len(dailiesFailed)
+			totalMsgsRollupsCreated += len(monthliesCreated)
+			totalMsgsRollupsFailed += len(monthliesFailed)
 		}
 		if cfg.ArchiveRuns {
-			dailiesCreated, dailiesFailed, _, _, _, err := ArchiveOrg(ctx, start, cfg, db, s3Client, org, RunType)
+			dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, _, err := ArchiveOrg(ctx, start, cfg, db, s3Client, org, RunType)
 			if err != nil {
 				log.WithError(err).WithField("archive_type", RunType).Error("error archiving org runs")
 			}
-			totalRunsArchived += countRecords(dailiesCreated)
+			totalRunsRecordsArchived += countRecords(dailiesCreated)
 			totalRunsArchivesCreated += len(dailiesCreated)
 			totalRunsArchivesFailed += len(dailiesFailed)
+			totalRunsRollupsCreated += len(monthliesCreated)
+			totalRunsRollupsFailed += len(monthliesFailed)
 		}
 
 		cancel()
@@ -984,12 +990,16 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 
 	analytics.Gauge("archiver.archive_elapsed", timeTaken.Seconds())
 	analytics.Gauge("archiver.orgs_archived", float64(len(orgs)))
-	analytics.Gauge("archiver.msgs_archived", float64(totalMsgsArchived))
+	analytics.Gauge("archiver.msgs_records_archived", float64(totalMsgsRecordsArchived))
 	analytics.Gauge("archiver.msgs_archives_created", float64(totalMsgsArchivesCreated))
 	analytics.Gauge("archiver.msgs_archives_failed", float64(totalMsgsArchivesFailed))
-	analytics.Gauge("archiver.runs_archived", float64(totalRunsArchived))
+	analytics.Gauge("archiver.msgs_rollups_created", float64(totalMsgsRollupsCreated))
+	analytics.Gauge("archiver.msgs_rollups_failed", float64(totalMsgsRollupsFailed))
+	analytics.Gauge("archiver.runs_records_archived", float64(totalRunsRecordsArchived))
 	analytics.Gauge("archiver.runs_archives_created", float64(totalRunsArchivesCreated))
 	analytics.Gauge("archiver.runs_archives_failed", float64(totalRunsArchivesFailed))
+	analytics.Gauge("archiver.runs_rollups_created", float64(totalRunsRollupsCreated))
+	analytics.Gauge("archiver.runs_rollups_failed", float64(totalRunsRollupsFailed))
 
 	return nil
 }

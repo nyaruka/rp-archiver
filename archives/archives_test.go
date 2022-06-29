@@ -536,12 +536,16 @@ func TestArchiveActiveOrgs(t *testing.T) {
 		assert.Equal(t, map[string][]float64{
 			"archiver.archive_elapsed":       {848.0},
 			"archiver.orgs_archived":         {3},
-			"archiver.msgs_archived":         {5},
+			"archiver.msgs_records_archived": {5},
 			"archiver.msgs_archives_created": {92},
 			"archiver.msgs_archives_failed":  {0},
-			"archiver.runs_archived":         {4},
+			"archiver.msgs_rollups_created":  {3},
+			"archiver.msgs_rollups_failed":   {0},
+			"archiver.runs_records_archived": {4},
 			"archiver.runs_archives_created": {41},
 			"archiver.runs_archives_failed":  {1},
+			"archiver.runs_rollups_created":  {3},
+			"archiver.runs_rollups_failed":   {1},
 		}, mockAnalytics.Gauges)
 	}
 
