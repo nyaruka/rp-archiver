@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
+	"github.com/nyaruka/gocommon/dates"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -116,7 +117,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	outer, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
-	start := time.Now()
+	start := dates.Now()
 	log := logrus.WithFields(logrus.Fields{
 		"id":           archive.ID,
 		"org_id":       archive.OrgID,
@@ -179,7 +180,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
-		start := time.Now()
+		start := dates.Now()
 
 		// start our transaction
 		tx, err := db.BeginTxx(ctx, nil)
@@ -199,7 +200,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 			return errors.Wrap(err, "error committing run delete transaction")
 		}
 
-		log.WithField("elapsed", time.Since(start)).WithField("count", len(idBatch)).Debug("deleted batch of runs")
+		log.WithField("elapsed", dates.Since(start)).WithField("count", len(idBatch)).Debug("deleted batch of runs")
 
 		cancel()
 	}
@@ -207,7 +208,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	outer, cancel = context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	deletedOn := time.Now()
+	deletedOn := dates.Now()
 
 	// all went well! mark our archive as no longer needing deletion
 	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletedOn)
@@ -217,7 +218,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	archive.NeedsDeletion = false
 	archive.DeletedOn = &deletedOn
 
-	logrus.WithField("elapsed", time.Since(start)).Info("completed deleting runs")
+	logrus.WithField("elapsed", dates.Since(start)).Info("completed deleting runs")
 
 	return nil
 }

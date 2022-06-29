@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
+	"github.com/nyaruka/gocommon/dates"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -123,7 +124,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	outer, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
-	start := time.Now()
+	start := dates.Now()
 	log := logrus.WithFields(logrus.Fields{
 		"id":           archive.ID,
 		"org_id":       archive.OrgID,
@@ -183,7 +184,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
-		start := time.Now()
+		start := dates.Now()
 
 		// start our transaction
 		tx, err := db.BeginTxx(ctx, nil)
@@ -215,7 +216,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 			return errors.Wrap(err, "error committing message delete transaction")
 		}
 
-		log.WithField("elapsed", time.Since(start)).WithField("count", len(idBatch)).Debug("deleted batch of messages")
+		log.WithField("elapsed", dates.Since(start)).WithField("count", len(idBatch)).Debug("deleted batch of messages")
 
 		cancel()
 	}
@@ -223,7 +224,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	outer, cancel = context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	deletedOn := time.Now()
+	deletedOn := dates.Now()
 
 	// all went well! mark our archive as no longer needing deletion
 	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletedOn)
@@ -233,7 +234,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	archive.NeedsDeletion = false
 	archive.DeletedOn = &deletedOn
 
-	logrus.WithField("elapsed", time.Since(start)).Info("completed deleting messages")
+	logrus.WithField("elapsed", dates.Since(start)).Info("completed deleting messages")
 
 	return nil
 }
@@ -255,7 +256,7 @@ LIMIT 1000000;
 
 // DeleteBroadcasts deletes all broadcasts older than 90 days for the passed in org which have no active messages on them
 func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, org Org) error {
-	start := time.Now()
+	start := dates.Now()
 	threshhold := now.AddDate(0, 0, -org.RetentionPeriod)
 
 	rows, err := db.QueryxContext(ctx, selectOldOrgBroadcasts, org.ID, threshhold)
@@ -271,7 +272,7 @@ func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sq
 		}
 
 		// been deleting this org more than an hour? thats enough for today, exit out
-		if time.Since(start) > time.Hour {
+		if dates.Since(start) > time.Hour {
 			break
 		}
 
@@ -344,7 +345,7 @@ func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sq
 
 	if count > 0 {
 		logrus.WithFields(logrus.Fields{
-			"elapsed": time.Since(start),
+			"elapsed": dates.Since(start),
 			"count":   count,
 			"org_id":  org.ID,
 		}).Info("completed deleting broadcasts")
