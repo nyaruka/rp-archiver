@@ -800,6 +800,8 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			continue
 		}
 
+		t1 := dates.Since(start)
+
 		if config.UploadToS3 {
 			err = UploadArchive(ctx, s3Client, config.S3Bucket, archive)
 			if err != nil {
@@ -808,11 +810,15 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			}
 		}
 
+		t2 := dates.Since(start)
+
 		err = WriteArchiveToDB(ctx, db, archive)
 		if err != nil {
 			log.WithError(err).Error("error writing record to db")
 			continue
 		}
+
+		t3 := dates.Since(start)
 
 		if !config.KeepFiles {
 			err := DeleteArchiveFile(archive)
@@ -822,7 +828,9 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			}
 		}
 
-		log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": dates.Since(start)}).Info("rollup created")
+		t4 := dates.Since(start)
+
+		log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": dates.Since(start)}).WithFields(logrus.Fields{"t1": t1, "t2": t2, "t3": t3, "t4": t4}).Info("rollup created")
 		created = append(created, archive)
 	}
 
