@@ -1,3 +1,8 @@
+v7.3.6
+----------
+ * Add temporary additional logging
+ * Replace ExitOnCompletion config option with Once which makes it run once and exit
+
 v7.3.5
 ----------
  * Improve librato analytics and add tests
