@@ -108,18 +108,17 @@ func main() {
 
 	analytics.Start()
 
-	for {
-		nextArchival := getNextArchivalTime(timeOfDay)
-		napTime := time.Until(nextArchival)
-
-		logrus.WithField("sleep_time", napTime).WithField("next_archival", nextArchival).Info("sleeping until next archival")
-		time.Sleep(napTime)
-
+	if config.Once {
 		doArchival(db, config, s3Client)
+	} else {
+		for {
+			nextArchival := getNextArchivalTime(timeOfDay)
+			napTime := time.Until(nextArchival)
 
-		// ok, we did all our work for our orgs, quit if so configured or sleep until the next day
-		if config.ExitOnCompletion {
-			break
+			logrus.WithField("sleep_time", napTime).WithField("next_archival", nextArchival).Info("sleeping until next archival")
+			time.Sleep(napTime)
+
+			doArchival(db, config, s3Client)
 		}
 	}
 
