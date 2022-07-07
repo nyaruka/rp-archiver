@@ -600,12 +600,6 @@ VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count,
 RETURNING id
 `
 
-const updateRollups = `
-UPDATE archives_archive 
-SET rollup_id = $1 
-WHERE ARRAY[id] <@ $2
-`
-
 // WriteArchiveToDB write an archive to the Database
 func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -641,7 +635,7 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error 
 			childIDs = append(childIDs, c.ID)
 		}
 
-		result, err := tx.ExecContext(ctx, updateRollups, archive.ID, pq.Array(childIDs))
+		result, err := tx.ExecContext(ctx, `UPDATE archives_archive SET rollup_id = $1 WHERE id = ANY($2)`, archive.ID, pq.Array(childIDs))
 		if err != nil {
 			tx.Rollback()
 			return errors.Wrapf(err, "error updating rollup ids")
@@ -800,8 +794,6 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			continue
 		}
 
-		t1 := dates.Since(start)
-
 		if config.UploadToS3 {
 			err = UploadArchive(ctx, s3Client, config.S3Bucket, archive)
 			if err != nil {
@@ -810,15 +802,11 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			}
 		}
 
-		t2 := dates.Since(start)
-
 		err = WriteArchiveToDB(ctx, db, archive)
 		if err != nil {
 			log.WithError(err).Error("error writing record to db")
 			continue
 		}
-
-		t3 := dates.Since(start)
 
 		if !config.KeepFiles {
 			err := DeleteArchiveFile(archive)
@@ -828,9 +816,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			}
 		}
 
-		t4 := dates.Since(start)
-
-		log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": dates.Since(start)}).WithFields(logrus.Fields{"t1": t1, "t2": t2, "t3": t3, "t4": t4}).Info("rollup created")
+		log.WithFields(logrus.Fields{"id": archive.ID, "record_count": archive.RecordCount, "elapsed": dates.Since(start)}).Info("rollup created")
 		created = append(created, archive)
 	}
 
