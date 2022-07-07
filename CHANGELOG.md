@@ -1,3 +1,8 @@
+v7.3.7
+----------
+ * Change query used to update rollup_id on dailies
+ * Remove temporary logging
+
 v7.3.6
 ----------
  * Add temporary additional logging
