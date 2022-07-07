@@ -534,7 +534,7 @@ func TestArchiveActiveOrgs(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.Equal(t, map[string][]float64{
-			"archiver.archive_elapsed":       {860.0},
+			"archiver.archive_elapsed":       {848.0},
 			"archiver.orgs_archived":         {3},
 			"archiver.msgs_records_archived": {5},
 			"archiver.msgs_archives_created": {92},
