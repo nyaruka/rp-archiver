@@ -69,51 +69,55 @@ To run all of the tests:
 go test -p=1 ./...
 ```
 
-## Refernce
+## Reference
 
-```
 These are the configuration options that can be provided as parameters or environment variables. If using environment 
 varibles, convert to uppercase, replace dashes with underscores and prefix the name with `ARCHIVER_`, e.g. `-archive-messages` 
 becomes `ARCHIVER_ARCHIVE_MESSAGES`.
 
+```
   -archive-messages
-    	whether we should archive messages (default true)
+      whether we should archive messages (default true)
   -archive-runs
-    	whether we should archive runs (default true)
+      whether we should archive runs (default true)
   -aws-access-key-id string
-    	the access key id to use when authenticating S3 (default "missing_aws_access_key_id")
+      the access key id to use when authenticating S3 (default "missing_aws_access_key_id")
   -aws-secret-access-key string
-    	the secret access key id to use when authenticating S3 (default "missing_aws_secret_access_key")
+      the secret access key id to use when authenticating S3 (default "missing_aws_secret_access_key")
   -db string
-    	the connection string for our database (default "postgres://localhost/archiver_test?sslmode=disable")
+      the connection string for our database (default "postgres://localhost/archiver_test?sslmode=disable")
   -debug-conf
-    	print where config values are coming from
+      print where config values are coming from
   -delete
-    	whether to delete messages and runs from the db after archival (default false)
+      whether to delete messages and runs from the db after archival (default false)
   -help
-    	print usage information
+      print usage information
   -keep-files
-    	whether we should keep local archive files after upload (default false)
+      whether we should keep local archive files after upload (default false)
+  -librato-username
+      the Librato username for metrics reporting
+  -librato-token
+      the Librato token for metrics reporting
   -log-level string
-    	the log level, one of error, warn, info, debug (default "info")
+      the log level, one of error, warn, info, debug (default "info")
   -once
-    	run archving immediately and then exit
+      run archving immediately and then exit
   -retention-period int
-    	the number of days to keep before archiving (default 90)
+      the number of days to keep before archiving (default 90)
   -s3-bucket string
-    	the S3 bucket we will write archives to (default "dl-archiver-test")
+      the S3 bucket we will write archives to (default "dl-archiver-test")
   -s3-disable-ssl
-    	whether we disable SSL when accessing S3. Should always be set to False unless you're hosting an S3 compatible service within a secure internal network
+      whether we disable SSL when accessing S3. Should always be set to False unless you're hosting an S3 compatible service within a secure internal network
   -s3-endpoint string
-    	the S3 endpoint we will write archives to (default "https://s3.amazonaws.com")
+      the S3 endpoint we will write archives to (default "https://s3.amazonaws.com")
   -s3-force-path-style
-    	whether we force S3 path style. Should generally need to default to False unless you're hosting an S3 compatible service
+      whether we force S3 path style. Should generally need to default to False unless you're hosting an S3 compatible service
   -s3-region string
-    	the S3 region we will write archives to (default "us-east-1")
+      the S3 region we will write archives to (default "us-east-1")
   -sentry-dsn string
-    	the sentry configuration to log errors to, if any
+      the sentry configuration to log errors to, if any
   -temp-dir string
-    	directory where temporary archive files are written (default "/tmp")
+      directory where temporary archive files are written (default "/tmp")
   -upload-to-s3
-    	whether we should upload archive to S3 (default true)
+      whether we should upload archive to S3 (default true)
 ```
