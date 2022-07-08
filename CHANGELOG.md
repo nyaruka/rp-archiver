@@ -1,3 +1,7 @@
+v7.4.0
+----------
+ * Include rollups in monthlies failed metric as well as monthlies created from scratch
+
 v7.3.7
 ----------
  * Change query used to update rollup_id on dailies
