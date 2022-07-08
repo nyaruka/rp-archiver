@@ -770,18 +770,20 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 }
 
 // RollupOrgArchives rolls up monthly archives from our daily archives
-func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
 	log := logrus.WithFields(logrus.Fields{"org_id": org.ID, "org_name": org.Name, "archive_type": archiveType})
-	created := make([]*Archive, 0, 1)
 
 	// get our missing monthly archives
 	archives, err := GetMissingMonthlyArchives(ctx, db, now, org, archiveType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	created := make([]*Archive, 0, len(archives))
+	failed := make([]*Archive, 0, 1)
 
 	// build them from rollups
 	for _, archive := range archives {
@@ -791,6 +793,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 		err = BuildRollupArchive(ctx, db, config, s3Client, archive, now, org, archiveType)
 		if err != nil {
 			log.WithError(err).Error("error building monthly archive")
+			failed = append(failed, archive)
 			continue
 		}
 
@@ -798,6 +801,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 			err = UploadArchive(ctx, s3Client, config.S3Bucket, archive)
 			if err != nil {
 				log.WithError(err).Error("error writing archive to s3")
+				failed = append(failed, archive)
 				continue
 			}
 		}
@@ -805,6 +809,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 		err = WriteArchiveToDB(ctx, db, archive)
 		if err != nil {
 			log.WithError(err).Error("error writing record to db")
+			failed = append(failed, archive)
 			continue
 		}
 
@@ -820,7 +825,7 @@ func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 		created = append(created, archive)
 	}
 
-	return created, nil
+	return created, failed, nil
 }
 
 const setArchiveDeleted = `
@@ -828,21 +833,6 @@ UPDATE archives_archive
 SET needs_deletion = FALSE, deleted_on = $2
 WHERE id = $1
 `
-
-// helper method to safely execute an IN query in the passed in transaction
-func executeInQuery(ctx context.Context, tx *sqlx.Tx, query string, ids []int64) error {
-	q, vs, err := sqlx.In(query, ids)
-	if err != nil {
-		return err
-	}
-	q = tx.Rebind(q)
-
-	_, err = tx.ExecContext(ctx, q, vs...)
-	if err != nil {
-		tx.Rollback()
-	}
-	return err
-}
 
 var deleteTransactionSize = 100
 
@@ -909,12 +899,14 @@ func ArchiveOrg(ctx context.Context, now time.Time, cfg *Config, db *sqlx.DB, s3
 		log.WithFields(logrus.Fields{"elapsed": elapsed, "records_per_second": rate}).Info("completed archival for org")
 	}
 
-	monthliesRolledUp, err := RollupOrgArchives(ctx, now, cfg, db, s3Client, org, archiveType)
+	rollupsCreated, rollupsFailed, err := RollupOrgArchives(ctx, now, cfg, db, s3Client, org, archiveType)
 	if err != nil {
 		return nil, nil, nil, nil, nil, errors.Wrapf(err, "error rolling up archives")
 	}
 
-	monthliesCreated = append(monthliesCreated, monthliesRolledUp...)
+	monthliesCreated = append(monthliesCreated, rollupsCreated...)
+	monthliesFailed = append(monthliesFailed, rollupsFailed...)
+	monthliesFailed = removeDuplicates(monthliesFailed) // don't double report monthlies that fail being built from db and rolled up from dailies
 
 	// finally delete any archives not yet actually archived
 	var deleted []*Archive
@@ -996,13 +988,4 @@ func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
 	analytics.Gauge("archiver.runs_rollups_failed", float64(totalRunsRollupsFailed))
 
 	return nil
-}
-
-// counts the records in the given archives
-func countRecords(as []*Archive) int {
-	n := 0
-	for _, a := range as {
-		n += a.RecordCount
-	}
-	return n
 }
