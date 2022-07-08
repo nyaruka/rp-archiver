@@ -8,14 +8,14 @@ RP-Archiver is the [RapidPro](https://github.com/rapidpro/rapidpro) component re
 old runs and messages. It interacts directly with the RapidPro database and writes archive files to an 
 S3 compatible endpoint.
 
-# Deploying
+## Deploying
 
 As Archiver is a Go application, it compiles to a binary and that binary along with the config file is all
 you need to run it on your server. You can find bundles for each platform in the
 [releases directory](https://github.com/nyaruka/rp-archiver/releases). You should only run a single archiver
 instance for a deployment.
 
-# Configuration
+## Configuration
 
 Archiver uses a tiered configuration system, each option takes precendence over the ones above it:
 
@@ -27,7 +27,7 @@ We recommend running Archiver with no changes to the configuration and no parame
 environment variables to configure it. You can use `% rp-archiver --help` to see a list of the
 environment variables and parameters and for more details on each option.
 
-# RapidPro Configuration
+### RapidPro Configuration
 
 For use with RapidPro, you will want to configure these settings:
 
@@ -47,7 +47,7 @@ Recommended settings for error reporting:
 
  * `ARCHIVER_SENTRY_DSN`: The DSN to use when logging errors to Sentry
 
-# Development
+## Development
 
 Once you've checked out the code, you can build Archiver with:
 
@@ -69,12 +69,13 @@ To run all of the tests:
 go test -p=1 ./...
 ```
 
-## Usage
+## Refernce
 
 ```
-Archives RapidPro runs and msgs to S3
+These are the configuration options that can be provided as parameters or environment variables. If using environment 
+varibles, convert to uppercase, replace dashes with underscores and prefix the name with `ARCHIVER_`, e.g. `-archive-messages` 
+becomes `ARCHIVER_ARCHIVE_MESSAGES`.
 
-Usage of archiver:
   -archive-messages
     	whether we should archive messages (default true)
   -archive-runs
@@ -95,6 +96,8 @@ Usage of archiver:
     	whether we should keep local archive files after upload (default false)
   -log-level string
     	the log level, one of error, warn, info, debug (default "info")
+  -once
+    	run archving immediately and then exit
   -retention-period int
     	the number of days to keep before archiving (default 90)
   -s3-bucket string
@@ -113,23 +116,4 @@ Usage of archiver:
     	directory where temporary archive files are written (default "/tmp")
   -upload-to-s3
     	whether we should upload archive to S3 (default true)
-
-Environment variables:
-                   ARCHIVER_ARCHIVE_MESSAGES - bool
-                       ARCHIVER_ARCHIVE_RUNS - bool
-                  ARCHIVER_AWS_ACCESS_KEY_ID - string
-              ARCHIVER_AWS_SECRET_ACCESS_KEY - string
-                                 ARCHIVER_DB - string
-                             ARCHIVER_DELETE - bool
-                         ARCHIVER_KEEP_FILES - bool
-                          ARCHIVER_LOG_LEVEL - string
-                   ARCHIVER_RETENTION_PERIOD - int
-                          ARCHIVER_S3_BUCKET - string
-                     ARCHIVER_S3_DISABLE_SSL - bool
-                        ARCHIVER_S3_ENDPOINT - string
-                ARCHIVER_S3_FORCE_PATH_STYLE - bool
-                          ARCHIVER_S3_REGION - string
-                         ARCHIVER_SENTRY_DSN - string
-                           ARCHIVER_TEMP_DIR - string
-                       ARCHIVER_UPLOAD_TO_S3 - bool
 ```
