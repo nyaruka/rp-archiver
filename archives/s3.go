@@ -1,4 +1,4 @@
-package archiver
+package archives
 
 import (
 	"context"
@@ -47,7 +47,6 @@ func NewS3Client(config *Config) (s3iface.S3API, error) {
 		return nil, err
 	}
 
-	logrus.Info("s3 bucket ok")
 	return s3Client, nil
 }
 

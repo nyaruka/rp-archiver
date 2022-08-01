@@ -1,4 +1,4 @@
-package archiver
+package archives
 
 import (
 	"compress/gzip"
@@ -11,12 +11,14 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
+	"github.com/nyaruka/gocommon/analytics"
+	"github.com/nyaruka/gocommon/dates"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 func setup(t *testing.T) *sqlx.DB {
-	testDB, err := ioutil.ReadFile("testdb.sql")
+	testDB, err := ioutil.ReadFile("../testdb.sql")
 	assert.NoError(t, err)
 
 	db, err := sqlx.Open("postgres", "postgres://temba:temba@localhost:5432/archiver_test?sslmode=disable&TimeZone=UTC")
@@ -34,7 +36,7 @@ func TestGetMissingDayArchives(t *testing.T) {
 
 	// get the tasks for our org
 	ctx := context.Background()
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
@@ -82,7 +84,7 @@ func TestGetMissingMonthArchives(t *testing.T) {
 
 	// get the tasks for our org
 	ctx := context.Background()
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
@@ -115,7 +117,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	err := EnsureTempArchiveDirectory("/tmp")
 	assert.NoError(t, err)
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -143,9 +145,9 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have two records, second will have attachments
 	assert.Equal(t, 3, task.RecordCount)
-	assert.Equal(t, int64(483), task.Size)
+	assert.Equal(t, int64(528), task.Size)
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
-	assert.Equal(t, "6fe9265860425cf1f9757ba3d91b1a05", task.Hash)
+	assert.Equal(t, "b3bf00bf1234ea47f14ffd0171a8ead0", task.Hash)
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -163,8 +165,8 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
-	assert.Equal(t, int64(290), task.Size)
-	assert.Equal(t, "a719c7ec64c516a6e159d26a70cb4225", task.Hash)
+	assert.Equal(t, int64(294), task.Size)
+	assert.Equal(t, "bd163ead077774425aa559e30d48ca87", task.Hash)
 	assertArchiveFile(t, task, "messages2.jsonl")
 
 	DeleteArchiveFile(task)
@@ -192,7 +194,7 @@ func TestCreateRunArchive(t *testing.T) {
 	err := EnsureTempArchiveDirectory("/tmp")
 	assert.NoError(t, err)
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -218,8 +220,8 @@ func TestCreateRunArchive(t *testing.T) {
 
 	// should have two record
 	assert.Equal(t, 2, task.RecordCount)
-	assert.Equal(t, int64(642), task.Size)
-	assert.Equal(t, "f793f863f5e060b9d67c5688a555da6a", task.Hash)
+	assert.Equal(t, int64(472), task.Size)
+	assert.Equal(t, "734d437e1c66d09e033d698c732178f8", task.Hash)
 	assertArchiveFile(t, task, "runs1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -238,8 +240,8 @@ func TestCreateRunArchive(t *testing.T) {
 
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
-	assert.Equal(t, int64(497), task.Size)
-	assert.Equal(t, "074de71dfb619c78dbac5b6709dd66c2", task.Hash)
+	assert.Equal(t, int64(490), task.Size)
+	assert.Equal(t, "c2138e3c3009a9c09fc55482903d93e4", task.Hash)
 	assertArchiveFile(t, task, "runs2.jsonl")
 
 	DeleteArchiveFile(task)
@@ -249,7 +251,7 @@ func TestWriteArchiveToDB(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -303,7 +305,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 	ctx := context.Background()
 	deleteTransactionSize = 1
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -322,53 +324,23 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 		assertCount(t, db, 4, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
 
-		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
+		dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
 		assert.NoError(t, err)
 
-		assert.Equal(t, 63, len(created))
-		assert.Equal(t, time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), created[0].StartDate)
-		assert.Equal(t, DayPeriod, created[0].Period)
-		assert.Equal(t, 0, created[0].RecordCount)
-		assert.Equal(t, int64(23), created[0].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[0].Hash)
+		assert.Equal(t, 61, len(dailiesCreated))
+		assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+		assertArchive(t, dailiesCreated[1], time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+		assertArchive(t, dailiesCreated[2], time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), DayPeriod, 3, 528, "b3bf00bf1234ea47f14ffd0171a8ead0")
+		assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 312, "32e61b1431217b59fca0170f637d78a3")
+		assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
-		assert.Equal(t, time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), created[1].StartDate)
-		assert.Equal(t, DayPeriod, created[1].Period)
-		assert.Equal(t, 0, created[1].RecordCount)
-		assert.Equal(t, int64(23), created[1].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[1].Hash)
+		assert.Equal(t, 0, len(dailiesFailed))
 
-		assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), created[2].StartDate)
-		assert.Equal(t, DayPeriod, created[2].Period)
-		assert.Equal(t, 3, created[2].RecordCount)
-		assert.Equal(t, int64(483), created[2].Size)
-		assert.Equal(t, "6fe9265860425cf1f9757ba3d91b1a05", created[2].Hash)
+		assert.Equal(t, 2, len(monthliesCreated))
+		assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 553, "156e45e29b6587cb85ccf75e03800b00")
+		assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
-		assert.Equal(t, time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), created[3].StartDate)
-		assert.Equal(t, DayPeriod, created[3].Period)
-		assert.Equal(t, 1, created[3].RecordCount)
-		assert.Equal(t, int64(306), created[3].Size)
-		assert.Equal(t, "7ece4401d3afac9c08a913398f213ffa", created[3].Hash)
-
-		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[60].StartDate)
-		assert.Equal(t, DayPeriod, created[60].Period)
-		assert.Equal(t, 0, created[60].RecordCount)
-		assert.Equal(t, int64(23), created[60].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[60].Hash)
-
-		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[61].StartDate)
-		assert.Equal(t, MonthPeriod, created[61].Period)
-		assert.Equal(t, 4, created[61].RecordCount)
-		assert.Equal(t, int64(509), created[61].Size)
-		assert.Equal(t, "9e40be76913bf58655b70ee96dcac25d", created[61].Hash)
-
-		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[62].StartDate)
-		assert.Equal(t, MonthPeriod, created[62].Period)
-		assert.Equal(t, 0, created[62].RecordCount)
-		assert.Equal(t, int64(23), created[62].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[62].Hash)
-
-		// no rollup for october since that had one invalid daily archive
+		assert.Equal(t, 0, len(monthliesFailed))
 
 		assert.Equal(t, 63, len(deleted))
 		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
@@ -440,11 +412,19 @@ func assertCount(t *testing.T, db *sqlx.DB, expected int, query string, args ...
 	assert.Equal(t, expected, count, "counts mismatch for query %s", query)
 }
 
+func assertArchive(t *testing.T, a *Archive, startDate time.Time, period ArchivePeriod, recordCount int, size int64, hash string) {
+	assert.Equal(t, startDate, a.StartDate)
+	assert.Equal(t, period, a.Period)
+	assert.Equal(t, recordCount, a.RecordCount)
+	assert.Equal(t, size, a.Size)
+	assert.Equal(t, hash, a.Hash)
+}
+
 func TestArchiveOrgRuns(t *testing.T) {
 	db := setup(t)
 	ctx := context.Background()
 
-	config := NewConfig()
+	config := NewDefaultConfig()
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -461,34 +441,16 @@ func TestArchiveOrgRuns(t *testing.T) {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
-		created, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
+		dailiesCreated, _, monthliesCreated, _, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[2], RunType)
 		assert.NoError(t, err)
 
-		assert.Equal(t, 12, len(created))
+		assert.Equal(t, 10, len(dailiesCreated))
+		assertArchive(t, dailiesCreated[0], time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+		assertArchive(t, dailiesCreated[9], time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 2, 1984, "869cc00ad4cca0371d07c88d8cf2bf26")
 
-		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), created[0].StartDate)
-		assert.Equal(t, MonthPeriod, created[0].Period)
-		assert.Equal(t, 1, created[0].RecordCount)
-		assert.Equal(t, int64(497), created[0].Size)
-		assert.Equal(t, "074de71dfb619c78dbac5b6709dd66c2", created[0].Hash)
-
-		assert.Equal(t, time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), created[1].StartDate)
-		assert.Equal(t, MonthPeriod, created[1].Period)
-		assert.Equal(t, 0, created[1].RecordCount)
-		assert.Equal(t, int64(23), created[1].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[1].Hash)
-
-		assert.Equal(t, time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), created[2].StartDate)
-		assert.Equal(t, DayPeriod, created[2].Period)
-		assert.Equal(t, 0, created[2].RecordCount)
-		assert.Equal(t, int64(23), created[2].Size)
-		assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", created[2].Hash)
-
-		assert.Equal(t, time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), created[11].StartDate)
-		assert.Equal(t, DayPeriod, created[11].Period)
-		assert.Equal(t, 1, created[11].RecordCount)
-		assert.Equal(t, int64(427), created[11].Size)
-		assert.Equal(t, "bf08041cef314492fee2910357ec4189", created[11].Hash)
+		assert.Equal(t, 2, len(monthliesCreated))
+		assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 1, 490, "c2138e3c3009a9c09fc55482903d93e4")
+		assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
 		assert.Equal(t, 12, len(deleted))
 
@@ -517,7 +479,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 			time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC),
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, count)
+		assert.Equal(t, 3, count)
 
 		// more recent run unaffected (even though it was parent)
 		count, err = getCountInRange(
@@ -529,5 +491,63 @@ func TestArchiveOrgRuns(t *testing.T) {
 		)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, count)
+
+		// org 2 has a run that can't be archived because it's still active - as it has no existing archives
+		// this will manifest itself as a monthly which fails to save
+		dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, _, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], RunType)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 31, len(dailiesCreated))
+		assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+
+		assert.Equal(t, 1, len(dailiesFailed))
+		assertArchive(t, dailiesFailed[0], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
+
+		assert.Equal(t, 1, len(monthliesCreated))
+		assertArchive(t, monthliesCreated[0], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+
+		assert.Equal(t, 1, len(monthliesFailed))
+		assertArchive(t, monthliesFailed[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 0, "")
 	}
+}
+
+func TestArchiveActiveOrgs(t *testing.T) {
+	db := setup(t)
+	config := NewDefaultConfig()
+
+	os.Args = []string{"rp-archiver"}
+	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
+	loader.MustLoad()
+
+	mockAnalytics := analytics.NewMock()
+	analytics.RegisterBackend(mockAnalytics)
+	analytics.Start()
+
+	dates.SetNowSource(dates.NewSequentialNowSource(time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)))
+	defer dates.SetNowSource(dates.DefaultNowSource)
+
+	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
+		s3Client, err := NewS3Client(config)
+		assert.NoError(t, err)
+
+		err = ArchiveActiveOrgs(db, config, s3Client)
+		assert.NoError(t, err)
+
+		assert.Equal(t, map[string][]float64{
+			"archiver.archive_elapsed":       {848.0},
+			"archiver.orgs_archived":         {3},
+			"archiver.msgs_records_archived": {5},
+			"archiver.msgs_archives_created": {92},
+			"archiver.msgs_archives_failed":  {0},
+			"archiver.msgs_rollups_created":  {3},
+			"archiver.msgs_rollups_failed":   {0},
+			"archiver.runs_records_archived": {4},
+			"archiver.runs_archives_created": {41},
+			"archiver.runs_archives_failed":  {1},
+			"archiver.runs_rollups_created":  {3},
+			"archiver.runs_rollups_failed":   {1},
+		}, mockAnalytics.Gauges)
+	}
+
+	analytics.Stop()
 }

@@ -1,4 +1,6 @@
-package archiver
+package archives
+
+import "os"
 
 // Config is our top level configuration object
 type Config struct {
@@ -19,16 +21,22 @@ type Config struct {
 	KeepFiles  bool   `help:"whether we should keep local archive files after upload (default false)"`
 	UploadToS3 bool   `help:"whether we should upload archive to S3"`
 
-	ArchiveMessages  bool   `help:"whether we should archive messages"`
-	ArchiveRuns      bool   `help:"whether we should archive runs"`
-	RetentionPeriod  int    `help:"the number of days to keep before archiving"`
-	Delete           bool   `help:"whether to delete messages and runs from the db after archival (default false)"`
-	ExitOnCompletion bool   `help:"whether archiver should exit after completing archiving job (default false)"`
-	StartTime        string `help:"what time archive jobs should run in UTC HH:MM "`
+	ArchiveMessages bool   `help:"whether we should archive messages"`
+	ArchiveRuns     bool   `help:"whether we should archive runs"`
+	RetentionPeriod int    `help:"the number of days to keep before archiving"`
+	Delete          bool   `help:"whether to delete messages and runs from the db after archival (default false)"`
+	StartTime       string `help:"what time archive jobs should run in UTC HH:MM "`
+	Once            bool   `help:"whether archiver should run once and exit (default false)"`
+
+	LibratoUsername string `help:"the username that will be used to authenticate to Librato"`
+	LibratoToken    string `help:"the token that will be used to authenticate to Librato"`
+	InstanceName    string `help:"the unique name of this instance used for analytics"`
 }
 
-// NewConfig returns a new default configuration object
-func NewConfig() *Config {
+// NewDefaultConfig returns a new default configuration object
+func NewDefaultConfig() *Config {
+	hostname, _ := os.Hostname()
+
 	config := Config{
 		DB:       "postgres://localhost/archiver_test?sslmode=disable",
 		LogLevel: "info",
@@ -46,12 +54,14 @@ func NewConfig() *Config {
 		KeepFiles:  false,
 		UploadToS3: true,
 
-		ArchiveMessages:  true,
-		ArchiveRuns:      true,
-		RetentionPeriod:  90,
-		Delete:           false,
-		ExitOnCompletion: false,
-		StartTime:        "00:01",
+		ArchiveMessages: true,
+		ArchiveRuns:     true,
+		RetentionPeriod: 90,
+		Delete:          false,
+		StartTime:       "00:01",
+		Once:            false,
+
+		InstanceName: hostname,
 	}
 
 	return &config
