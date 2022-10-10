@@ -58,9 +58,9 @@ becomes `ARCHIVER_LOG_LEVEL`.
   -archive-runs
       whether we should archive runs (default true)
   -aws-access-key-id string
-      the access key id to use when authenticating S3 (default "missing_aws_access_key_id")
+      the access key id to use when authenticating S3 (default none)
   -aws-secret-access-key string
-      the secret access key id to use when authenticating S3 (default "missing_aws_secret_access_key")
+      the secret access key id to use when authenticating S3 (default none)
   -db string
       the connection string for our database (default "postgres://localhost/archiver_test?sslmode=disable")
   -debug-conf
