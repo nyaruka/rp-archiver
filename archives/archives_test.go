@@ -37,6 +37,7 @@ func TestGetMissingDayArchives(t *testing.T) {
 	// get the tasks for our org
 	ctx := context.Background()
 	config := NewDefaultConfig()
+	config.AWSAccessKeyID = "test"
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
