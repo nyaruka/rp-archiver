@@ -1,3 +1,8 @@
+v7.5.0
+----------
+ * Use go 1.19
+ * Allow AWS Cred Chain
+
 v7.4.0
 ----------
  * Include rollups in monthlies failed metric as well as monthlies created from scratch
