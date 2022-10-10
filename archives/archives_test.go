@@ -37,7 +37,9 @@ func TestGetMissingDayArchives(t *testing.T) {
 	// get the tasks for our org
 	ctx := context.Background()
 	config := NewDefaultConfig()
-	config.AWSAccessKeyID = "test"
+	config.AWSAccessKeyID = "missing_aws_access_key_id"
+	config.AWSSecretAccessKey = "missing_aws_secret_access_key"
+
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
@@ -86,6 +88,8 @@ func TestGetMissingMonthArchives(t *testing.T) {
 	// get the tasks for our org
 	ctx := context.Background()
 	config := NewDefaultConfig()
+	config.AWSAccessKeyID = "missing_aws_access_key_id"
+	config.AWSSecretAccessKey = "missing_aws_secret_access_key"
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
@@ -119,6 +123,8 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.NoError(t, err)
 
 	config := NewDefaultConfig()
+	config.AWSAccessKeyID = "missing_aws_access_key_id"
+	config.AWSSecretAccessKey = "missing_aws_secret_access_key"
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -196,6 +202,8 @@ func TestCreateRunArchive(t *testing.T) {
 	assert.NoError(t, err)
 
 	config := NewDefaultConfig()
+	config.AWSAccessKeyID = "missing_aws_access_key_id"
+	config.AWSSecretAccessKey = "missing_aws_secret_access_key"
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -253,6 +261,8 @@ func TestWriteArchiveToDB(t *testing.T) {
 	ctx := context.Background()
 
 	config := NewDefaultConfig()
+	config.AWSAccessKeyID = "missing_aws_access_key_id"
+	config.AWSSecretAccessKey = "missing_aws_secret_access_key"
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -307,6 +317,8 @@ func TestArchiveOrgMessages(t *testing.T) {
 	deleteTransactionSize = 1
 
 	config := NewDefaultConfig()
+	config.AWSAccessKeyID = "missing_aws_access_key_id"
+	config.AWSSecretAccessKey = "missing_aws_secret_access_key"
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -426,6 +438,8 @@ func TestArchiveOrgRuns(t *testing.T) {
 	ctx := context.Background()
 
 	config := NewDefaultConfig()
+	config.AWSAccessKeyID = "missing_aws_access_key_id"
+	config.AWSSecretAccessKey = "missing_aws_secret_access_key"
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
@@ -515,6 +529,8 @@ func TestArchiveOrgRuns(t *testing.T) {
 func TestArchiveActiveOrgs(t *testing.T) {
 	db := setup(t)
 	config := NewDefaultConfig()
+	config.AWSAccessKeyID = "missing_aws_access_key_id"
+	config.AWSSecretAccessKey = "missing_aws_secret_access_key"
 
 	os.Args = []string{"rp-archiver"}
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
