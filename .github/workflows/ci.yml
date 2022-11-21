@@ -5,9 +5,8 @@ env:
 jobs:
   test:
     name: Test
-    strategy:
-      matrix:
-        pg-version: ["13", "14"]
+    env:
+      pg-version: "14"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -16,7 +15,7 @@ jobs:
       - name: Install PostgreSQL
         uses: harmon758/postgresql-action@v1
         with:
-          postgresql version: ${{ matrix.pg-version }}
+          postgresql version: ${{ env.pg-version }}
           postgresql db: archiver_test
           postgresql user: temba
           postgresql password: temba
