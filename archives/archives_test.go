@@ -3,7 +3,7 @@ package archives
 import (
 	"compress/gzip"
 	"context"
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -18,7 +18,7 @@ import (
 )
 
 func setup(t *testing.T) *sqlx.DB {
-	testDB, err := ioutil.ReadFile("../testdb.sql")
+	testDB, err := os.ReadFile("../testdb.sql")
 	assert.NoError(t, err)
 
 	db, err := sqlx.Open("postgres", "postgres://temba:temba@localhost:5432/archiver_test?sslmode=disable&TimeZone=UTC")
@@ -180,10 +180,10 @@ func assertArchiveFile(t *testing.T, archive *Archive, truthName string) {
 
 	zTestReader, err := gzip.NewReader(testFile)
 	assert.NoError(t, err)
-	test, err := ioutil.ReadAll(zTestReader)
+	test, err := io.ReadAll(zTestReader)
 	assert.NoError(t, err)
 
-	truth, err := ioutil.ReadFile("./testdata/" + truthName)
+	truth, err := os.ReadFile("./testdata/" + truthName)
 	assert.NoError(t, err)
 
 	assert.Equal(t, truth, test)
