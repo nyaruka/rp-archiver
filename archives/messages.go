@@ -232,13 +232,12 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 }
 
 const sqlSelectOldOrgBroadcasts = `
-  SELECT id
-    FROM msgs_broadcast
-   WHERE org_id = $1 AND created_on < $2 AND schedule_id IS NULL
-ORDER BY created_on ASC, id ASC
-   LIMIT 1000000;`
+SELECT id
+  FROM msgs_broadcast b
+ WHERE b.org_id = $1 AND b.created_on < $2 AND b.schedule_id IS NULL AND NOT EXISTS (SELECT 1 FROM msgs_msg WHERE broadcast_id = b.id)
+ LIMIT 1000000;`
 
-// DeleteBroadcasts deletes all broadcasts older than 90 days for the passed in org which have no active messages on them
+// DeleteBroadcasts deletes all broadcasts older than 90 days for the passed in org which have no associated messages
 func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, org Org) error {
 	start := dates.Now()
 	threshhold := now.AddDate(0, 0, -org.RetentionPeriod)
@@ -263,18 +262,6 @@ func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sq
 		var broadcastID int64
 		if err := rows.Scan(&broadcastID); err != nil {
 			return errors.Wrap(err, "unable to get broadcast id")
-		}
-
-		// make sure we have no messages left
-		var hasMsgs bool
-		err = db.Get(&hasMsgs, `SELECT EXISTS(SELECT 1 FROM msgs_msg WHERE broadcast_id = $1)`, broadcastID)
-		if err != nil {
-			return errors.Wrapf(err, "error checking if broadcast still has messages: %d", broadcastID)
-		}
-
-		if hasMsgs {
-			logrus.WithField("broadcast_id", broadcastID).WithField("org_id", org.ID).Warn("unable to delete broadcast, has messages still")
-			continue
 		}
 
 		// we delete broadcasts in a transaction per broadcast
