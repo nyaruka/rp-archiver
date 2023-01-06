@@ -261,20 +261,19 @@ func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sq
 		}
 
 		var broadcastID int64
-		err := rows.Scan(&broadcastID)
-		if err != nil {
+		if err := rows.Scan(&broadcastID); err != nil {
 			return errors.Wrap(err, "unable to get broadcast id")
 		}
 
-		// make sure we have no active messages
-		var msgCount int64
-		err = db.Get(&msgCount, `SELECT count(*) FROM msgs_msg WHERE broadcast_id = $1`, broadcastID)
+		// make sure we have no messages left
+		var hasMsgs bool
+		err = db.Get(&hasMsgs, `SELECT EXISTS(SELECT 1 FROM msgs_msg WHERE broadcast_id = $1)`, broadcastID)
 		if err != nil {
-			return errors.Wrapf(err, "unable to select number of msgs for broadcast: %d", broadcastID)
+			return errors.Wrapf(err, "error checking if broadcast still has messages: %d", broadcastID)
 		}
 
-		if msgCount != 0 {
-			logrus.WithField("broadcast_id", broadcastID).WithField("org_id", org.ID).WithField("msg_count", msgCount).Warn("unable to delete broadcast, has messages still")
+		if hasMsgs {
+			logrus.WithField("broadcast_id", broadcastID).WithField("org_id", org.ID).Warn("unable to delete broadcast, has messages still")
 			continue
 		}
 
