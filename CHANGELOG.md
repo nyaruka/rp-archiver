@@ -1,3 +1,7 @@
+v8.1.0 (2023-01-18)
+-------------------------
+ * Delete old flow starts after deleting runs
+
 v8.0.0 (2023-01-09)
 -------------------------
  * Only fetch broadcasts which don't have messages
