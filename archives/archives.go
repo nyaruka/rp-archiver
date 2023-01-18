@@ -866,6 +866,10 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 
 		case RunType:
 			err = DeleteArchivedRuns(ctx, config, db, s3Client, a)
+			if err == nil {
+				err = DeleteFlowStarts(ctx, now, config, db, org)
+			}
+
 		default:
 			err = fmt.Errorf("unknown archive type: %s", a.ArchiveType)
 		}

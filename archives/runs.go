@@ -218,3 +218,92 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 
 	return nil
 }
+
+const selectOldOrgFlowStarts = `
+ SELECT id
+   FROM flows_flowstart s
+  WHERE s.org_id = $1 AND s.created_on < $2 AND NOT EXISTS (SELECT 1 FROM flows_flowrun WHERE start_id = s.id)
+  LIMIT 1000000;`
+
+// DeleteFlowStarts deletes all starts older than 90 days for the passed in org which have no associated runs
+func DeleteFlowStarts(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, org Org) error {
+	start := dates.Now()
+	threshhold := now.AddDate(0, 0, -org.RetentionPeriod)
+
+	rows, err := db.QueryxContext(ctx, selectOldOrgFlowStarts, org.ID, threshhold)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		if count == 0 {
+			logrus.WithField("org_id", org.ID).Info("deleting starts")
+		}
+
+		// been deleting this org more than an hour? thats enough for today, exit out
+		if dates.Since(start) > time.Hour {
+			break
+		}
+
+		var startID int64
+		if err := rows.Scan(&startID); err != nil {
+			return errors.Wrap(err, "unable to get start id")
+		}
+
+		// we delete starts in a transaction per start
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return errors.Wrapf(err, "error starting transaction while deleting start: %d", startID)
+		}
+
+		// delete contacts M2M
+		_, err = tx.Exec(`DELETE from flows_flowstart_contacts WHERE flowstart_id = $1`, startID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting related contacts for start: %d", startID)
+		}
+
+		// delete groups M2M
+		_, err = tx.Exec(`DELETE from flows_flowstart_groups WHERE flowstart_id = $1`, startID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting related groups for start: %d", startID)
+		}
+
+		// delete calls M2M
+		_, err = tx.Exec(`DELETE from flows_flowstart_calls WHERE flowstart_id = $1`, startID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting related calls for start: %d", startID)
+		}
+
+		// delete counts
+		_, err = tx.Exec(`DELETE from flows_flowstartcount WHERE start_id = $1`, startID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting counts for start: %d", startID)
+		}
+
+		// finally, delete our start
+		_, err = tx.Exec(`DELETE from flows_flowstart WHERE id = $1`, startID)
+		if err != nil {
+			tx.Rollback()
+			return errors.Wrapf(err, "error deleting start: %d", startID)
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return errors.Wrapf(err, "error deleting start: %d", startID)
+		}
+
+		count++
+	}
+
+	if count > 0 {
+		logrus.WithFields(logrus.Fields{"elapsed": dates.Since(start), "count": count, "org_id": org.ID}).Info("completed deleting starts")
+	}
+
+	return nil
+}
