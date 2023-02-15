@@ -284,13 +284,6 @@ func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sq
 			return errors.Wrapf(err, "error deleting related groups for broadcast: %d", broadcastID)
 		}
 
-		// delete URNs M2M
-		_, err = tx.Exec(`DELETE from msgs_broadcast_urns WHERE broadcast_id = $1`, broadcastID)
-		if err != nil {
-			tx.Rollback()
-			return errors.Wrapf(err, "error deleting related urns for broadcast: %d", broadcastID)
-		}
-
 		// delete counts associated with this broadcast
 		_, err = tx.Exec(`DELETE from msgs_broadcastmsgcount WHERE broadcast_id = $1`, broadcastID)
 		if err != nil {
