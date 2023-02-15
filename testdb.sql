@@ -11,7 +11,6 @@ DROP TABLE IF EXISTS flows_flowrun CASCADE;
 DROP TABLE IF EXISTS flows_flow CASCADE;
 DROP TABLE IF EXISTS msgs_broadcast_contacts CASCADE;
 DROP TABLE IF EXISTS msgs_broadcast_groups CASCADE;
-DROP TABLE IF EXISTS msgs_broadcast_urns CASCADE;
 DROP TABLE IF EXISTS msgs_broadcastmsgcount CASCADE;
 DROP TABLE IF EXISTS msgs_broadcast CASCADE;
 DROP TABLE IF EXISTS msgs_label CASCADE;
@@ -132,12 +131,6 @@ CREATE TABLE msgs_broadcast_groups (
     id serial primary key,
     broadcast_id integer NOT NULL REFERENCES msgs_broadcast(id),
     contactgroup_id integer NOT NULL REFERENCES contacts_contactgroup(id)
-);
-
-CREATE TABLE msgs_broadcast_urns (
-    id serial primary key,
-    broadcast_id integer NOT NULL REFERENCES msgs_broadcast(id),
-    contacturn_id integer NOT NULL REFERENCES contacts_contacturn(id)
 );
 
 CREATE TABLE msgs_broadcastmsgcount (
