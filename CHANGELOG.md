@@ -1,3 +1,7 @@
+v8.1.1 (2023-02-15)
+-------------------------
+ * Don't try to delete broadcast URNs which no longer exist
+
 v8.1.0 (2023-01-18)
 -------------------------
  * Delete old flow starts after deleting runs
