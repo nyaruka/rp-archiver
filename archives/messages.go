@@ -28,7 +28,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 		row_to_json(channel) as channel,
 		row_to_json(flow) as flow,
 		CASE WHEN direction = 'I' THEN 'in' WHEN direction = 'O' THEN 'out' ELSE NULL END AS direction,
-		CASE WHEN msg_type = 'F' THEN 'flow' WHEN msg_type = 'V' THEN 'ivr' WHEN msg_type = 'I' THEN 'inbox' ELSE NULL END AS "type",
+		CASE WHEN msg_type = 'T' THEN 'text' WHEN msg_type = 'V' THEN 'ivr' WHEN msg_type = 'F' THEN 'flow' WHEN msg_type = 'I' THEN 'inbox' ELSE NULL END AS "type",
 		CASE 
 			WHEN status = 'I' THEN 'initializing'
 			WHEN status = 'P' THEN 'queued'
