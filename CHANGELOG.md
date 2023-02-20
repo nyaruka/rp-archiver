@@ -1,3 +1,7 @@
+v8.1.2 (2023-02-20)
+-------------------------
+ * Add support for msg_type = T
+
 v8.1.1 (2023-02-15)
 -------------------------
  * Don't try to delete broadcast URNs which no longer exist
