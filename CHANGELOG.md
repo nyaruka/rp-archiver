@@ -1,3 +1,8 @@
+v8.1.3 (2023-03-09)
+-------------------------
+ * Update dependencies and use go 1.20
+ * Update test database schema and cleanup sql queries
+
 v8.1.2 (2023-02-20)
 -------------------------
  * Add support for msg_type = T
