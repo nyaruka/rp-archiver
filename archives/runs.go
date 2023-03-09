@@ -207,7 +207,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	deletedOn := dates.Now()
 
 	// all went well! mark our archive as no longer needing deletion
-	_, err = db.ExecContext(outer, setArchiveDeleted, archive.ID, deletedOn)
+	_, err = db.ExecContext(outer, sqlUpdateArchiveDeleted, archive.ID, deletedOn)
 	if err != nil {
 		return errors.Wrap(err, "error setting archive as deleted")
 	}
