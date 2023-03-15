@@ -148,9 +148,9 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have two records, second will have attachments
 	assert.Equal(t, 3, task.RecordCount)
-	assert.Equal(t, int64(528), task.Size)
+	assert.Equal(t, int64(522), task.Size)
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
-	assert.Equal(t, "b3bf00bf1234ea47f14ffd0171a8ead0", task.Hash)
+	assert.Equal(t, "c2c12d94eb758a3c06c5c4e0706934ff", task.Hash)
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -168,8 +168,8 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
-	assert.Equal(t, int64(294), task.Size)
-	assert.Equal(t, "bd163ead077774425aa559e30d48ca87", task.Hash)
+	assert.Equal(t, int64(293), task.Size)
+	assert.Equal(t, "c8245a44279102a1612170df3787c32d", task.Hash)
 	assertArchiveFile(t, task, "messages2.jsonl")
 
 	DeleteArchiveFile(task)
@@ -333,14 +333,14 @@ func TestArchiveOrgMessages(t *testing.T) {
 		assert.Equal(t, 61, len(dailiesCreated))
 		assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 		assertArchive(t, dailiesCreated[1], time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
-		assertArchive(t, dailiesCreated[2], time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), DayPeriod, 3, 528, "b3bf00bf1234ea47f14ffd0171a8ead0")
-		assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 312, "32e61b1431217b59fca0170f637d78a3")
+		assertArchive(t, dailiesCreated[2], time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), DayPeriod, 3, 522, "c2c12d94eb758a3c06c5c4e0706934ff")
+		assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 311, "9eaec21e28af92bc338d9b6bcd712109")
 		assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
 		assert.Equal(t, 0, len(dailiesFailed))
 
 		assert.Equal(t, 2, len(monthliesCreated))
-		assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 553, "156e45e29b6587cb85ccf75e03800b00")
+		assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 545, "d4ce6331f3c871d394ed3b916144ac85")
 		assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
 		assert.Equal(t, 0, len(monthliesFailed))
