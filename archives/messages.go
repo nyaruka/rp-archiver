@@ -28,7 +28,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 		row_to_json(channel) as channel,
 		row_to_json(flow) as flow,
 		CASE WHEN direction = 'I' THEN 'in' WHEN direction = 'O' THEN 'out' ELSE NULL END AS direction,
-		CASE WHEN msg_type = 'T' THEN 'text' WHEN msg_type = 'V' THEN 'ivr' WHEN msg_type = 'F' THEN 'flow' WHEN msg_type = 'I' THEN 'inbox' ELSE NULL END AS "type",
+		CASE WHEN msg_type = 'V' THEN 'voice' ELSE 'text' END AS "type",
 		CASE 
 			WHEN status = 'I' THEN 'initializing'
 			WHEN status = 'P' THEN 'queued'
@@ -40,8 +40,8 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 			WHEN status = 'F' THEN 'failed'
 			WHEN status = 'S' THEN 'sent'
 			WHEN status = 'R' THEN 'resent'
-		ELSE NULL
-		END as status,
+			ELSE NULL 
+		END AS status,
 		CASE WHEN visibility = 'V' THEN 'visible' WHEN visibility = 'A' THEN 'archived' WHEN visibility = 'D' THEN 'deleted' WHEN visibility = 'X' THEN 'deleted' ELSE NULL END as visibility,
 		text,
 		(select coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (select attach_data.attachment[1] as content_type, attach_data.attachment[2] as url FROM (select regexp_matches(unnest(attachments), '^(.*?):(.*)$') attachment) as attach_data) as attach_row) as attachments,
