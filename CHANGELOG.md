@@ -1,3 +1,7 @@
+v8.1.4 (2023-03-15)
+-------------------------
+ * Match API and always return type=text|voice for messages
+
 v8.1.3 (2023-03-09)
 -------------------------
  * Update dependencies and use go 1.20
