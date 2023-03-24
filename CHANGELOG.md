@@ -1,3 +1,7 @@
+v8.1.5 (2023-03-24)
+-------------------------
+ * Revert to go 1.19
+
 v8.1.4 (2023-03-15)
 -------------------------
  * Match API and always return type=text|voice for messages
