@@ -17,7 +17,7 @@ jobs:
         with:
           postgresql version: ${{ env.pg-version }}
           postgresql db: archiver_test
-          postgresql user: temba
+          postgresql user: archiver_test
           postgresql password: temba
 
       - name: Install Go
