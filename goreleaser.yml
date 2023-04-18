@@ -2,16 +2,18 @@ build:
   main: ./cmd/rp-archiver/main.go
   binary: rp-archiver
   goos:
-    - windows
     - darwin
     - linux
   goarch:
     - amd64
     - arm64
 
+changelog:
+  filters:
+    exclude:
+      - "^Update CHANGELOG.md"
+
 archives:
-  - id: main
-    files:
+  - files:
       - LICENSE
       - README.md
-
