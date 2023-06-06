@@ -1,3 +1,7 @@
+v8.1.7 (2023-06-06)
+-------------------------
+ * Fix release CHANGELOG generation
+
 v8.1.6 (2023-06-06)
 -------------------------
  * Remove deleting of channel logs as these are no longer linked to messages
