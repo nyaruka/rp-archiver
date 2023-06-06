@@ -219,11 +219,6 @@ CREATE TABLE archives_archive (
     rollup_id integer NULL
 );
 
-CREATE TABLE channels_channellog (
-    id serial primary key,
-    msg_id integer NOT NULL references msgs_msg(id)
-);
-
 INSERT INTO orgs_org(id, name, is_active, is_anon, created_on) VALUES
 (1, 'Org 1', TRUE, FALSE, '2017-11-10 21:11:59.890662+00'),
 (2, 'Org 2', TRUE, FALSE, '2017-08-10 21:11:59.890662+00'),
@@ -307,14 +302,6 @@ INSERT INTO msgs_msg_labels(id, msg_id, label_id) VALUES
 (2, 1, 2),
 (3, 2, 2),
 (4, 3, 2);
-
-INSERT INTO channels_channellog(id, msg_id) VALUES 
-(1, 1),
-(2, 2),
-(3, 3),
-(4, 4),
-(5, 5),
-(6, 6);
 
 INSERT INTO auth_user(id, username) VALUES 
 (1, 'greg@gmail.com');
