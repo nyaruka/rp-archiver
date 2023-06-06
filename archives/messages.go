@@ -99,9 +99,6 @@ LEFT JOIN contacts_contact cc ON cc.id = mm.contact_id
     WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
  ORDER BY mm.created_on ASC, mm.id ASC`
 
-const sqlDeleteChannelLogs = `
-DELETE FROM channels_channellog WHERE msg_id IN(?)`
-
 const sqlDeleteMessageLabels = `
 DELETE FROM msgs_msg_labels WHERE msg_id IN(?)`
 
@@ -184,19 +181,13 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 			return err
 		}
 
-		// first delete any channel logs
-		err = executeInQuery(ctx, tx, sqlDeleteChannelLogs, idBatch)
-		if err != nil {
-			return errors.Wrap(err, "error removing channel logs")
-		}
-
-		// then any labels
+		// first delete any labelings
 		err = executeInQuery(ctx, tx, sqlDeleteMessageLabels, idBatch)
 		if err != nil {
 			return errors.Wrap(err, "error removing message labels")
 		}
 
-		// finally, delete our messages
+		// then delete the messages themselves
 		err = executeInQuery(ctx, tx, sqlDeleteMessages, idBatch)
 		if err != nil {
 			return errors.Wrap(err, "error deleting messages")
