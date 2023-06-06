@@ -1,3 +1,7 @@
+v8.1.6 (2023-06-06)
+-------------------------
+ * Remove deleting of channel logs as these are no longer linked to messages
+
 v8.1.5 (2023-03-24)
 -------------------------
  * Revert to go 1.19
