@@ -1,3 +1,7 @@
+v8.2.0 (2023-07-31)
+-------------------------
+ * Update .gitignore
+
 v8.1.7 (2023-06-06)
 -------------------------
  * Fix release CHANGELOG generation
