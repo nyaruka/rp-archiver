@@ -7,7 +7,7 @@
 *~
 .vscode
 dist/
-
+*.DS_store
 *.py
 *.pyc
 
