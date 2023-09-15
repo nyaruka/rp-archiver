@@ -17,9 +17,10 @@ type Config struct {
 	AWSAccessKeyID     string `help:"the access key id to use when authenticating S3"`
 	AWSSecretAccessKey string `help:"the secret access key id to use when authenticating S3"`
 
-	TempDir    string `help:"directory where temporary archive files are written"`
-	KeepFiles  bool   `help:"whether we should keep local archive files after upload (default false)"`
-	UploadToS3 bool   `help:"whether we should upload archive to S3"`
+	TempDir      string `help:"directory where temporary archive files are written"`
+	KeepFiles    bool   `help:"whether we should keep local archive files after upload (default false)"`
+	UploadToS3   bool   `help:"whether we should upload archive to S3"`
+	IgnoreMD5Sum bool   `help:"whether to ignore md5sum S3 ETag comparison before deleting"`
 
 	ArchiveMessages bool   `help:"whether we should archive messages"`
 	ArchiveRuns     bool   `help:"whether we should archive runs"`

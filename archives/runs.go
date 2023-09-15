@@ -131,7 +131,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	}
 
 	// if our etag and archive md5 don't match, that's an error, return
-	if md5 != archive.Hash {
+	if !config.IgnoreMD5Sum && md5 != archive.Hash {
 		return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, md5)
 	}
 
