@@ -59,9 +59,9 @@ CREATE TABLE contacts_contacturn (
     priority integer NOT NULL,
     path character varying(255) NOT NULL,
     channel_id integer,
-    auth text,
     display character varying(255),
-    identity character varying(255) NOT NULL
+    identity character varying(255) NOT NULL,
+    auth_tokens jsonb
 );
 
 CREATE TABLE contacts_contactgroup (
