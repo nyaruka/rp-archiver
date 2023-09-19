@@ -1,3 +1,8 @@
+v8.3.1 (2023-09-19)
+-------------------------
+ * Add support for optin type messages
+ * Update deps and go version for CI
+
 v8.3.0 (2023-08-10)
 -------------------------
  * Update to go 1.20
