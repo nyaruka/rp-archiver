@@ -1,3 +1,8 @@
+v8.3.3 (2023-09-26)
+-------------------------
+ * Allow disabling of hash checking
+ * Fix checking S3 uploads so that we always check size but only check hash for files uploaded as single part
+
 v8.3.2 (2023-09-25)
 -------------------------
  * Update to go 1.21
