@@ -17,9 +17,10 @@ type Config struct {
 	AWSAccessKeyID     string `help:"the access key id to use when authenticating S3"`
 	AWSSecretAccessKey string `help:"the secret access key id to use when authenticating S3"`
 
-	TempDir    string `help:"directory where temporary archive files are written"`
-	KeepFiles  bool   `help:"whether we should keep local archive files after upload (default false)"`
-	UploadToS3 bool   `help:"whether we should upload archive to S3"`
+	TempDir       string `help:"directory where temporary archive files are written"`
+	KeepFiles     bool   `help:"whether we should keep local archive files after upload (default false)"`
+	UploadToS3    bool   `help:"whether we should upload archive to S3"`
+	CheckS3Hashes bool   `help:"whether to check S3 hashes of uploaded archives before deleting records"`
 
 	ArchiveMessages bool   `help:"whether we should archive messages"`
 	ArchiveRuns     bool   `help:"whether we should archive runs"`
@@ -50,9 +51,10 @@ func NewDefaultConfig() *Config {
 		AWSAccessKeyID:     "",
 		AWSSecretAccessKey: "",
 
-		TempDir:    "/tmp",
-		KeepFiles:  false,
-		UploadToS3: true,
+		TempDir:       "/tmp",
+		KeepFiles:     false,
+		UploadToS3:    true,
+		CheckS3Hashes: true,
 
 		ArchiveMessages: true,
 		ArchiveRuns:     true,
