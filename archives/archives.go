@@ -535,10 +535,6 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		return errors.Wrapf(err, "error calculating archive hash")
 	}
 
-	if stat.Size() > 5e9 {
-		return fmt.Errorf("archive too large, must be smaller than 5 gigs, build dailies if possible")
-	}
-
 	archive.ArchiveFile = file.Name()
 	archive.Size = stat.Size()
 	archive.RecordCount = recordCount

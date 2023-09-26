@@ -26,15 +26,14 @@ We recommend running it with no changes to the configuration and no parameters, 
 environment variables to configure it. You can use `% rp-archiver --help` to see a list of the
 environment variables and parameters and for more details on each option.
 
-### RapidPro
-
-For use with RapidPro, you will want to configure these settings:
+For use with RapidPro/TextIt, you will need to configure these settings:
 
  * `ARCHIVER_DB`: URL describing how to connect to the database (default "postgres://temba:temba@localhost/temba?sslmode=disable")
  * `ARCHIVER_TEMP_DIR`: The directory that temporary archives will be written before upload (default "/tmp")
  * `ARCHIVER_DELETE`: Whether to delete messages and runs after they are archived, we recommend setting this to true for large installations (default false)
  
-For writing of archives, Archiver needs access to an S3 bucket, you can configure access to your bucket via:
+For writing of archives, Archiver needs access to a storage bucket on an S3 compatible service. For AWS we recommend that 
+you choose SSE-S3 encryption as this is the only type that supports validation of upload ETags.
 
  * `ARCHIVER_S3_REGION`: The region for your S3 bucket (ex: `ew-west-1`)
  * `ARCHIVER_S3_BUCKET`: The name of your S3 bucket (ex: `dl-archiver-test"`)
@@ -42,62 +41,13 @@ For writing of archives, Archiver needs access to an S3 bucket, you can configur
  * `ARCHIVER_AWS_ACCESS_KEY_ID`: The AWS access key id used to authenticate to AWS
  * `ARCHIVER_AWS_SECRET_ACCESS_KEY` The AWS secret access key used to authenticate to AWS
 
+If using a different encryption type or service that produces non-MD5 ETags:
+
+ * `CHECK_S3_HASHES`: can be set to `FALSE` to disable checking of upload hashes.
+
 Recommended settings for error reporting:
 
  * `ARCHIVER_SENTRY_DSN`: The DSN to use when logging errors to Sentry
-
-### Reference
-
-These are the configuration options that can be provided as parameters or environment variables. If using environment 
-varibles, convert to uppercase, replace dashes with underscores and prefix the name with `ARCHIVER_`, e.g. `-log-level` 
-becomes `ARCHIVER_LOG_LEVEL`.
-
-```
-  -archive-messages
-      whether we should archive messages (default true)
-  -archive-runs
-      whether we should archive runs (default true)
-  -aws-access-key-id string
-      the access key id to use when authenticating S3 (default none)
-  -aws-secret-access-key string
-      the secret access key id to use when authenticating S3 (default none)
-  -db string
-      the connection string for our database (default "postgres://localhost/archiver_test?sslmode=disable")
-  -debug-conf
-      print where config values are coming from
-  -delete
-      whether to delete messages and runs from the db after archival (default false)
-  -help
-      print usage information
-  -keep-files
-      whether we should keep local archive files after upload (default false)
-  -librato-username
-      the Librato username for metrics reporting
-  -librato-token
-      the Librato token for metrics reporting
-  -log-level string
-      the log level, one of error, warn, info, debug (default "info")
-  -once
-      run archving immediately and then exit
-  -retention-period int
-      the number of days to keep before archiving (default 90)
-  -s3-bucket string
-      the S3 bucket we will write archives to (default "dl-archiver-test")
-  -s3-disable-ssl
-      whether we disable SSL when accessing S3. Should always be set to False unless you're hosting an S3 compatible service within a secure internal network
-  -s3-endpoint string
-      the S3 endpoint we will write archives to (default "https://s3.amazonaws.com")
-  -s3-force-path-style
-      whether we force S3 path style. Should generally need to default to False unless you're hosting an S3 compatible service
-  -s3-region string
-      the S3 region we will write archives to (default "us-east-1")
-  -sentry-dsn string
-      the sentry configuration to log errors to, if any
-  -temp-dir string
-      directory where temporary archive files are written (default "/tmp")
-  -upload-to-s3
-      whether we should upload archive to S3 (default true)
-```
 
 ## Development
 
