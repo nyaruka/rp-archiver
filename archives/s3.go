@@ -20,7 +20,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var s3BucketURL = "https://%s.s3.amazonaws.com%s"
+const s3BucketURL = "https://%s.s3.amazonaws.com%s"
+
+// any file over this needs to be uploaded in chunks
+const maxSingleUploadBytes = 5e9 // 5GB
+
+// size of chunk to use when doing multi-part uploads
+const chunkSizeBytes = 1e9 // 1GB
 
 // NewS3Client creates a new s3 client from the passed in config, testing it as necessary
 func NewS3Client(config *Config) (s3iface.S3API, error) {
@@ -81,7 +87,7 @@ func UploadToS3(ctx context.Context, s3Client s3iface.S3API, bucket string, path
 	md5 := base64.StdEncoding.EncodeToString(hashBytes)
 
 	// if this fits into a single part, upload that way
-	if archive.Size <= 5e9 {
+	if archive.Size <= maxSingleUploadBytes {
 		params := &s3.PutObjectInput{
 			Bucket:          aws.String(bucket),
 			Body:            f,
@@ -97,11 +103,11 @@ func UploadToS3(ctx context.Context, s3Client s3iface.S3API, bucket string, path
 			return err
 		}
 	} else {
-		// this file is bigger than 5 gigs, use an upload manager instead, it will take care of uploading in parts
+		// this file is bigger than limit, use an upload manager instead, it will take care of uploading in parts
 		uploader := s3manager.NewUploaderWithClient(
 			s3Client,
 			func(u *s3manager.Uploader) {
-				u.PartSize = 1e9 // 1 gig per part
+				u.PartSize = chunkSizeBytes
 			},
 		)
 		params := &s3manager.UploadInput{
@@ -129,17 +135,17 @@ func withAcceptEncoding(e string) request.Option {
 	}
 }
 
-// GetS3FileETAG returns the ETAG hash for the passed in file
-func GetS3FileETAG(ctx context.Context, s3Client s3iface.S3API, fileURL string) (string, error) {
+// GetS3FileInfo returns the ETAG hash for the passed in file
+func GetS3FileInfo(ctx context.Context, s3Client s3iface.S3API, fileURL string) (int64, string, error) {
 	u, err := url.Parse(fileURL)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 
 	bucket := strings.Split(u.Host, ".")[0]
 	path := u.Path
 
-	output, err := s3Client.HeadObjectWithContext(
+	head, err := s3Client.HeadObjectWithContext(
 		ctx,
 		&s3.HeadObjectInput{
 			Bucket: aws.String(bucket),
@@ -148,16 +154,17 @@ func GetS3FileETAG(ctx context.Context, s3Client s3iface.S3API, fileURL string) 
 	)
 
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 
-	if output.ETag == nil {
-		return "", fmt.Errorf("no ETAG for object")
+	if head.ContentLength == nil || head.ETag == nil {
+		return 0, "", fmt.Errorf("no size or ETag returned for S3 object")
 	}
 
 	// etag is quoted, remove them
-	etag := strings.Trim(*output.ETag, `"`)
-	return etag, nil
+	etag := strings.Trim(*head.ETag, `"`)
+
+	return *head.ContentLength, etag, nil
 }
 
 // GetS3File return an io.ReadCloser for the passed in bucket and path

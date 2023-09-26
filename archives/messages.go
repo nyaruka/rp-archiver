@@ -129,15 +129,19 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	})
 	log.Info("deleting messages")
 
-	// first things first, make sure our file is present on S3
-	md5, err := GetS3FileETAG(outer, s3Client, archive.URL)
+	// first things first, make sure our file is correct on S3
+	s3Size, s3Hash, err := GetS3FileInfo(outer, s3Client, archive.URL)
 	if err != nil {
 		return err
 	}
 
-	// if our etag and archive md5 don't match, that's an error, return
-	if md5 != archive.Hash {
-		return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, md5)
+	if s3Size != archive.Size {
+		return fmt.Errorf("archive size: %d and s3 size: %d do not match", archive.Size, s3Size)
+	}
+
+	// if S3 hash is MD5 then check against archive hash
+	if archive.Size <= maxSingleUploadBytes && s3Hash != archive.Hash {
+		return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, s3Hash)
 	}
 
 	// ok, archive file looks good, let's build up our list of message ids, this may be big but we are int64s so shouldn't be too big
