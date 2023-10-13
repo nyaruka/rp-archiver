@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/archives"
+	"github.com/nyaruka/rp-archiver/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -42,6 +44,12 @@ func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{})
 	logrus.WithField("version", version).WithField("released", date).Info("starting archiver")
 
+	// configure golang std structured logging to route to logrus
+	slog.SetDefault(slog.New(utils.NewLogrusHandler(logrus.StandardLogger())))
+
+	logger := slog.With("comp", "main")
+	logger.Info("starting archiver", "version", version, "released", date)
+
 	// if we have a DSN entry, try to initialize it
 	if config.SentryDSN != "" {
 		hook, err := logrus_sentry.NewSentryHook(config.SentryDSN, []logrus.Level{logrus.PanicLevel, logrus.FatalLevel, logrus.ErrorLevel})
@@ -57,7 +65,7 @@ func main() {
 
 	// our settings shouldn't contain a timezone, nothing will work right with this not being a constant UTC
 	if strings.Contains(config.DB, "TimeZone") {
-		logrus.WithField("db", config.DB).Fatalf("invalid db connection string, do not specify a timezone, archiver always uses UTC")
+		logger.Error("invalid db connection string, do not specify a timezone, archiver always uses UTC", "db", config.DB)
 	}
 
 	// force our DB connection to be in UTC
@@ -69,19 +77,19 @@ func main() {
 
 	db, err := sqlx.Open("postgres", config.DB)
 	if err != nil {
-		logrus.Fatal(err)
+		logger.Error("error connecting to db", "error", err)
 	} else {
 		db.SetMaxOpenConns(2)
-		logrus.WithField("state", "starting").Info("db ok")
+		logger.Info("db ok", "state", "starting")
 	}
 
 	var s3Client s3iface.S3API
 	if config.UploadToS3 {
 		s3Client, err = archives.NewS3Client(config)
 		if err != nil {
-			logrus.WithError(err).Fatal("unable to initialize s3 client")
+			logger.Error("unable to initialize s3 client", "error", err)
 		} else {
-			logrus.WithField("state", "starting").Info("s3 bucket ok")
+			logger.Info("s3 bucket ok", "state", "starting")
 		}
 	}
 
@@ -90,15 +98,15 @@ func main() {
 	// ensure that we can actually write to the temp directory
 	err = archives.EnsureTempArchiveDirectory(config.TempDir)
 	if err != nil {
-		logrus.WithError(err).Fatal("cannot write to temp directory")
+		logger.Error("cannot write to temp directory", "error", err)
 	} else {
-		logrus.WithField("state", "starting").Info("tmp file access ok")
+		logger.Info("tmp file access ok", "state", "starting")
 	}
 
 	// parse our start time
 	timeOfDay, err := dates.ParseTimeOfDay("tt:mm", config.StartTime)
 	if err != nil {
-		logrus.WithError(err).Fatal("invalid start time supplied, format: HH:MM")
+		logger.Error("invalid start time supplied, format: HH:MM", "error", err)
 	}
 
 	// if we have a librato token, configure it
@@ -115,7 +123,7 @@ func main() {
 			nextArchival := getNextArchivalTime(timeOfDay)
 			napTime := time.Until(nextArchival)
 
-			logrus.WithField("sleep_time", napTime).WithField("next_archival", nextArchival).Info("sleeping until next archival")
+			logger.Info("sleeping until next archival", "sleep_time", napTime, "next_archival", nextArchival)
 			time.Sleep(napTime)
 
 			doArchival(db, config, s3Client)
@@ -131,7 +139,7 @@ func doArchival(db *sqlx.DB, cfg *archives.Config, s3Client s3iface.S3API) {
 		// try to archive all active orgs, and if it fails, wait 5 minutes and try again
 		err := archives.ArchiveActiveOrgs(db, cfg, s3Client)
 		if err != nil {
-			logrus.WithError(err).Error("error archiving, will retry in 5 minutes")
+			slog.Error("error archiving, will retry in 5 minutes", "error", err)
 			time.Sleep(time.Minute * 5)
 			continue
 		} else {
