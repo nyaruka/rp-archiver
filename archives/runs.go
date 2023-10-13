@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -114,14 +114,14 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	defer cancel()
 
 	start := dates.Now()
-	log := logrus.WithFields(logrus.Fields{
-		"id":           archive.ID,
-		"org_id":       archive.OrgID,
-		"start_date":   archive.StartDate,
-		"end_date":     archive.endDate(),
-		"archive_type": archive.ArchiveType,
-		"total_count":  archive.RecordCount,
-	})
+	log := slog.With(
+		"id", archive.ID,
+		"org_id", archive.OrgID,
+		"start_date", archive.StartDate,
+		"end_date", archive.endDate(),
+		"archive_type", archive.ArchiveType,
+		"total_count", archive.RecordCount,
+	)
 	log.Info("deleting runs")
 
 	// first things first, make sure our file is correct on S3
@@ -167,7 +167,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	}
 	rows.Close()
 
-	log.WithField("run_count", len(runIDs)).Debug("found runs")
+	log.Debug("found runs", "run_count", len(runIDs))
 
 	// verify we don't see more runs than there are in our archive (fewer is ok)
 	if runCount > archive.RecordCount {
@@ -200,7 +200,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 			return errors.Wrap(err, "error committing run delete transaction")
 		}
 
-		log.WithField("elapsed", dates.Since(start)).WithField("count", len(idBatch)).Debug("deleted batch of runs")
+		log.Debug("deleted batch of runs", "elapsed", dates.Since(start), "count", len(idBatch))
 
 		cancel()
 	}
@@ -218,7 +218,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	archive.NeedsDeletion = false
 	archive.DeletedOn = &deletedOn
 
-	logrus.WithField("elapsed", dates.Since(start)).Info("completed deleting runs")
+	slog.Info("completed deleting runs", "elapsed", dates.Since(start))
 
 	return nil
 }
@@ -243,7 +243,7 @@ func DeleteFlowStarts(ctx context.Context, now time.Time, config *Config, db *sq
 	count := 0
 	for rows.Next() {
 		if count == 0 {
-			logrus.WithField("org_id", org.ID).Info("deleting starts")
+			slog.Info("deleting starts", "org_id", org.ID)
 		}
 
 		// been deleting this org more than an hour? thats enough for today, exit out
@@ -306,7 +306,7 @@ func DeleteFlowStarts(ctx context.Context, now time.Time, config *Config, db *sq
 	}
 
 	if count > 0 {
-		logrus.WithFields(logrus.Fields{"elapsed": dates.Since(start), "count": count, "org_id": org.ID}).Info("completed deleting starts")
+		slog.Info("completed deleting starts", "elapsed", dates.Since(start), "count", count, "org_id", org.ID)
 	}
 
 	return nil
