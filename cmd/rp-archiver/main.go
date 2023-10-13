@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"log/slog"
 	"os"
 	"strings"
@@ -8,15 +9,15 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
-	"github.com/evalphobia/logrus_sentry"
+	"github.com/getsentry/sentry-go"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
 	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/archives"
-	"github.com/nyaruka/rp-archiver/utils"
-	"github.com/sirupsen/logrus"
+	slogmulti "github.com/samber/slog-multi"
+	slogsentry "github.com/samber/slog-sentry"
 )
 
 var (
@@ -31,36 +32,44 @@ func main() {
 	loader.MustLoad()
 
 	if config.KeepFiles && !config.UploadToS3 {
-		logrus.Fatal("cannot delete archives and also not upload to s3")
+		log.Fatal("cannot delete archives and also not upload to s3")
 	}
 
-	level, err := logrus.ParseLevel(config.LogLevel)
+	var level slog.Level
+	err := level.UnmarshalText([]byte(config.LogLevel))
 	if err != nil {
-		logrus.Fatalf("Invalid log level '%s'", level)
+		log.Fatalf("invalid log level %s", level)
+		os.Exit(1)
 	}
 
-	logrus.SetLevel(level)
-	logrus.SetOutput(os.Stdout)
-	logrus.SetFormatter(&logrus.TextFormatter{})
-	logrus.WithField("version", version).WithField("released", date).Info("starting archiver")
-
-	// configure golang std structured logging to route to logrus
-	slog.SetDefault(slog.New(utils.NewLogrusHandler(logrus.StandardLogger())))
+	// configure our logger
+	logHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+	slog.SetDefault(slog.New(logHandler))
 
 	logger := slog.With("comp", "main")
 	logger.Info("starting archiver", "version", version, "released", date)
 
 	// if we have a DSN entry, try to initialize it
 	if config.SentryDSN != "" {
-		hook, err := logrus_sentry.NewSentryHook(config.SentryDSN, []logrus.Level{logrus.PanicLevel, logrus.FatalLevel, logrus.ErrorLevel})
-		hook.Timeout = 0
-		hook.StacktraceConfiguration.Enable = true
-		hook.StacktraceConfiguration.Skip = 4
-		hook.StacktraceConfiguration.Context = 5
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn:           config.SentryDSN,
+			EnableTracing: false,
+		})
 		if err != nil {
-			logrus.Fatalf("invalid sentry DSN: '%s': %s", config.SentryDSN, err)
+			log.Fatalf("error initiating sentry client, error %s, dsn %s", err, config.SentryDSN)
+			os.Exit(1)
 		}
-		logrus.StandardLogger().Hooks.Add(hook)
+
+		defer sentry.Flush(2 * time.Second)
+
+		logger = slog.New(
+			slogmulti.Fanout(
+				logHandler,
+				slogsentry.Option{Level: slog.LevelError}.NewSentryHandler(),
+			),
+		)
+		logger = logger.With("release", version)
+		slog.SetDefault(logger)
 	}
 
 	// our settings shouldn't contain a timezone, nothing will work right with this not being a constant UTC
