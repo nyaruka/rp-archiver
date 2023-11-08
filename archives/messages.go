@@ -234,7 +234,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 const sqlSelectOldOrgBroadcasts = `
 SELECT id
   FROM msgs_broadcast b
- WHERE b.org_id = $1 AND b.created_on < $2 AND b.schedule_id IS NULL AND NOT EXISTS (SELECT 1 FROM msgs_msg WHERE broadcast_id = b.id)
+ WHERE b.org_id = $1 AND b.created_on < $2 AND b.schedule_id IS NULL AND b.is_active AND NOT EXISTS (SELECT 1 FROM msgs_msg WHERE broadcast_id = b.id)
  LIMIT 1000000;`
 
 // DeleteBroadcasts deletes all broadcasts older than 90 days for the passed in org which have no associated messages
