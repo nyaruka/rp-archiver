@@ -1,3 +1,7 @@
+v8.3.4 (2023-11-08)
+-------------------------
+ * Fix deleting of broadcasts so we don't include deleted scheduled broadcasts
+
 v8.3.3 (2023-09-26)
 -------------------------
  * Allow disabling of hash checking
