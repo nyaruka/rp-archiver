@@ -116,7 +116,8 @@ CREATE TABLE msgs_broadcast (
     org_id integer NOT NULL REFERENCES orgs_org(id),
     translations jsonb NOT NULL,
     created_on timestamp with time zone NOT NULL,
-    schedule_id int NULL
+    schedule_id int NULL,
+    is_active boolean NOT NULL
 );
 
 CREATE TABLE msgs_broadcast_contacts (
@@ -276,11 +277,11 @@ INSERT INTO flows_flow(id, uuid, org_id, name) VALUES
 (3, '3914b88e-625b-4603-bd9f-9319dc331c6b', 2, 'Flow 3'),
 (4, 'cfa2371d-2f06-481d-84b2-d974f3803bb0', 2, 'Flow 4');
 
-INSERT INTO msgs_broadcast(id, org_id, translations, created_on, schedule_id) VALUES
-(1, 2, '{"text": {"eng": "hello", "fre": "bonjour"}}', '2017-08-12 22:11:59.890662+02:00', 1),
-(2, 2, '{"text": {"und": "hola"}}', '2017-08-12 22:11:59.890662+02:00', NULL),
-(3, 2, '{"text": {"und": "not purged"}}', '2017-08-12 19:11:59.890662+02:00', NULL),
-(4, 2, '{"text": {"und": "new"}}', '2019-08-12 19:11:59.890662+02:00', NULL);
+INSERT INTO msgs_broadcast(id, org_id, translations, created_on, schedule_id, is_active) VALUES
+(1, 2, '{"text": {"eng": "hello", "fre": "bonjour"}}', '2017-08-12 22:11:59.890662+02:00', 1, TRUE),
+(2, 2, '{"text": {"und": "hola"}}', '2017-08-12 22:11:59.890662+02:00', NULL, TRUE),
+(3, 2, '{"text": {"und": "not purged"}}', '2017-08-12 19:11:59.890662+02:00', NULL, TRUE),
+(4, 2, '{"text": {"und": "new"}}', '2019-08-12 19:11:59.890662+02:00', NULL, TRUE);
 
 INSERT INTO msgs_msg(id, uuid, org_id, broadcast_id, text, created_on, sent_on, modified_on, direction, status, visibility, msg_type, attachments, channel_id, contact_id, contact_urn_id, flow_id, msg_count, error_count, next_attempt) VALUES
 (1, '2f969340-704a-4aa2-a1bd-2f832a21d257', 2, NULL, 'message 1', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'V', 'T', NULL, 2, 6, 7, NULL, 1, 0, '2017-08-12 21:11:59.890662+00'),
