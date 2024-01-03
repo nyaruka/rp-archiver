@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -93,7 +93,7 @@ func writeMessageRecords(ctx context.Context, db *sqlx.DB, archive *Archive, wri
 		recordCount++
 	}
 
-	logrus.WithField("record_count", recordCount).Debug("Done Writing")
+	slog.Debug("Done Writing", "record_count", recordCount)
 	return recordCount, nil
 }
 
@@ -119,14 +119,14 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	defer cancel()
 
 	start := dates.Now()
-	log := logrus.WithFields(logrus.Fields{
-		"id":           archive.ID,
-		"org_id":       archive.OrgID,
-		"start_date":   archive.StartDate,
-		"end_date":     archive.endDate(),
-		"archive_type": archive.ArchiveType,
-		"total_count":  archive.RecordCount,
-	})
+	log := slog.With(
+		"id", archive.ID,
+		"org_id", archive.OrgID,
+		"start_date", archive.StartDate,
+		"end_date", archive.endDate(),
+		"archive_type", archive.ArchiveType,
+		"total_count", archive.RecordCount,
+	)
 	log.Info("deleting messages")
 
 	// first things first, make sure our file is correct on S3
@@ -169,7 +169,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	}
 	rows.Close()
 
-	log.WithField("msg_count", len(msgIDs)).Debug("found messages")
+	log.Debug("found messages", "msg_count", len(msgIDs))
 
 	// verify we don't see more messages than there are in our archive (fewer is ok)
 	if visibleCount > archive.RecordCount {
@@ -208,7 +208,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 			return errors.Wrap(err, "error committing message delete transaction")
 		}
 
-		log.WithField("elapsed", dates.Since(start)).WithField("count", len(idBatch)).Debug("deleted batch of messages")
+		log.Debug("deleted batch of messages", "elapsed", dates.Since(start), "count", len(idBatch))
 
 		cancel()
 	}
@@ -226,7 +226,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	archive.NeedsDeletion = false
 	archive.DeletedOn = &deletedOn
 
-	logrus.WithField("elapsed", dates.Since(start)).Info("completed deleting messages")
+	slog.Info("completed deleting messages", "elapsed", dates.Since(start))
 
 	return nil
 }
@@ -251,7 +251,8 @@ func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sq
 	count := 0
 	for rows.Next() {
 		if count == 0 {
-			logrus.WithField("org_id", org.ID).Info("deleting broadcasts")
+			slog.Info("deleting broadcasts", "org_id", org.ID)
+
 		}
 
 		// been deleting this org more than an hour? thats enough for today, exit out
@@ -307,7 +308,7 @@ func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sq
 	}
 
 	if count > 0 {
-		logrus.WithFields(logrus.Fields{"elapsed": dates.Since(start), "count": count, "org_id": org.ID}).Info("completed deleting broadcasts")
+		slog.Info("completed deleting broadcasts", "elapsed", dates.Since(start), "count", count, "org_id", org.ID)
 	}
 
 	return nil

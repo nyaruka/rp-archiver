@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -17,7 +18,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/sirupsen/logrus"
 )
 
 const s3BucketURL = "https://%s.s3.amazonaws.com%s"
@@ -44,7 +44,7 @@ func NewS3Client(config *Config) (s3iface.S3API, error) {
 		return nil, err
 	}
 	s3Session.Handlers.Send.PushFront(func(r *request.Request) {
-		logrus.WithField("headers", r.HTTPRequest.Header).WithField("service", r.ClientInfo.ServiceName).WithField("operation", r.Operation).WithField("params", r.Params).Debug("making aws request")
+		slog.Debug("making aws request", "headers", r.HTTPRequest.Header, "service", r.ClientInfo.ServiceName, "operation", r.Operation, "params", r.Params)
 	})
 
 	s3Client := s3.New(s3Session)
@@ -52,7 +52,7 @@ func NewS3Client(config *Config) (s3iface.S3API, error) {
 	// test out our S3 credentials
 	err = TestS3(s3Client, config.S3Bucket)
 	if err != nil {
-		logrus.WithError(err).Fatal("s3 bucket not reachable")
+		slog.Error("s3 bucket not reachable", "error", err)
 		return nil, err
 	}
 

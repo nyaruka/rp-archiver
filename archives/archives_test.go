@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"context"
 	"io"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/nyaruka/ezconf"
 	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/gocommon/dates"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,7 +26,8 @@ func setup(t *testing.T) *sqlx.DB {
 
 	_, err = db.Exec(string(testDB))
 	assert.NoError(t, err)
-	logrus.SetLevel(logrus.DebugLevel)
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
 	return db
 }
