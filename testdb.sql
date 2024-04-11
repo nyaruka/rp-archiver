@@ -14,6 +14,7 @@ DROP TABLE IF EXISTS msgs_broadcast CASCADE;
 DROP TABLE IF EXISTS msgs_label CASCADE;
 DROP TABLE IF EXISTS msgs_msg_labels CASCADE;
 DROP TABLE IF EXISTS msgs_msg CASCADE;
+DROP TABLE IF EXISTS msgs_optin CASCADE;
 DROP TABLE IF EXISTS ivr_call CASCADE;
 DROP TABLE IF EXISTS contacts_contacturn CASCADE;
 DROP TABLE IF EXISTS contacts_contactgroup_contacts CASCADE;
@@ -28,6 +29,11 @@ CREATE TABLE orgs_org (
     is_anon boolean NOT NULL,
     is_active boolean NOT NULL,
     created_on timestamp with time zone NOT NULL
+);
+
+CREATE TABLE auth_user (
+    id serial primary key,
+    username character varying(128) NOT NULL
 );
 
 CREATE TABLE channels_channel (
@@ -84,33 +90,6 @@ CREATE TABLE flows_flow (
     name character varying(128) NOT NULL
 );
 
-CREATE TABLE msgs_msg (
-    id serial primary key,
-    uuid uuid NULL,
-    org_id integer NOT NULL REFERENCES orgs_org(id),
-    broadcast_id integer NULL,
-    text text NOT NULL,
-    high_priority boolean NULL,
-    created_on timestamp with time zone NOT NULL,
-    modified_on timestamp with time zone NOT NULL,
-    sent_on timestamp with time zone,
-    queued_on timestamp with time zone,
-    direction character varying(1) NOT NULL,
-    status character varying(1) NOT NULL,
-    visibility character varying(1) NOT NULL,
-    msg_type character varying(1),
-    msg_count integer NOT NULL,
-    error_count integer NOT NULL,
-    next_attempt timestamp with time zone NOT NULL,
-    external_id character varying(255),
-    attachments character varying(255)[],
-    channel_id integer REFERENCES channels_channel(id),
-    contact_id integer NOT NULL REFERENCES contacts_contact(id),
-    contact_urn_id integer NULL REFERENCES contacts_contacturn(id),
-    flow_id integer NULL REFERENCES flows_flow(id),
-    metadata text
-);
-
 CREATE TABLE msgs_broadcast (
     id serial primary key,
     org_id integer NOT NULL REFERENCES orgs_org(id),
@@ -138,6 +117,46 @@ CREATE TABLE msgs_broadcastmsgcount (
     broadcast_id integer NOT NULL REFERENCES msgs_broadcast(id)
 );
 
+CREATE TABLE msgs_optin (
+    id serial PRIMARY KEY,
+    uuid uuid NOT NULL,
+    org_id integer NOT NULL REFERENCES orgs_org(id) ON DELETE CASCADE,
+    name character varying(64)
+);
+
+CREATE TABLE msgs_msg (
+    id bigserial PRIMARY KEY,
+    uuid uuid NOT NULL,
+    org_id integer NOT NULL REFERENCES orgs_org(id) ON DELETE CASCADE,
+    channel_id integer REFERENCES channels_channel(id) ON DELETE CASCADE,
+    contact_id integer NOT NULL REFERENCES contacts_contact(id) ON DELETE CASCADE,
+    contact_urn_id integer REFERENCES contacts_contacturn(id) ON DELETE CASCADE,
+    broadcast_id integer REFERENCES msgs_broadcast(id) ON DELETE CASCADE,
+    flow_id integer REFERENCES flows_flow(id) ON DELETE CASCADE,
+    --ticket_id integer REFERENCES tickets_ticket(id) ON DELETE CASCADE,
+    created_by_id integer REFERENCES auth_user(id) ON DELETE CASCADE,
+    text text NOT NULL,
+    attachments character varying(255)[] NULL,
+    quick_replies character varying(64)[] NULL,
+    optin_id integer REFERENCES msgs_optin(id) ON DELETE CASCADE,
+    locale character varying(6) NULL,
+    created_on timestamp with time zone NOT NULL,
+    modified_on timestamp with time zone NOT NULL,
+    sent_on timestamp with time zone,
+    msg_type character varying(1) NOT NULL,
+    direction character varying(1) NOT NULL,
+    status character varying(1) NOT NULL,
+    visibility character varying(1) NOT NULL,
+    msg_count integer NOT NULL,
+    high_priority boolean NULL,
+    error_count integer NOT NULL,
+    next_attempt timestamp with time zone NOT NULL,
+    failed_reason character varying(1),
+    external_id character varying(255),
+    metadata text,
+    log_uuids uuid[]
+);
+
 CREATE TABLE msgs_label (
     id serial primary key,
     uuid character varying(36) NULL,
@@ -148,11 +167,6 @@ CREATE TABLE msgs_msg_labels (
     id serial primary key,
     msg_id integer NOT NULL REFERENCES msgs_msg(id),
     label_id integer NOT NULL REFERENCES msgs_label(id)
-);
-
-CREATE TABLE auth_user (
-    id serial primary key,
-    username character varying(128) NOT NULL
 );
 
 CREATE TABLE ivr_call (
