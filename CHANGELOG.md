@@ -1,3 +1,9 @@
+v9.1.0 (2024-04-12)
+-------------------------
+ * Remove flows_flowrun.submitted_by
+ * Replace logrus with slog
+ * Update to go 1.22 and update deps
+
 v9.0.0 (2024-01-05)
 -------------------------
  * Update dependencies
