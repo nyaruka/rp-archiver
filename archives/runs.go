@@ -48,14 +48,11 @@ FROM (
         WHEN status = 'X' THEN 'expired'
         WHEN status = 'F' THEN 'failed'
         ELSE NULL
-	 END as exit_type,
- 	 a.username as submitted_by
+	 END as exit_type
 
    FROM flows_flowrun fr
-     LEFT JOIN auth_user a ON a.id = fr.submitted_by_id
-     JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
-     JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id) AS contact_struct ON True
-   
+   JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
+   JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id) AS contact_struct ON True
    WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
    ORDER BY fr.modified_on ASC, id ASC
 ) as rec;`
