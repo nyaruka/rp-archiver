@@ -1,3 +1,7 @@
+v9.1.1 (2024-04-25)
+-------------------------
+ * Add support for status=READ
+
 v9.1.0 (2024-04-12)
 -------------------------
  * Remove flows_flowrun.submitted_by
