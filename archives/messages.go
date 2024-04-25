@@ -44,7 +44,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 			WHEN status = 'E' THEN 'errored'
 			WHEN status = 'F' THEN 'failed'
 			WHEN status = 'S' THEN 'sent'
-			WHEN status = 'R' THEN 'resent'
+			WHEN status = 'R' THEN 'read'
 			ELSE NULL 
 		END AS status,
 		CASE WHEN visibility = 'V' THEN 'visible' WHEN visibility = 'A' THEN 'archived' WHEN visibility = 'D' THEN 'deleted' WHEN visibility = 'X' THEN 'deleted' ELSE NULL END as visibility,
