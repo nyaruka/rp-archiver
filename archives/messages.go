@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/gocommon/dates"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -75,14 +74,14 @@ func writeMessageRecords(ctx context.Context, db *sqlx.DB, archive *Archive, wri
 
 	rows, err := db.QueryxContext(ctx, sqlLookupMsgs, archive.Org.ID, archive.StartDate, archive.endDate())
 	if err != nil {
-		return 0, errors.Wrapf(err, "error querying messages for org: %d", archive.Org.ID)
+		return 0, fmt.Errorf("error querying messages for org: %d: %w", archive.Org.ID, err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		err = rows.Scan(&visibility, &record)
 		if err != nil {
-			return 0, errors.Wrapf(err, "error scanning message row for org: %d", archive.Org.ID)
+			return 0, fmt.Errorf("error scanning message row for org: %d: %w", archive.Org.ID, err)
 		}
 
 		if visibility == "deleted" {
@@ -193,19 +192,19 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		// first delete any labelings
 		err = executeInQuery(ctx, tx, sqlDeleteMessageLabels, idBatch)
 		if err != nil {
-			return errors.Wrap(err, "error removing message labels")
+			return fmt.Errorf("error removing message labels: %w", err)
 		}
 
 		// then delete the messages themselves
 		err = executeInQuery(ctx, tx, sqlDeleteMessages, idBatch)
 		if err != nil {
-			return errors.Wrap(err, "error deleting messages")
+			return fmt.Errorf("error deleting messages: %w", err)
 		}
 
 		// commit our transaction
 		err = tx.Commit()
 		if err != nil {
-			return errors.Wrap(err, "error committing message delete transaction")
+			return fmt.Errorf("error committing message delete transaction: %w", err)
 		}
 
 		log.Debug("deleted batch of messages", "elapsed", dates.Since(start), "count", len(idBatch))
@@ -221,7 +220,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	// all went well! mark our archive as no longer needing deletion
 	_, err = db.ExecContext(outer, sqlUpdateArchiveDeleted, archive.ID, deletedOn)
 	if err != nil {
-		return errors.Wrap(err, "error setting archive as deleted")
+		return fmt.Errorf("error setting archive as deleted: %w", err)
 	}
 	archive.NeedsDeletion = false
 	archive.DeletedOn = &deletedOn
@@ -262,46 +261,46 @@ func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sq
 
 		var broadcastID int64
 		if err := rows.Scan(&broadcastID); err != nil {
-			return errors.Wrap(err, "unable to get broadcast id")
+			return fmt.Errorf("unable to get broadcast id: %w", err)
 		}
 
 		// we delete broadcasts in a transaction per broadcast
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
-			return errors.Wrapf(err, "error starting transaction while deleting broadcast: %d", broadcastID)
+			return fmt.Errorf("error starting transaction while deleting broadcast: %d: %w", broadcastID, err)
 		}
 
 		// delete contacts M2M
 		_, err = tx.Exec(`DELETE from msgs_broadcast_contacts WHERE broadcast_id = $1`, broadcastID)
 		if err != nil {
 			tx.Rollback()
-			return errors.Wrapf(err, "error deleting related contacts for broadcast: %d", broadcastID)
+			return fmt.Errorf("error deleting related contacts for broadcast: %d: %w", broadcastID, err)
 		}
 
 		// delete groups M2M
 		_, err = tx.Exec(`DELETE from msgs_broadcast_groups WHERE broadcast_id = $1`, broadcastID)
 		if err != nil {
 			tx.Rollback()
-			return errors.Wrapf(err, "error deleting related groups for broadcast: %d", broadcastID)
+			return fmt.Errorf("error deleting related groups for broadcast: %d: %w", broadcastID, err)
 		}
 
 		// delete counts associated with this broadcast
 		_, err = tx.Exec(`DELETE from msgs_broadcastmsgcount WHERE broadcast_id = $1`, broadcastID)
 		if err != nil {
 			tx.Rollback()
-			return errors.Wrapf(err, "error deleting counts for broadcast: %d", broadcastID)
+			return fmt.Errorf("error deleting counts for broadcast: %d: %w", broadcastID, err)
 		}
 
 		// finally, delete our broadcast
 		_, err = tx.Exec(`DELETE from msgs_broadcast WHERE id = $1`, broadcastID)
 		if err != nil {
 			tx.Rollback()
-			return errors.Wrapf(err, "error deleting broadcast: %d", broadcastID)
+			return fmt.Errorf("error deleting broadcast: %d: %w", broadcastID, err)
 		}
 
 		err = tx.Commit()
 		if err != nil {
-			return errors.Wrapf(err, "error deleting broadcast: %d", broadcastID)
+			return fmt.Errorf("error deleting broadcast: %d: %w", broadcastID, err)
 		}
 
 		count++
