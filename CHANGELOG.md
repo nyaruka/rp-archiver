@@ -1,3 +1,8 @@
+v9.1.2 (2024-06-04)
+-------------------------
+ * Update deps
+ * Use std lib errors
+
 v9.1.1 (2024-04-25)
 -------------------------
  * Add support for status=READ
