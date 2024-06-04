@@ -3,13 +3,13 @@ module github.com/nyaruka/rp-archiver
 go 1.22
 
 require (
-	github.com/aws/aws-sdk-go v1.53.14
+	github.com/aws/aws-sdk-go v1.53.15
 	github.com/getsentry/sentry-go v0.28.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/nyaruka/ezconf v0.3.0
 	github.com/nyaruka/gocommon v1.55.5
-	github.com/samber/slog-multi v1.0.3
+	github.com/samber/slog-multi v1.1.0
 	github.com/samber/slog-sentry v1.2.2
 	github.com/stretchr/testify v1.9.0
 )
@@ -17,8 +17,6 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
