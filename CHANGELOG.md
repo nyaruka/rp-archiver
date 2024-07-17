@@ -1,3 +1,8 @@
+v9.2.0 (2024-07-17)
+-------------------------
+ * Update dependencies
+ * Test against PostgreSQL 15
+
 v9.1.2 (2024-06-04)
 -------------------------
  * Update deps
