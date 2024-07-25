@@ -31,8 +31,9 @@ const chunkSizeBytes = 1e9 // 1GB
 // NewS3Client creates a new s3 client from the passed in config, testing it as necessary
 func NewS3Client(config *Config) (s3iface.S3API, error) {
 	s3config := &aws.Config{
-		Region:   aws.String(config.AWSRegion),
-		Endpoint: aws.String(config.S3Endpoint),
+		Region:           aws.String(config.AWSRegion),
+		Endpoint:         aws.String(config.S3Endpoint),
+		S3ForcePathStyle: aws.Bool(config.S3ForcePathStyle),
 	}
 	if config.AWSAccessKeyID != "" {
 		s3config.Credentials = credentials.NewStaticCredentials(config.AWSAccessKeyID, config.AWSSecretAccessKey, "")
