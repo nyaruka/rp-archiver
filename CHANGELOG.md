@@ -1,3 +1,7 @@
+v9.3.1 (2024-07-25)
+-------------------------
+ * Re-add config option to force path style urls in S3, use minio to emulate S3 for testing
+
 v9.3.0 (2024-07-25)
 -------------------------
  * Update AWS/S3 config
