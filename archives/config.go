@@ -12,8 +12,9 @@ type Config struct {
 	AWSSecretAccessKey string `help:"secret access key to use for AWS services"`
 	AWSRegion          string `help:"region to use for AWS services, e.g. us-east-1"`
 
-	S3Endpoint string `help:"the S3 endpoint we will write archives to"`
-	S3Bucket   string `help:"the S3 bucket we will write archives to"`
+	S3Endpoint       string `help:"the S3 endpoint we will write archives to"`
+	S3Bucket         string `help:"the S3 bucket we will write archives to"`
+	S3ForcePathStyle bool   `help:"S3 should used /bucket/path style URLs"`
 
 	TempDir       string `help:"directory where temporary archive files are written"`
 	KeepFiles     bool   `help:"whether we should keep local archive files after upload (default false)"`
@@ -43,8 +44,9 @@ func NewDefaultConfig() *Config {
 		AWSSecretAccessKey: "",
 		AWSRegion:          "us-east-1",
 
-		S3Endpoint: "https://s3.amazonaws.com",
-		S3Bucket:   "dl-archiver-test",
+		S3Endpoint:       "https://s3.amazonaws.com",
+		S3Bucket:         "temba-archives",
+		S3ForcePathStyle: false,
 
 		TempDir:       "/tmp",
 		KeepFiles:     false,
