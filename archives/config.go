@@ -8,14 +8,12 @@ type Config struct {
 	LogLevel  string `help:"the log level, one of error, warn, info, debug"`
 	SentryDSN string `help:"the sentry configuration to log errors to, if any"`
 
-	S3Endpoint       string `help:"the S3 endpoint we will write archives to"`
-	S3Region         string `help:"the S3 region we will write archives to"`
-	S3Bucket         string `help:"the S3 bucket we will write archives to"`
-	S3DisableSSL     bool   `help:"whether we disable SSL when accessing S3. Should always be set to False unless you're hosting an S3 compatible service within a secure internal network"`
-	S3ForcePathStyle bool   `help:"whether we force S3 path style. Should generally need to default to False unless you're hosting an S3 compatible service"`
+	AWSAccessKeyID     string `help:"access key ID to use for AWS services"`
+	AWSSecretAccessKey string `help:"secret access key to use for AWS services"`
+	AWSRegion          string `help:"region to use for AWS services, e.g. us-east-1"`
 
-	AWSAccessKeyID     string `help:"the access key id to use when authenticating S3"`
-	AWSSecretAccessKey string `help:"the secret access key id to use when authenticating S3"`
+	S3Endpoint string `help:"the S3 endpoint we will write archives to"`
+	S3Bucket   string `help:"the S3 bucket we will write archives to"`
 
 	TempDir       string `help:"directory where temporary archive files are written"`
 	KeepFiles     bool   `help:"whether we should keep local archive files after upload (default false)"`
@@ -39,17 +37,14 @@ func NewDefaultConfig() *Config {
 	hostname, _ := os.Hostname()
 
 	config := Config{
-		DB:       "postgres://localhost/archiver_test?sslmode=disable",
-		LogLevel: "info",
-
-		S3Endpoint:       "https://s3.amazonaws.com",
-		S3Region:         "us-east-1",
-		S3Bucket:         "dl-archiver-test",
-		S3DisableSSL:     false,
-		S3ForcePathStyle: false,
+		DB: "postgres://localhost/archiver_test?sslmode=disable",
 
 		AWSAccessKeyID:     "",
 		AWSSecretAccessKey: "",
+		AWSRegion:          "us-east-1",
+
+		S3Endpoint: "https://s3.amazonaws.com",
+		S3Bucket:   "dl-archiver-test",
 
 		TempDir:       "/tmp",
 		KeepFiles:     false,
@@ -64,6 +59,7 @@ func NewDefaultConfig() *Config {
 		Once:            false,
 
 		InstanceName: hostname,
+		LogLevel:     "info",
 	}
 
 	return &config
