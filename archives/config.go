@@ -12,9 +12,9 @@ type Config struct {
 	AWSSecretAccessKey string `help:"secret access key to use for AWS services"`
 	AWSRegion          string `help:"region to use for AWS services, e.g. us-east-1"`
 
-	S3Endpoint       string `help:"the S3 endpoint we will write archives to"`
-	S3Bucket         string `help:"the S3 bucket we will write archives to"`
-	S3ForcePathStyle bool   `help:"S3 should used /bucket/path style URLs"`
+	S3Endpoint string `help:"S3 endpoint we will write archives to"`
+	S3Bucket   string `help:"S3 bucket we will write archives to"`
+	S3Minio    bool   `help:"S3 is actually Minio or other compatible service"`
 
 	TempDir       string `help:"directory where temporary archive files are written"`
 	KeepFiles     bool   `help:"whether we should keep local archive files after upload (default false)"`
@@ -37,16 +37,16 @@ type Config struct {
 func NewDefaultConfig() *Config {
 	hostname, _ := os.Hostname()
 
-	config := Config{
+	return &Config{
 		DB: "postgres://localhost/archiver_test?sslmode=disable",
 
 		AWSAccessKeyID:     "",
 		AWSSecretAccessKey: "",
 		AWSRegion:          "us-east-1",
 
-		S3Endpoint:       "https://s3.amazonaws.com",
-		S3Bucket:         "temba-archives",
-		S3ForcePathStyle: false,
+		S3Endpoint: "https://s3.amazonaws.com",
+		S3Bucket:   "temba-archives",
+		S3Minio:    false,
 
 		TempDir:       "/tmp",
 		KeepFiles:     false,
@@ -63,6 +63,4 @@ func NewDefaultConfig() *Config {
 		InstanceName: hostname,
 		LogLevel:     "info",
 	}
-
-	return &config
 }

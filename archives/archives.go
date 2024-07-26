@@ -14,11 +14,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/gocommon/dates"
+	"github.com/nyaruka/gocommon/s3x"
 )
 
 // ArchiveType is the type for the archives
@@ -320,7 +320,7 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 }
 
 // BuildRollupArchive builds a monthly archive from the files present on S3
-func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client s3iface.S3API, monthlyArchive *Archive, now time.Time, org Org, archiveType ArchiveType) error {
+func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client *s3x.Service, monthlyArchive *Archive, now time.Time, org Org, archiveType ArchiveType) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Hour)
 	defer cancel()
 
@@ -549,7 +549,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 }
 
 // UploadArchive uploads the passed archive file to S3
-func UploadArchive(ctx context.Context, s3Client s3iface.S3API, bucket string, archive *Archive) error {
+func UploadArchive(ctx context.Context, s3Client *s3x.Service, bucket string, archive *Archive) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 	defer cancel()
 
@@ -675,7 +675,7 @@ func DeleteArchiveFile(archive *Archive) error {
 }
 
 // CreateOrgArchives builds all the missing archives for the passed in org
-func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, error) {
+func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client *s3x.Service, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, error) {
 	archiveCount, err := GetCurrentArchiveCount(ctx, db, org, archiveType)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("error getting current archive count: %w", err)
@@ -708,7 +708,7 @@ func CreateOrgArchives(ctx context.Context, now time.Time, config *Config, db *s
 	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil
 }
 
-func createArchive(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3iface.S3API, archive *Archive) error {
+func createArchive(ctx context.Context, db *sqlx.DB, config *Config, s3Client *s3x.Service, archive *Archive) error {
 	err := CreateArchiveFile(ctx, db, archive, config.TempDir)
 	if err != nil {
 		return fmt.Errorf("error writing archive file: %w", err)
@@ -738,7 +738,7 @@ func createArchive(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3
 	return nil
 }
 
-func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s3iface.S3API, org Org, archives []*Archive) ([]*Archive, []*Archive) {
+func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client *s3x.Service, org Org, archives []*Archive) ([]*Archive, []*Archive) {
 	log := slog.With("org_id", org.ID, "org_name", org.Name)
 
 	created := make([]*Archive, 0, len(archives))
@@ -762,7 +762,7 @@ func createArchives(ctx context.Context, db *sqlx.DB, config *Config, s3Client s
 }
 
 // RollupOrgArchives rolls up monthly archives from our daily archives
-func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, error) {
+func RollupOrgArchives(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client *s3x.Service, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
@@ -825,7 +825,7 @@ const sqlUpdateArchiveDeleted = `UPDATE archives_archive SET needs_deletion = FA
 var deleteTransactionSize = 100
 
 // DeleteArchivedOrgRecords deletes all the records for the given org based on archives already created
-func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, error) {
+func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, s3Client *s3x.Service, org Org, archiveType ArchiveType) ([]*Archive, error) {
 	// get all the archives that haven't yet been deleted
 	archives, err := GetArchivesNeedingDeletion(ctx, db, org, archiveType)
 	if err != nil {
@@ -876,7 +876,7 @@ func DeleteArchivedOrgRecords(ctx context.Context, now time.Time, config *Config
 }
 
 // ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
-func ArchiveOrg(ctx context.Context, now time.Time, cfg *Config, db *sqlx.DB, s3Client s3iface.S3API, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, []*Archive, error) {
+func ArchiveOrg(ctx context.Context, now time.Time, cfg *Config, db *sqlx.DB, s3Client *s3x.Service, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, []*Archive, error) {
 	log := slog.With("org_id", org.ID, "org_name", org.Name)
 	start := dates.Now()
 
@@ -913,7 +913,7 @@ func ArchiveOrg(ctx context.Context, now time.Time, cfg *Config, db *sqlx.DB, s3
 }
 
 // ArchiveActiveOrgs fetches active orgs and archives messages and runs
-func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client s3iface.S3API) error {
+func ArchiveActiveOrgs(db *sqlx.DB, cfg *Config, s3Client *s3x.Service) error {
 	start := dates.Now()
 
 	// get our active orgs
