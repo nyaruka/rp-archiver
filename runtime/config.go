@@ -1,4 +1,4 @@
-package archives
+package runtime
 
 import "os"
 

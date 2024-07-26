@@ -9,7 +9,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/gocommon/dates"
-	"github.com/nyaruka/gocommon/s3x"
+	"github.com/nyaruka/rp-archiver/runtime"
 )
 
 const (
@@ -113,7 +113,7 @@ DELETE FROM msgs_msg WHERE id IN(?)`
 // all the messages in the archive date range, and if equal or fewer than the number archived, deletes them 100 at a time
 //
 // Upon completion it updates the needs_deletion flag on the archive
-func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client *s3x.Service, archive *Archive) error {
+func DeleteArchivedMessages(ctx context.Context, rt *runtime.Runtime, archive *Archive) error {
 	outer, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 
@@ -129,7 +129,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	log.Info("deleting messages")
 
 	// first things first, make sure our file is correct on S3
-	s3Size, s3Hash, err := GetS3FileInfo(outer, s3Client, archive.URL)
+	s3Size, s3Hash, err := GetS3FileInfo(outer, rt.S3, archive.URL)
 	if err != nil {
 		return err
 	}
@@ -139,12 +139,12 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	}
 
 	// if S3 hash is MD5 then check against archive hash
-	if config.CheckS3Hashes && archive.Size <= maxSingleUploadBytes && s3Hash != archive.Hash {
+	if rt.Config.CheckS3Hashes && archive.Size <= maxSingleUploadBytes && s3Hash != archive.Hash {
 		return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, s3Hash)
 	}
 
 	// ok, archive file looks good, let's build up our list of message ids, this may be big but we are int64s so shouldn't be too big
-	rows, err := db.QueryxContext(outer, sqlSelectOrgMessagesInRange, archive.OrgID, archive.StartDate, archive.endDate())
+	rows, err := rt.DB.QueryxContext(outer, sqlSelectOrgMessagesInRange, archive.OrgID, archive.StartDate, archive.endDate())
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 		start := dates.Now()
 
 		// start our transaction
-		tx, err := db.BeginTxx(ctx, nil)
+		tx, err := rt.DB.BeginTxx(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -218,7 +218,7 @@ func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3
 	deletedOn := dates.Now()
 
 	// all went well! mark our archive as no longer needing deletion
-	_, err = db.ExecContext(outer, sqlUpdateArchiveDeleted, archive.ID, deletedOn)
+	_, err = rt.DB.ExecContext(outer, sqlUpdateArchiveDeleted, archive.ID, deletedOn)
 	if err != nil {
 		return fmt.Errorf("error setting archive as deleted: %w", err)
 	}
@@ -237,11 +237,11 @@ SELECT id
  LIMIT 1000000;`
 
 // DeleteBroadcasts deletes all broadcasts older than 90 days for the passed in org which have no associated messages
-func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sqlx.DB, org Org) error {
+func DeleteBroadcasts(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org) error {
 	start := dates.Now()
 	threshhold := now.AddDate(0, 0, -org.RetentionPeriod)
 
-	rows, err := db.QueryxContext(ctx, sqlSelectOldOrgBroadcasts, org.ID, threshhold)
+	rows, err := rt.DB.QueryxContext(ctx, sqlSelectOldOrgBroadcasts, org.ID, threshhold)
 	if err != nil {
 		return err
 	}
@@ -265,7 +265,7 @@ func DeleteBroadcasts(ctx context.Context, now time.Time, config *Config, db *sq
 		}
 
 		// we delete broadcasts in a transaction per broadcast
-		tx, err := db.BeginTx(ctx, nil)
+		tx, err := rt.DB.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("error starting transaction while deleting broadcast: %d: %w", broadcastID, err)
 		}
