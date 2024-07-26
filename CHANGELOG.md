@@ -1,3 +1,8 @@
+v9.3.2 (2024-07-26)
+-------------------------
+ * Add runtime.Runtime to hold config, DB and S3
+ * Update to latest gocommon
+
 v9.3.1 (2024-07-25)
 -------------------------
  * Re-add config option to force path style urls in S3, use minio to emulate S3 for testing
