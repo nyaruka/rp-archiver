@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/nyaruka/gocommon/s3x"
+	"github.com/nyaruka/rp-archiver/runtime"
 )
 
 const s3BucketURL = "https://%s.s3.amazonaws.com%s"
@@ -27,7 +28,7 @@ const maxSingleUploadBytes = 5e9 // 5GB
 const chunkSizeBytes = 1e9 // 1GB
 
 // NewS3Client creates a new s3 service from the passed in config, testing it as necessary
-func NewS3Client(cfg *Config) (*s3x.Service, error) {
+func NewS3Client(cfg *runtime.Config) (*s3x.Service, error) {
 	svc, err := s3x.NewService(cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.AWSRegion, cfg.S3Endpoint, cfg.S3Minio)
 	if err != nil {
 		return nil, err
