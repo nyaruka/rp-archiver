@@ -11,7 +11,6 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/nyaruka/ezconf"
 	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +24,7 @@ func setup(t *testing.T) (*Config, *sqlx.DB) {
 	config.AWSAccessKeyID = "root"
 	config.AWSSecretAccessKey = "tembatemba"
 	config.S3Endpoint = "http://localhost:9000"
-	config.S3ForcePathStyle = true
+	config.S3Minio = true
 
 	testDB, err := os.ReadFile("../testdb.sql")
 	assert.NoError(t, err)
@@ -316,93 +315,85 @@ func TestArchiveOrgMessages(t *testing.T) {
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
-	os.Args = []string{"rp-archiver"}
-
-	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", nil)
-	loader.MustLoad()
-
 	config.Delete = true
 
-	// AWS S3 config in the environment needed to download from S3
-	if config.AWSAccessKeyID != "" && config.AWSSecretAccessKey != "" {
-		s3Client, err := NewS3Client(config)
-		assert.NoError(t, err)
+	s3Client, err := NewS3Client(config)
+	assert.NoError(t, err)
 
-		assertCount(t, db, 4, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
+	assertCount(t, db, 4, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
 
-		dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
-		assert.NoError(t, err)
+	dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, err := ArchiveOrg(ctx, now, config, db, s3Client, orgs[1], MessageType)
+	assert.NoError(t, err)
 
-		assert.Equal(t, 61, len(dailiesCreated))
-		assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
-		assertArchive(t, dailiesCreated[1], time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
-		assertArchive(t, dailiesCreated[2], time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), DayPeriod, 3, 522, "c2c12d94eb758a3c06c5c4e0706934ff")
-		assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 311, "9eaec21e28af92bc338d9b6bcd712109")
-		assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assert.Equal(t, 61, len(dailiesCreated))
+	assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assertArchive(t, dailiesCreated[1], time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assertArchive(t, dailiesCreated[2], time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), DayPeriod, 3, 522, "c2c12d94eb758a3c06c5c4e0706934ff")
+	assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 311, "9eaec21e28af92bc338d9b6bcd712109")
+	assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
-		assert.Equal(t, 0, len(dailiesFailed))
+	assert.Equal(t, 0, len(dailiesFailed))
 
-		assert.Equal(t, 2, len(monthliesCreated))
-		assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 545, "d4ce6331f3c871d394ed3b916144ac85")
-		assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assert.Equal(t, 2, len(monthliesCreated))
+	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 545, "d4ce6331f3c871d394ed3b916144ac85")
+	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
-		assert.Equal(t, 0, len(monthliesFailed))
+	assert.Equal(t, 0, len(monthliesFailed))
 
-		assert.Equal(t, 63, len(deleted))
-		assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
-		assert.Equal(t, MonthPeriod, deleted[0].Period)
+	assert.Equal(t, 63, len(deleted))
+	assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
+	assert.Equal(t, MonthPeriod, deleted[0].Period)
 
-		// shouldn't have any messages remaining for this org for those periods
-		for _, d := range deleted {
-			count, err := getCountInRange(
-				db,
-				getMsgCount,
-				orgs[1].ID,
-				d.StartDate,
-				d.endDate(),
-			)
-			assert.NoError(t, err)
-			assert.Equal(t, 0, count)
-			assert.False(t, d.NeedsDeletion)
-			assert.NotNil(t, d.DeletedOn)
-		}
-
-		// our one message in our existing archive (but that had an invalid URL) should still exist however
+	// shouldn't have any messages remaining for this org for those periods
+	for _, d := range deleted {
 		count, err := getCountInRange(
 			db,
 			getMsgCount,
 			orgs[1].ID,
-			time.Date(2017, 10, 8, 0, 0, 0, 0, time.UTC),
-			time.Date(2017, 10, 9, 0, 0, 0, 0, time.UTC),
+			d.StartDate,
+			d.endDate(),
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, 1, count)
-
-		// and messages on our other orgs should be unaffected
-		count, err = getCountInRange(
-			db,
-			getMsgCount,
-			orgs[2].ID,
-			time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC),
-			time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC),
-		)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, count)
-
-		// as is our newer message which was replied to
-		count, err = getCountInRange(
-			db,
-			getMsgCount,
-			orgs[1].ID,
-			time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
-			time.Date(2018, 2, 1, 0, 0, 0, 0, time.UTC),
-		)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, count)
-
-		// one broadcast still exists because it has a schedule, the other because it still has msgs, the last because it is new
-		assertCount(t, db, 3, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
+		assert.Equal(t, 0, count)
+		assert.False(t, d.NeedsDeletion)
+		assert.NotNil(t, d.DeletedOn)
 	}
+
+	// our one message in our existing archive (but that had an invalid URL) should still exist however
+	count, err := getCountInRange(
+		db,
+		getMsgCount,
+		orgs[1].ID,
+		time.Date(2017, 10, 8, 0, 0, 0, 0, time.UTC),
+		time.Date(2017, 10, 9, 0, 0, 0, 0, time.UTC),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	// and messages on our other orgs should be unaffected
+	count, err = getCountInRange(
+		db,
+		getMsgCount,
+		orgs[2].ID,
+		time.Date(2015, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	// as is our newer message which was replied to
+	count, err = getCountInRange(
+		db,
+		getMsgCount,
+		orgs[1].ID,
+		time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2018, 2, 1, 0, 0, 0, 0, time.UTC),
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	// one broadcast still exists because it has a schedule, the other because it still has msgs, the last because it is new
+	assertCount(t, db, 3, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
 }
 
 const getRunCount = `

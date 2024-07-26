@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/gocommon/dates"
+	"github.com/nyaruka/gocommon/s3x"
 )
 
 const (
@@ -113,7 +113,7 @@ DELETE FROM msgs_msg WHERE id IN(?)`
 // all the messages in the archive date range, and if equal or fewer than the number archived, deletes them 100 at a time
 //
 // Upon completion it updates the needs_deletion flag on the archive
-func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client s3iface.S3API, archive *Archive) error {
+func DeleteArchivedMessages(ctx context.Context, config *Config, db *sqlx.DB, s3Client *s3x.Service, archive *Archive) error {
 	outer, cancel := context.WithTimeout(ctx, time.Hour*3)
 	defer cancel()
 

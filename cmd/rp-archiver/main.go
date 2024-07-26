@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/getsentry/sentry-go"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
 	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/gocommon/dates"
+	"github.com/nyaruka/gocommon/s3x"
 	"github.com/nyaruka/rp-archiver/archives"
 	slogmulti "github.com/samber/slog-multi"
 	slogsentry "github.com/samber/slog-sentry"
@@ -92,7 +92,7 @@ func main() {
 		logger.Info("db ok", "state", "starting")
 	}
 
-	var s3Client s3iface.S3API
+	var s3Client *s3x.Service
 	if config.UploadToS3 {
 		s3Client, err = archives.NewS3Client(config)
 		if err != nil {
@@ -143,7 +143,7 @@ func main() {
 	wg.Wait()
 }
 
-func doArchival(db *sqlx.DB, cfg *archives.Config, s3Client s3iface.S3API) {
+func doArchival(db *sqlx.DB, cfg *archives.Config, s3Client *s3x.Service) {
 	for {
 		// try to archive all active orgs, and if it fails, wait 5 minutes and try again
 		err := archives.ArchiveActiveOrgs(db, cfg, s3Client)
