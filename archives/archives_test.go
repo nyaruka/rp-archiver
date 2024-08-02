@@ -497,8 +497,8 @@ func TestArchiveActiveOrgs(t *testing.T) {
 	analytics.RegisterBackend(mockAnalytics)
 	analytics.Start()
 
-	dates.SetNowSource(dates.NewSequentialNowSource(time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)))
-	defer dates.SetNowSource(dates.DefaultNowSource)
+	dates.SetNowFunc(dates.NewSequentialNow(time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC), time.Second))
+	defer dates.SetNowFunc(time.Now)
 
 	err := ArchiveActiveOrgs(rt)
 	assert.NoError(t, err)
