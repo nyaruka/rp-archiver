@@ -1,3 +1,7 @@
+v9.3.3 (2024-08-22)
+-------------------------
+ * Update to aws-sdk-go-v2
+
 v9.3.2 (2024-07-26)
 -------------------------
  * Add runtime.Runtime to hold config, DB and S3
