@@ -11,11 +11,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/nyaruka/gocommon/s3x"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go/middleware"
+	"github.com/aws/smithy-go/transport/http"
+	"github.com/nyaruka/gocommon/aws/s3x"
 	"github.com/nyaruka/rp-archiver/runtime"
 )
 
@@ -65,32 +67,32 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 			Key:             aws.String(path),
 			ContentType:     aws.String("application/json"),
 			ContentEncoding: aws.String("gzip"),
-			ACL:             aws.String(s3.BucketCannedACLPrivate),
+			ACL:             types.ObjectCannedACLPrivate,
 			ContentMD5:      aws.String(md5),
-			Metadata:        map[string]*string{"md5chksum": aws.String(md5)},
+			Metadata:        map[string]string{"md5chksum": md5},
 		}
-		_, err = s3Client.Client.PutObjectWithContext(ctx, params)
+		_, err = s3Client.Client.PutObject(ctx, params)
 		if err != nil {
 			return err
 		}
 	} else {
 		// this file is bigger than limit, use an upload manager instead, it will take care of uploading in parts
-		uploader := s3manager.NewUploaderWithClient(
+		uploader := manager.NewUploader(
 			s3Client.Client,
-			func(u *s3manager.Uploader) {
+			func(u *manager.Uploader) {
 				u.PartSize = chunkSizeBytes
 			},
 		)
-		params := &s3manager.UploadInput{
+		params := &s3.PutObjectInput{
 			Bucket:          aws.String(bucket),
 			Key:             aws.String(path),
 			Body:            f,
 			ContentType:     aws.String("application/json"),
 			ContentEncoding: aws.String("gzip"),
-			ACL:             aws.String(s3.BucketCannedACLPrivate),
+			ACL:             types.ObjectCannedACLPrivate,
 		}
 
-		_, err = uploader.UploadWithContext(ctx, params)
+		_, err = uploader.Upload(ctx, params)
 		if err != nil {
 			return err
 		}
@@ -100,9 +102,11 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 	return nil
 }
 
-func withAcceptEncoding(e string) request.Option {
-	return func(r *request.Request) {
-		r.HTTPRequest.Header.Add("Accept-Encoding", e)
+func withAcceptEncoding(e string) func(o *s3.Options) {
+	return func(o *s3.Options) {
+		o.APIOptions = append(o.APIOptions, []func(*middleware.Stack) error{
+			http.SetHeaderValue("Accept-Encoding", e),
+		}...)
 	}
 }
 
@@ -116,7 +120,7 @@ func GetS3FileInfo(ctx context.Context, s3Client *s3x.Service, fileURL string) (
 	bucket := strings.Split(u.Host, ".")[0]
 	path := u.Path
 
-	head, err := s3Client.Client.HeadObjectWithContext(
+	head, err := s3Client.Client.HeadObject(
 		ctx,
 		&s3.HeadObjectInput{
 			Bucket: aws.String(bucket),
@@ -148,7 +152,7 @@ func GetS3File(ctx context.Context, s3Client *s3x.Service, fileURL string) (io.R
 	bucket := strings.Split(u.Host, ".")[0]
 	path := u.Path
 
-	output, err := s3Client.Client.GetObjectWithContext(
+	output, err := s3Client.Client.GetObject(
 		ctx,
 		&s3.GetObjectInput{
 			Bucket: aws.String(bucket),

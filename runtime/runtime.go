@@ -2,7 +2,7 @@ package runtime
 
 import (
 	"github.com/jmoiron/sqlx"
-	"github.com/nyaruka/gocommon/s3x"
+	"github.com/nyaruka/gocommon/aws/s3x"
 )
 
 type Runtime struct {
