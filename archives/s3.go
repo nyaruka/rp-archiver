@@ -118,7 +118,7 @@ func GetS3FileInfo(ctx context.Context, s3Client *s3x.Service, fileURL string) (
 	}
 
 	bucket := strings.Split(u.Host, ".")[0]
-	path := u.Path
+	path := strings.TrimPrefix(u.Path, "/")
 
 	head, err := s3Client.Client.HeadObject(
 		ctx,
@@ -150,7 +150,7 @@ func GetS3File(ctx context.Context, s3Client *s3x.Service, fileURL string) (io.R
 	}
 
 	bucket := strings.Split(u.Host, ".")[0]
-	path := u.Path
+	path := strings.TrimPrefix(u.Path, "/")
 
 	output, err := s3Client.Client.GetObject(
 		ctx,
