@@ -1,3 +1,7 @@
+v9.3.5 (2024-08-23)
+-------------------------
+ * Improve error messages from failed S3 operations
+
 v9.3.4 (2024-08-22)
 -------------------------
  * Always strip leading / from S3 keys
