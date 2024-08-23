@@ -118,18 +118,11 @@ func GetS3FileInfo(ctx context.Context, s3Client *s3x.Service, fileURL string) (
 	}
 
 	bucket := strings.Split(u.Host, ".")[0]
-	path := strings.TrimPrefix(u.Path, "/")
+	key := strings.TrimPrefix(u.Path, "/")
 
-	head, err := s3Client.Client.HeadObject(
-		ctx,
-		&s3.HeadObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(path),
-		},
-	)
-
+	head, err := s3Client.Client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
 	if err != nil {
-		return 0, "", err
+		return 0, "", fmt.Errorf("error looking up S3 object bucket=%s key=%s: %w", bucket, key, err)
 	}
 
 	if head.ContentLength == nil || head.ETag == nil {
@@ -150,19 +143,15 @@ func GetS3File(ctx context.Context, s3Client *s3x.Service, fileURL string) (io.R
 	}
 
 	bucket := strings.Split(u.Host, ".")[0]
-	path := strings.TrimPrefix(u.Path, "/")
+	key := strings.TrimPrefix(u.Path, "/")
 
 	output, err := s3Client.Client.GetObject(
 		ctx,
-		&s3.GetObjectInput{
-			Bucket: aws.String(bucket),
-			Key:    aws.String(path),
-		},
+		&s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)},
 		withAcceptEncoding("gzip"),
 	)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error fetching S3 object bucket=%s key=%s: %w", bucket, key, err)
 	}
 
 	return output.Body, nil
