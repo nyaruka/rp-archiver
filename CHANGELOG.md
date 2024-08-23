@@ -1,3 +1,7 @@
+v9.3.6 (2024-08-23)
+-------------------------
+ * Fix uploading archives
+
 v9.3.5 (2024-08-23)
 -------------------------
  * Improve error messages from failed S3 operations
