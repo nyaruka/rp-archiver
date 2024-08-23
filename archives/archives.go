@@ -556,13 +556,13 @@ func UploadArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 	archivePath := ""
 	if archive.Period == DayPeriod {
 		archivePath = fmt.Sprintf(
-			"/%d/%s_%s%d%02d%02d_%s.jsonl.gz",
+			"%d/%s_%s%d%02d%02d_%s.jsonl.gz",
 			archive.Org.ID, archive.ArchiveType, archive.Period,
 			archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day(),
 			archive.Hash)
 	} else {
 		archivePath = fmt.Sprintf(
-			"/%d/%s_%s%d%02d_%s.jsonl.gz",
+			"%d/%s_%s%d%02d_%s.jsonl.gz",
 			archive.Org.ID, archive.ArchiveType, archive.Period,
 			archive.StartDate.Year(), archive.StartDate.Month(),
 			archive.Hash)
