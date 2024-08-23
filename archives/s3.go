@@ -21,7 +21,7 @@ import (
 	"github.com/nyaruka/rp-archiver/runtime"
 )
 
-const s3BucketURL = "https://%s.s3.amazonaws.com%s"
+const s3BucketURL = "https://%s.s3.amazonaws.com/%s"
 
 // any file over this needs to be uploaded in chunks
 const maxSingleUploadBytes = 5e9 // 5GB
