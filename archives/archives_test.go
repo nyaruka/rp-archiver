@@ -226,8 +226,8 @@ func TestCreateRunArchive(t *testing.T) {
 
 	// should have two record
 	assert.Equal(t, 2, task.RecordCount)
-	assert.Equal(t, int64(458), task.Size)
-	assert.Equal(t, "7220a13c19f5b6065e7d4c419c114635", task.Hash)
+	assert.Equal(t, int64(457), task.Size)
+	assert.Equal(t, "c283214529adb0666655f3a6b03a4992", task.Hash)
 	assertArchiveFile(t, task, "runs1.jsonl")
 
 	DeleteArchiveFile(task)
