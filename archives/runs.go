@@ -24,47 +24,47 @@ const (
 const sqlLookupRuns = `
 SELECT rec.uuid, rec.exited_on, row_to_json(rec)
 FROM (
-   SELECT
-	 fr.id as id,
-	 fr.uuid as uuid,
-     row_to_json(flow_struct) AS flow,
-     row_to_json(contact_struct) AS contact,
-     fr.responded,
-	 (SELECT CASE
-		WHEN (fr.path_nodes IS NOT NULL AND fr.path_times IS NOT NULL)
-		THEN (
-			SELECT coalesce(jsonb_agg(path_data), '[]'::jsonb)
-			FROM (
-				SELECT node, time
-				FROM unnest(fr.path_nodes::text[] , fr.path_times::timestamptz[]) x(node, time) LIMIT 500)
-				as path_data)
-		ELSE (
-			SELECT coalesce(jsonb_agg(path_data), '[]'::jsonb)
-			FROM (
-				SELECT path_row ->> 'node_uuid' AS node, (path_row ->> 'arrived_on')::timestamptz as time
-				FROM jsonb_array_elements(fr.path::jsonb) AS path_row LIMIT 500)
-				as path_data)
-	 END as path),
-     (SELECT coalesce(jsonb_object_agg(values_data.key, values_data.value), '{}'::jsonb) from (
-		SELECT key, jsonb_build_object('name', value -> 'name', 'value', value -> 'value', 'input', value -> 'input', 'time', (value -> 'created_on')::text::timestamptz, 'category', value -> 'category', 'node', value -> 'node_uuid') as value
-		FROM jsonb_each(fr.results::jsonb)) AS values_data
-	 ) as values,
-     fr.created_on,
-     fr.modified_on,
-	 fr.exited_on,
-     CASE
-        WHEN status = 'C' THEN 'completed'
-        WHEN status = 'I' THEN 'interrupted'
-        WHEN status = 'X' THEN 'expired'
-        WHEN status = 'F' THEN 'failed'
-        ELSE NULL
-	 END as exit_type
+	SELECT
+		fr.id as id,
+		fr.uuid as uuid,
+		row_to_json(flow_struct) AS flow,
+		row_to_json(contact_struct) AS contact,
+		fr.responded,
+		(SELECT CASE
+			WHEN (fr.path_nodes IS NOT NULL AND fr.path_times IS NOT NULL)
+			THEN (
+				SELECT coalesce(jsonb_agg(path_data), '[]'::jsonb)
+				FROM (
+					SELECT node, time
+					FROM unnest(fr.path_nodes::text[] , fr.path_times::timestamptz[]) x(node, time) LIMIT 500)
+					as path_data)
+			ELSE (
+				SELECT coalesce(jsonb_agg(path_data), '[]'::jsonb)
+				FROM (
+					SELECT path_row ->> 'node_uuid' AS node, (path_row ->> 'arrived_on')::timestamptz as time
+					FROM jsonb_array_elements(fr.path::jsonb) AS path_row LIMIT 500)
+					as path_data)
+		END as path),
+		(SELECT coalesce(jsonb_object_agg(values_data.key, values_data.value), '{}'::jsonb) from (
+			SELECT key, jsonb_build_object('name', value -> 'name', 'value', value -> 'value', 'input', value -> 'input', 'time', (value -> 'created_on')::text::timestamptz, 'category', value -> 'category', 'node', value -> 'node_uuid') as value
+			FROM jsonb_each(fr.results::jsonb)) AS values_data
+		) as values,
+		fr.created_on,
+		fr.modified_on,
+		fr.exited_on,
+		CASE
+			WHEN status = 'C' THEN 'completed'
+			WHEN status = 'I' THEN 'interrupted'
+			WHEN status = 'X' THEN 'expired'
+			WHEN status = 'F' THEN 'failed'
+			ELSE NULL
+		END as exit_type
 
-   FROM flows_flowrun fr
-   JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
-   JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id) AS contact_struct ON True
-   WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
-   ORDER BY fr.modified_on ASC, id ASC
+	FROM flows_flowrun fr
+	JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
+	JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = fr.contact_id) AS contact_struct ON True
+	WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
+	ORDER BY fr.modified_on ASC, id ASC
 ) as rec;`
 
 // writeRunRecords writes the runs in the archive's date range to the passed in writer
