@@ -1,3 +1,7 @@
+v9.3.7 (2024-12-05)
+-------------------------
+ * Support reading from run.path_nodes and path_times when set
+
 v9.3.6 (2024-08-23)
 -------------------------
  * Fix uploading archives
