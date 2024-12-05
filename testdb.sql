@@ -209,6 +209,8 @@ CREATE TABLE flows_flowrun (
     start_id integer NULL REFERENCES flows_flowstart(id),
     results text NOT NULL,
     path text NOT NULL,
+    path_nodes uuid[] NULL,
+    path_times timestamp with time zone[] NULL,
     created_on timestamp with time zone NOT NULL,
     modified_on timestamp with time zone NOT NULL,
     exited_on timestamp with time zone NULL,
@@ -335,23 +337,27 @@ INSERT INTO flows_flowstart_groups(flowstart_id, contactgroup_id) VALUES
 INSERT INTO flows_flowstart_calls(flowstart_id, call_id) VALUES 
 (1, 1);
 
-INSERT INTO flows_flowrun(id, uuid, org_id, responded, contact_id, flow_id, results, path, created_on, modified_on, exited_on, status, start_id) VALUES
-(1, '4ced1260-9cfe-4b7f-81dd-b637108f15b9', 2, TRUE, 6, 1, '{}', '[]', '2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C', 1),
+INSERT INTO flows_flowrun(id, uuid, org_id, responded, contact_id, flow_id, results, path, path_nodes, path_times, created_on, modified_on, exited_on, status, start_id) VALUES
+(1, '4ced1260-9cfe-4b7f-81dd-b637108f15b9', 2, TRUE, 6, 1, '{}', '[]', NULL, NULL, '2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C', 1),
 (2, '7d68469c-0494-498a-bdf3-bac68321fd6d', 2, TRUE, 6, 1, 
 '{"agree": {"category": "Strongly agree", "node_uuid": "a0434c54-3e26-4eb0-bafc-46cdeaf435ac", "name": "Do you agree?", "value": "A", "created_on": "2017-05-03T12:25:21.714339+00:00", "input": "A"}}',
 '[{"uuid": "c3d0b417-db75-417c-8050-33776ec8f620", "node_uuid": "10896d63-8df7-4022-88dd-a9d93edf355b", "arrived_on": "2017-08-12T15:07:24.049815+02:00", "exit_uuid": "2f890507-2ad2-4bd1-92fc-0ca031155fca"}]', 
-'2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C', NULL),
+NULL, NULL, '2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C', NULL),
 (3, 'de782b35-a398-46ed-8550-34c66053841b', 3, TRUE, 7, 2, 
 '{"agree": {"category": "Strongly agree", "node_uuid": "084c8cf1-715d-4d0a-b38d-a616ed74e638", "name": "Agree", "value": "A", "created_on": "2017-05-03T12:25:21.714339+00:00", "input": "A"}, "confirm_agree": {"category": "Confirmed Strongly agree", "node_uuid": "a0434c54-3e26-4eb0-bafc-46cdeaf435ab", "name": "Do you agree?", "value": "A", "created_on": "2017-05-03T12:25:21.714339+00:00", "input": "A"}}',
 '[{"uuid": "600ac5b4-4895-4161-ad97-6e2f1bb48bcb", "node_uuid": "accbc6e2-b0df-46cd-9a76-bff0fdf4d753", "arrived_on": "2017-08-12T15:07:24.049815+02:00", "exit_uuid": "8249e2dc-c893-4200-b6d2-398d07a459bc"}]', 
-'2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00', 'C', NULL),
+NULL, NULL, '2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00','2017-08-10 21:11:59.890662+02:00', 'C', NULL),
 (4, '329a5d24-64fc-479c-8d24-9674c9b46530', 3, TRUE, 7, 2, 
 '{"agree": {"category": "Disagree", "node_uuid": "084c8cf1-715d-4d0a-b38d-a616ed74e638", "name": "Agree", "value": "B", "created_on": "2017-10-10T12:25:21.714339+00:00", "input": "B"}}',
 '[{"uuid": "babf4fc8-e12c-4bb9-a9dd-61178a118b5a", "node_uuid": "accbc6e2-b0df-46cd-9a76-bff0fdf4d753", "arrived_on": "2017-10-12T15:07:24.049815+02:00", "exit_uuid": "8249e2dc-c893-4200-b6d2-398d07a459bc"}]', 
-'2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00', 'C', NULL),
-(5, 'abed67d2-06b8-4749-8bb9-ecda037b673b', 3, TRUE, 7, 2, '{}', '[]', '2017-10-10 21:11:59.890663+02:00','2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00', 'C', NULL),
-(6, '6262eefe-a6e9-4201-9b76-a7f25e3b7f29', 3, TRUE, 7, 2, '{}', '[]', '2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00', 'C', NULL),
-(7, '6c0d7db9-076b-4edc-ab4b-38576ae394fc', 2, TRUE, 7, 2, '{}', '[]', '2017-08-13 13:11:59.890662+02:00','2017-08-14 16:11:59.890662+02:00', NULL, 'W', NULL);
+NULL, NULL, '2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00', 'C', NULL),
+(5, 'abed67d2-06b8-4749-8bb9-ecda037b673b', 3, TRUE, 7, 2, '{}', '[]', NULL, NULL, '2017-10-10 21:11:59.890663+02:00','2017-10-10 21:11:59.890662+02:00','2017-10-10 21:11:59.890662+02:00', 'C', NULL),
+(6, '6262eefe-a6e9-4201-9b76-a7f25e3b7f29', 3, TRUE, 7, 2, '{}', '[]', NULL, NULL, '2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00','2017-12-12 21:11:59.890662+02:00', 'C', NULL),
+(7, '6c0d7db9-076b-4edc-ab4b-38576ae394fc', 2, TRUE, 7, 2, '{}', '[]', NULL, NULL, '2017-08-13 13:11:59.890662+02:00','2017-08-14 16:11:59.890662+02:00', NULL, 'W', NULL),
+(8, '0c54f7b9-875b-4385-ae85-fb9e84f4b3d6', 2, TRUE, 6, 1,
+'{"agree": {"category": "Strongly agree", "node_uuid": "a0434c54-3e26-4eb0-bafc-46cdeaf435ac", "name": "Do you agree?", "value": "A", "created_on": "2017-05-03T12:25:21.714339+00:00", "input": "A"}}',
+'[]',
+'{"d1a55403-83a3-42f1-b24c-6446bb18e6a6","ce1bdc68-5c16-452e-a0ce-52440fc7bb9a","1640b40d-63ed-43b0-a443-097ce8bb8710"}', '{"2017-08-12T15:07:25.049815+02:00","2017-08-12T15:07:26.049815+02:00","2017-08-12T15:07:27.049815+02:00"}', '2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00','2017-08-12 21:11:59.890662+02:00', 'C', NULL);
 
 -- update run #5 to have a path longer than 500 steps
 UPDATE flows_flowrun SET path = s.path FROM (

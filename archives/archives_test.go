@@ -225,9 +225,9 @@ func TestCreateRunArchive(t *testing.T) {
 	assert.NoError(t, err)
 
 	// should have two record
-	assert.Equal(t, 2, task.RecordCount)
-	assert.Equal(t, int64(458), task.Size)
-	assert.Equal(t, "7220a13c19f5b6065e7d4c419c114635", task.Hash)
+	assert.Equal(t, 3, task.RecordCount)
+	assert.Equal(t, int64(578), task.Size)
+	assert.Equal(t, "cd8ce82019986ac1f4ec1482aac7bca0", task.Hash)
 	assertArchiveFile(t, task, "runs1.jsonl")
 
 	DeleteArchiveFile(task)
@@ -459,7 +459,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 		time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC),
 	)
 	assert.NoError(t, err)
-	assert.Equal(t, 3, count)
+	assert.Equal(t, 4, count)
 
 	// more recent run unaffected (even though it was parent)
 	count, err = getCountInRange(
@@ -511,7 +511,7 @@ func TestArchiveActiveOrgs(t *testing.T) {
 		"archiver.msgs_archives_failed":  {0},
 		"archiver.msgs_rollups_created":  {3},
 		"archiver.msgs_rollups_failed":   {0},
-		"archiver.runs_records_archived": {4},
+		"archiver.runs_records_archived": {5},
 		"archiver.runs_archives_created": {41},
 		"archiver.runs_archives_failed":  {1},
 		"archiver.runs_rollups_created":  {3},
