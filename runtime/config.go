@@ -31,6 +31,9 @@ type Config struct {
 	LibratoUsername string `help:"the username that will be used to authenticate to Librato"`
 	LibratoToken    string `help:"the token that will be used to authenticate to Librato"`
 	InstanceName    string `help:"the unique name of this instance used for analytics"`
+
+	CloudwatchNamespace string `help:"the namespace to use for cloudwatch metrics"`
+	DeploymentID        string `help:"the deployment identifier to use for metrics"`
 }
 
 // NewDefaultConfig returns a new default configuration object
@@ -59,6 +62,9 @@ func NewDefaultConfig() *Config {
 		Delete:          false,
 		StartTime:       "00:01",
 		Once:            false,
+
+		CloudwatchNamespace: "Temba",
+		DeploymentID:        "dev",
 
 		InstanceName: hostname,
 		LogLevel:     "info",

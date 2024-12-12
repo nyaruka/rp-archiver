@@ -12,6 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/gocommon/analytics"
+	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/stretchr/testify/assert"
@@ -28,6 +29,7 @@ func setup(t *testing.T) (context.Context, *runtime.Runtime) {
 	config.AWSSecretAccessKey = "tembatemba"
 	config.S3Endpoint = "http://localhost:9000"
 	config.S3Minio = true
+	config.DeploymentID = "test"
 
 	testDB, err := os.ReadFile("../testdb.sql")
 	require.NoError(t, err)
@@ -43,7 +45,10 @@ func setup(t *testing.T) (context.Context, *runtime.Runtime) {
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
-	return ctx, &runtime.Runtime{Config: config, DB: db, S3: s3Client}
+	CW, err := cwatch.NewService(config.AWSAccessKeyID, config.AWSSecretAccessKey, config.AWSRegion, config.CloudwatchNamespace, config.DeploymentID)
+	require.NoError(t, err)
+
+	return ctx, &runtime.Runtime{Config: config, DB: db, S3: s3Client, CW: CW}
 }
 
 func TestGetMissingDayArchives(t *testing.T) {

@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/nyaruka/gocommon/analytics"
@@ -965,6 +967,91 @@ func ArchiveActiveOrgs(rt *runtime.Runtime) error {
 
 	timeTaken := dates.Now().Sub(start)
 	slog.Info("archiving of active orgs complete", "time_taken", timeTaken, "num_orgs", len(orgs))
+
+	dims := []types.Dimension{
+		{Name: aws.String("App"), Value: aws.String("archiver")},
+	}
+
+	metrics := []types.MetricDatum{
+		{
+			MetricName: aws.String("ArchiveElapsed"),
+			Dimensions: dims,
+			Value:      aws.Float64(timeTaken.Seconds()),
+			Unit:       types.StandardUnitSeconds,
+		},
+		{
+			MetricName: aws.String("OrgsArchived"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(len(orgs))),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("MsgsRecordsArchived"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalMsgsRecordsArchived)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("MsgsArchivedsCreated"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalMsgsArchivesCreated)),
+			Unit:       types.StandardUnitCount,
+		},
+
+		{
+			MetricName: aws.String("MsgsArchivedsFailed"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalMsgsArchivesFailed)),
+			Unit:       types.StandardUnitCount,
+		},
+
+		{
+			MetricName: aws.String("MsgsRollupsCreated"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalMsgsRollupsCreated)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("MsgsRollupsFailed"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalMsgsRollupsFailed)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("RunsRecordsArchived"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalRunsRecordsArchived)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("RunsArchivedsCreated"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalRunsArchivesCreated)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("RunsArchivedsFailed"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalRunsArchivesFailed)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("RunsRollupsCreated"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalRunsRollupsCreated)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("RunsRollupsFailed"),
+			Dimensions: dims,
+			Value:      aws.Float64(float64(totalRunsRollupsFailed)),
+			Unit:       types.StandardUnitCount,
+		},
+	}
+
+	if err = rt.CW.Send(ctx, metrics...); err != nil {
+		slog.Error("error putting metrics", "error", err)
+	}
 
 	analytics.Gauge("archiver.archive_elapsed", timeTaken.Seconds())
 	analytics.Gauge("archiver.orgs_archived", float64(len(orgs)))
