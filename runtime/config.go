@@ -1,7 +1,5 @@
 package runtime
 
-import "os"
-
 // Config is our top level configuration object
 type Config struct {
 	DB        string `help:"the connection string for our database"`
@@ -28,17 +26,12 @@ type Config struct {
 	StartTime       string `help:"what time archive jobs should run in UTC HH:MM "`
 	Once            bool   `help:"whether archiver should run once and exit (default false)"`
 
-	LibratoUsername string `help:"the username that will be used to authenticate to Librato"`
-	LibratoToken    string `help:"the token that will be used to authenticate to Librato"`
-	InstanceName    string `help:"the unique name of this instance used for analytics"`
-
 	CloudwatchNamespace string `help:"the namespace to use for cloudwatch metrics"`
 	DeploymentID        string `help:"the deployment identifier to use for metrics"`
 }
 
 // NewDefaultConfig returns a new default configuration object
 func NewDefaultConfig() *Config {
-	hostname, _ := os.Hostname()
 
 	return &Config{
 		DB: "postgres://localhost/archiver_test?sslmode=disable",
@@ -66,7 +59,6 @@ func NewDefaultConfig() *Config {
 		CloudwatchNamespace: "Temba",
 		DeploymentID:        "dev",
 
-		InstanceName: hostname,
-		LogLevel:     "info",
+		LogLevel: "info",
 	}
 }

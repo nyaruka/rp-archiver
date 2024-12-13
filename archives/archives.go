@@ -18,7 +18,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
-	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/runtime"
 )
@@ -1052,19 +1051,6 @@ func ArchiveActiveOrgs(rt *runtime.Runtime) error {
 	if err = rt.CW.Send(ctx, metrics...); err != nil {
 		slog.Error("error putting metrics", "error", err)
 	}
-
-	analytics.Gauge("archiver.archive_elapsed", timeTaken.Seconds())
-	analytics.Gauge("archiver.orgs_archived", float64(len(orgs)))
-	analytics.Gauge("archiver.msgs_records_archived", float64(totalMsgsRecordsArchived))
-	analytics.Gauge("archiver.msgs_archives_created", float64(totalMsgsArchivesCreated))
-	analytics.Gauge("archiver.msgs_archives_failed", float64(totalMsgsArchivesFailed))
-	analytics.Gauge("archiver.msgs_rollups_created", float64(totalMsgsRollupsCreated))
-	analytics.Gauge("archiver.msgs_rollups_failed", float64(totalMsgsRollupsFailed))
-	analytics.Gauge("archiver.runs_records_archived", float64(totalRunsRecordsArchived))
-	analytics.Gauge("archiver.runs_archives_created", float64(totalRunsArchivesCreated))
-	analytics.Gauge("archiver.runs_archives_failed", float64(totalRunsArchivesFailed))
-	analytics.Gauge("archiver.runs_rollups_created", float64(totalRunsRollupsCreated))
-	analytics.Gauge("archiver.runs_rollups_failed", float64(totalRunsRollupsFailed))
 
 	return nil
 }
