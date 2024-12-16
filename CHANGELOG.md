@@ -1,3 +1,7 @@
+v9.3.8 (2024-12-16)
+-------------------------
+ * Send metrics to cloudwatch and remove librato
+
 v9.3.7 (2024-12-05)
 -------------------------
  * Support reading from run.path_nodes and path_times when set
