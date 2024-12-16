@@ -12,7 +12,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
-	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/archives"
@@ -122,19 +121,12 @@ func main() {
 		logger.Error("invalid start time supplied, format: HH:MM", "error", err)
 	}
 
-	// if we have a librato token, configure it
-	if config.LibratoToken != "" {
-		analytics.RegisterBackend(analytics.NewLibrato(config.LibratoUsername, config.LibratoToken, config.InstanceName, time.Second, wg))
-	}
-
 	rt.CW, err = cwatch.NewService(config.AWSAccessKeyID, config.AWSSecretAccessKey, config.AWSRegion, config.CloudwatchNamespace, config.DeploymentID)
 	if err != nil {
 		logger.Error("unable to create cloudwatch service", "error", err)
 	} else {
 		logger.Info("cloudwatch service ok", "state", "starting")
 	}
-
-	analytics.Start()
 
 	if config.Once {
 		doArchival(rt)
@@ -150,7 +142,6 @@ func main() {
 		}
 	}
 
-	analytics.Stop()
 	wg.Wait()
 }
 

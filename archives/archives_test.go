@@ -11,9 +11,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/nyaruka/gocommon/analytics"
 	"github.com/nyaruka/gocommon/aws/cwatch"
-	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -498,30 +496,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 func TestArchiveActiveOrgs(t *testing.T) {
 	_, rt := setup(t)
 
-	mockAnalytics := analytics.NewMock()
-	analytics.RegisterBackend(mockAnalytics)
-	analytics.Start()
-
-	dates.SetNowFunc(dates.NewSequentialNow(time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC), time.Second))
-	defer dates.SetNowFunc(time.Now)
-
 	err := ArchiveActiveOrgs(rt)
 	assert.NoError(t, err)
 
-	assert.Equal(t, map[string][]float64{
-		"archiver.archive_elapsed":       {848.0},
-		"archiver.orgs_archived":         {3},
-		"archiver.msgs_records_archived": {5},
-		"archiver.msgs_archives_created": {92},
-		"archiver.msgs_archives_failed":  {0},
-		"archiver.msgs_rollups_created":  {3},
-		"archiver.msgs_rollups_failed":   {0},
-		"archiver.runs_records_archived": {5},
-		"archiver.runs_archives_created": {41},
-		"archiver.runs_archives_failed":  {1},
-		"archiver.runs_rollups_created":  {3},
-		"archiver.runs_rollups_failed":   {1},
-	}, mockAnalytics.Gauges)
-
-	analytics.Stop()
 }

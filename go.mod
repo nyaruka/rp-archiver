@@ -20,7 +20,6 @@ require (
 )
 
 require (
-	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.7 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.28.5 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.46 // indirect
@@ -29,7 +28,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.25 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.1 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.24 // indirect
-	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.43.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.43.3
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.4.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.5 // indirect
@@ -43,7 +42,6 @@ require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1 // indirect
-	github.com/nyaruka/librato v1.1.1 // indirect
 	github.com/nyaruka/null/v2 v2.0.3 // indirect
 	github.com/nyaruka/phonenumbers v1.4.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
