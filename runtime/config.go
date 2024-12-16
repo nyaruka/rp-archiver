@@ -56,7 +56,7 @@ func NewDefaultConfig() *Config {
 		StartTime:       "00:01",
 		Once:            false,
 
-		CloudwatchNamespace: "Temba",
+		CloudwatchNamespace: "Temba/Archiver",
 		DeploymentID:        "dev",
 
 		LogLevel: "info",

@@ -967,82 +967,68 @@ func ArchiveActiveOrgs(rt *runtime.Runtime) error {
 	timeTaken := dates.Now().Sub(start)
 	slog.Info("archiving of active orgs complete", "time_taken", timeTaken, "num_orgs", len(orgs))
 
-	dims := []types.Dimension{
-		{Name: aws.String("App"), Value: aws.String("archiver")},
-	}
+	msgsDim := types.Dimension{Name: aws.String("ArchiveType"), Value: aws.String("msgs")}
+	runsDim := types.Dimension{Name: aws.String("ArchiveType"), Value: aws.String("runs")}
 
 	metrics := []types.MetricDatum{
+		{MetricName: aws.String("ArchivingElapsed"), Value: aws.Float64(timeTaken.Seconds()), Unit: types.StandardUnitSeconds},
 		{
-			MetricName: aws.String("ArchiveElapsed"),
-			Dimensions: dims,
-			Value:      aws.Float64(timeTaken.Seconds()),
-			Unit:       types.StandardUnitSeconds,
-		},
-		{
-			MetricName: aws.String("OrgsArchived"),
-			Dimensions: dims,
-			Value:      aws.Float64(float64(len(orgs))),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("MsgsRecordsArchived"),
-			Dimensions: dims,
+			MetricName: aws.String("RecordsArchived"),
+			Dimensions: []types.Dimension{msgsDim},
 			Value:      aws.Float64(float64(totalMsgsRecordsArchived)),
 			Unit:       types.StandardUnitCount,
 		},
 		{
-			MetricName: aws.String("MsgsArchivedsCreated"),
-			Dimensions: dims,
-			Value:      aws.Float64(float64(totalMsgsArchivesCreated)),
-			Unit:       types.StandardUnitCount,
-		},
-
-		{
-			MetricName: aws.String("MsgsArchivedsFailed"),
-			Dimensions: dims,
-			Value:      aws.Float64(float64(totalMsgsArchivesFailed)),
-			Unit:       types.StandardUnitCount,
-		},
-
-		{
-			MetricName: aws.String("MsgsRollupsCreated"),
-			Dimensions: dims,
-			Value:      aws.Float64(float64(totalMsgsRollupsCreated)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("MsgsRollupsFailed"),
-			Dimensions: dims,
-			Value:      aws.Float64(float64(totalMsgsRollupsFailed)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("RunsRecordsArchived"),
-			Dimensions: dims,
+			MetricName: aws.String("RecordsArchived"),
+			Dimensions: []types.Dimension{runsDim},
 			Value:      aws.Float64(float64(totalRunsRecordsArchived)),
 			Unit:       types.StandardUnitCount,
 		},
 		{
-			MetricName: aws.String("RunsArchivedsCreated"),
-			Dimensions: dims,
+			MetricName: aws.String("ArchivesCreated"),
+			Dimensions: []types.Dimension{msgsDim},
+			Value:      aws.Float64(float64(totalMsgsArchivesCreated)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("ArchivesCreated"),
+			Dimensions: []types.Dimension{runsDim},
 			Value:      aws.Float64(float64(totalRunsArchivesCreated)),
 			Unit:       types.StandardUnitCount,
 		},
 		{
-			MetricName: aws.String("RunsArchivedsFailed"),
-			Dimensions: dims,
+			MetricName: aws.String("ArchivesFailed"),
+			Dimensions: []types.Dimension{msgsDim},
+			Value:      aws.Float64(float64(totalMsgsArchivesFailed)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("ArchivesFailed"),
+			Dimensions: []types.Dimension{runsDim},
 			Value:      aws.Float64(float64(totalRunsArchivesFailed)),
 			Unit:       types.StandardUnitCount,
 		},
 		{
-			MetricName: aws.String("RunsRollupsCreated"),
-			Dimensions: dims,
+			MetricName: aws.String("RollupsCreated"),
+			Dimensions: []types.Dimension{msgsDim},
+			Value:      aws.Float64(float64(totalMsgsRollupsCreated)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("RollupsCreated"),
+			Dimensions: []types.Dimension{runsDim},
 			Value:      aws.Float64(float64(totalRunsRollupsCreated)),
 			Unit:       types.StandardUnitCount,
 		},
 		{
-			MetricName: aws.String("RunsRollupsFailed"),
-			Dimensions: dims,
+			MetricName: aws.String("RollupsFailed"),
+			Dimensions: []types.Dimension{msgsDim},
+			Value:      aws.Float64(float64(totalMsgsRollupsFailed)),
+			Unit:       types.StandardUnitCount,
+		},
+		{
+			MetricName: aws.String("RollupsFailed"),
+			Dimensions: []types.Dimension{runsDim},
 			Value:      aws.Float64(float64(totalRunsRollupsFailed)),
 			Unit:       types.StandardUnitCount,
 		},
