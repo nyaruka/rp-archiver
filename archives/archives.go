@@ -14,10 +14,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
+	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/runtime"
 )
@@ -967,71 +967,21 @@ func ArchiveActiveOrgs(rt *runtime.Runtime) error {
 	timeTaken := dates.Now().Sub(start)
 	slog.Info("archiving of active orgs complete", "time_taken", timeTaken, "num_orgs", len(orgs))
 
-	msgsDim := types.Dimension{Name: aws.String("ArchiveType"), Value: aws.String("msgs")}
-	runsDim := types.Dimension{Name: aws.String("ArchiveType"), Value: aws.String("runs")}
+	msgsDim := cwatch.Dimension("ArchiveType", "msgs")
+	runsDim := cwatch.Dimension("ArchiveType", "runs")
 
 	metrics := []types.MetricDatum{
-		{MetricName: aws.String("ArchivingElapsed"), Value: aws.Float64(timeTaken.Seconds()), Unit: types.StandardUnitSeconds},
-		{
-			MetricName: aws.String("RecordsArchived"),
-			Dimensions: []types.Dimension{msgsDim},
-			Value:      aws.Float64(float64(totalMsgsRecordsArchived)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("RecordsArchived"),
-			Dimensions: []types.Dimension{runsDim},
-			Value:      aws.Float64(float64(totalRunsRecordsArchived)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("ArchivesCreated"),
-			Dimensions: []types.Dimension{msgsDim},
-			Value:      aws.Float64(float64(totalMsgsArchivesCreated)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("ArchivesCreated"),
-			Dimensions: []types.Dimension{runsDim},
-			Value:      aws.Float64(float64(totalRunsArchivesCreated)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("ArchivesFailed"),
-			Dimensions: []types.Dimension{msgsDim},
-			Value:      aws.Float64(float64(totalMsgsArchivesFailed)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("ArchivesFailed"),
-			Dimensions: []types.Dimension{runsDim},
-			Value:      aws.Float64(float64(totalRunsArchivesFailed)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("RollupsCreated"),
-			Dimensions: []types.Dimension{msgsDim},
-			Value:      aws.Float64(float64(totalMsgsRollupsCreated)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("RollupsCreated"),
-			Dimensions: []types.Dimension{runsDim},
-			Value:      aws.Float64(float64(totalRunsRollupsCreated)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("RollupsFailed"),
-			Dimensions: []types.Dimension{msgsDim},
-			Value:      aws.Float64(float64(totalMsgsRollupsFailed)),
-			Unit:       types.StandardUnitCount,
-		},
-		{
-			MetricName: aws.String("RollupsFailed"),
-			Dimensions: []types.Dimension{runsDim},
-			Value:      aws.Float64(float64(totalRunsRollupsFailed)),
-			Unit:       types.StandardUnitCount,
-		},
+		cwatch.Datum("ArchivingElapsed", timeTaken.Seconds(), types.StandardUnitSeconds),
+		cwatch.Datum("RecordsArchived", float64(totalMsgsRecordsArchived), types.StandardUnitCount, msgsDim),
+		cwatch.Datum("RecordsArchived", float64(totalRunsRecordsArchived), types.StandardUnitCount, runsDim),
+		cwatch.Datum("ArchivesCreated", float64(totalMsgsArchivesCreated), types.StandardUnitCount, msgsDim),
+		cwatch.Datum("ArchivesCreated", float64(totalRunsArchivesCreated), types.StandardUnitCount, runsDim),
+		cwatch.Datum("ArchivesFailed", float64(totalMsgsArchivesFailed), types.StandardUnitCount, msgsDim),
+		cwatch.Datum("ArchivesFailed", float64(totalRunsArchivesFailed), types.StandardUnitCount, runsDim),
+		cwatch.Datum("RollupsCreated", float64(totalMsgsRollupsCreated), types.StandardUnitCount, msgsDim),
+		cwatch.Datum("RollupsCreated", float64(totalRunsRollupsCreated), types.StandardUnitCount, runsDim),
+		cwatch.Datum("RollupsFailed", float64(totalMsgsRollupsFailed), types.StandardUnitCount, msgsDim),
+		cwatch.Datum("RollupsFailed", float64(totalRunsRollupsFailed), types.StandardUnitCount, runsDim),
 	}
 
 	if err = rt.CW.Send(ctx, metrics...); err != nil {

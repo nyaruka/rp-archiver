@@ -13,7 +13,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/nyaruka/ezconf v0.3.0
-	github.com/nyaruka/gocommon v1.60.3
+	github.com/nyaruka/gocommon v1.60.4
 	github.com/samber/slog-multi v1.2.0
 	github.com/samber/slog-sentry v1.2.2
 	github.com/stretchr/testify v1.10.0
