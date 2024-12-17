@@ -984,9 +984,11 @@ func ArchiveActiveOrgs(rt *runtime.Runtime) error {
 		cwatch.Datum("RollupsFailed", float64(totalRunsRollupsFailed), types.StandardUnitCount, runsDim),
 	}
 
+	ctx, cancel = context.WithTimeout(context.Background(), time.Minute)
 	if err = rt.CW.Send(ctx, metrics...); err != nil {
-		slog.Error("error putting metrics", "error", err)
+		slog.Error("error sending metrics", "error", err)
 	}
+	cancel()
 
 	return nil
 }
