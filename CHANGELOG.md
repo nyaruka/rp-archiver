@@ -1,3 +1,7 @@
+v9.3.9 (2024-12-17)
+-------------------------
+ * Fix sending metrics
+
 v9.3.8 (2024-12-16)
 -------------------------
  * Send metrics to cloudwatch and remove librato
