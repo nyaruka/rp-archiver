@@ -26,28 +26,30 @@ We recommend running it with no changes to the configuration and no parameters, 
 environment variables to configure it. You can use `% rp-archiver --help` to see a list of the
 environment variables and parameters and for more details on each option.
 
-For use with RapidPro/TextIt, you will need to configure these settings:
-
  * `ARCHIVER_DB`: URL describing how to connect to the database (default "postgres://temba:temba@localhost/temba?sslmode=disable")
  * `ARCHIVER_TEMP_DIR`: The directory that temporary archives will be written before upload (default "/tmp")
  * `ARCHIVER_DELETE`: Whether to delete messages and runs after they are archived, we recommend setting this to true for large installations (default false)
+
+### AWS services:
+
+ * `ARCHIVER_AWS_ACCESS_KEY_ID`: AWS access key id used to authenticate to AWS
+ * `ARCHIVER_AWS_SECRET_ACCESS_KEY`: AWS secret access key used to authenticate to AWS
+ * `ARCHIVER_AWS_REGION`: AWS region (ex: `eu-west-1`)
  
 For writing of archives, Archiver needs access to a storage bucket on an S3 compatible service. For AWS we recommend that 
 you choose SSE-S3 encryption as this is the only type that supports validation of upload ETags.
 
- * `ARCHIVER_S3_REGION`: The region for your S3 bucket (ex: `ew-west-1`)
- * `ARCHIVER_S3_BUCKET`: The name of your S3 bucket (ex: `dl-archiver-test"`)
- * `ARCHIVER_S3_ENDPOINT`: The S3 endpoint we will write archives to (default "https://s3.amazonaws.com")
- * `ARCHIVER_AWS_ACCESS_KEY_ID`: The AWS access key id used to authenticate to AWS
- * `ARCHIVER_AWS_SECRET_ACCESS_KEY` The AWS secret access key used to authenticate to AWS
+ * `ARCHIVER_S3_BUCKET`: name of your S3 bucket (ex: `dl-archiver-test"`)
 
 If using a different encryption type or service that produces non-MD5 ETags:
 
- * `CHECK_S3_HASHES`: can be set to `FALSE` to disable checking of upload hashes.
+ * `ARCHIVER_CHECK_S3_HASHES`: can be set to `FALSE` to disable checking of upload hashes.
 
-Recommended settings for error reporting:
+### Logging and error reporting:
 
- * `ARCHIVER_SENTRY_DSN`: The DSN to use when logging errors to Sentry
+ * `ARCHIVER_DEPLOYMENT_ID`: used for metrics reporting
+ * `ARCHIVER_SENTRY_DSN`: DSN to use when logging errors to Sentry
+ * `ARCHIVER_LOG_LEVEL`: logging level to use (default is `info`)
 
 ## Development
 
