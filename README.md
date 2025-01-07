@@ -1,5 +1,6 @@
 # 🗜️ Archiver
 
+[![tag](https://img.shields.io/github/tag/nyaruka/rp-archiver.svg)](https://github.com/nyaruka/rp-archiver/releases)
 [![Build Status](https://github.com/nyaruka/rp-archiver/workflows/CI/badge.svg)](https://github.com/nyaruka/rp-archiver/actions?query=workflow%3ACI) 
 [![codecov](https://codecov.io/gh/nyaruka/rp-archiver/branch/main/graph/badge.svg)](https://codecov.io/gh/nyaruka/rp-archiver) 
 [![Go Report Card](https://goreportcard.com/badge/github.com/nyaruka/rp-archiver)](https://goreportcard.com/report/github.com/nyaruka/rp-archiver) 
