@@ -214,8 +214,7 @@ CREATE TABLE flows_flowrun (
     created_on timestamp with time zone NOT NULL,
     modified_on timestamp with time zone NOT NULL,
     exited_on timestamp with time zone NULL,
-    status varchar(1) NOT NULL,
-    delete_from_results boolean
+    status varchar(1) NOT NULL
 );
 
 CREATE TABLE archives_archive (
