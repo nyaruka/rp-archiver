@@ -153,7 +153,6 @@ CREATE TABLE msgs_msg (
     next_attempt timestamp with time zone NOT NULL,
     failed_reason character varying(1),
     external_id character varying(255),
-    metadata text,
     log_uuids uuid[]
 );
 
@@ -167,12 +166,6 @@ CREATE TABLE msgs_msg_labels (
     id serial primary key,
     msg_id integer NOT NULL REFERENCES msgs_msg(id),
     label_id integer NOT NULL REFERENCES msgs_label(id)
-);
-
-CREATE TABLE ivr_call (
-    id serial primary key,
-    org_id integer NOT NULL REFERENCES orgs_org(id),
-    created_on timestamp with time zone NOT NULL
 );
 
 CREATE TABLE flows_flowstart (
@@ -191,12 +184,6 @@ CREATE TABLE flows_flowstart_groups (
     id serial primary key,
     flowstart_id integer NOT NULL REFERENCES flows_flowstart(id),
     contactgroup_id integer NOT NULL REFERENCES contacts_contactgroup(id)
-);
-
-CREATE TABLE flows_flowstart_calls (
-    id serial primary key,
-    flowstart_id integer NOT NULL REFERENCES flows_flowstart(id),
-    call_id integer NOT NULL REFERENCES ivr_call(id)
 );
 
 CREATE TABLE flows_flowrun (
@@ -321,9 +308,6 @@ INSERT INTO msgs_msg_labels(id, msg_id, label_id) VALUES
 INSERT INTO auth_user(id, username) VALUES 
 (1, 'greg@gmail.com');
 
-INSERT INTO ivr_call(id, org_id, created_on) VALUES 
-(1, 2, NOW());
-
 INSERT INTO flows_flowstart(id, org_id, created_on) VALUES 
 (1, 2, NOW());
 
@@ -331,9 +315,6 @@ INSERT INTO flows_flowstart_contacts(flowstart_id, contact_id) VALUES
 (1, 6);
 
 INSERT INTO flows_flowstart_groups(flowstart_id, contactgroup_id) VALUES 
-(1, 1);
-
-INSERT INTO flows_flowstart_calls(flowstart_id, call_id) VALUES 
 (1, 1);
 
 INSERT INTO flows_flowrun(id, uuid, org_id, responded, contact_id, flow_id, results, path, path_nodes, path_times, created_on, modified_on, exited_on, status, start_id) VALUES

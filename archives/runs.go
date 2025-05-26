@@ -283,13 +283,6 @@ func DeleteFlowStarts(ctx context.Context, rt *runtime.Runtime, now time.Time, o
 			return fmt.Errorf("error deleting related groups for start: %d: %w", startID, err)
 		}
 
-		// delete calls M2M
-		_, err = tx.Exec(`DELETE from flows_flowstart_calls WHERE flowstart_id = $1`, startID)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("error deleting related calls for start: %d: %w", startID, err)
-		}
-
 		// delete counts
 		_, err = tx.Exec(`DELETE from flows_flowstartcount WHERE start_id = $1`, startID)
 		if err != nil {
