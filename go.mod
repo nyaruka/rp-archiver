@@ -1,8 +1,6 @@
 module github.com/nyaruka/rp-archiver
 
-go 1.23
-
-toolchain go1.23.1
+go 1.24
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.32.6
