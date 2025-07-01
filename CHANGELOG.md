@@ -1,3 +1,8 @@
+v10.2.0 (2025-07-01)
+-------------------------
+ * Update dependencies
+ * Update to go 1.24
+
 v10.1.0 (2025-05-26)
 -------------------------
  * Remove flows_flowstart_calls
