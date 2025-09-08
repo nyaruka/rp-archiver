@@ -9,9 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
+	"github.com/nyaruka/gocommon/aws/s3x"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,6 +29,7 @@ func setup(t *testing.T) (context.Context, *runtime.Runtime) {
 	config.AWSAccessKeyID = "root"
 	config.AWSSecretAccessKey = "tembatemba"
 	config.S3Endpoint = "http://localhost:9000"
+	config.S3Bucket = "test-archives"
 	config.S3Minio = true
 	config.DeploymentID = "test"
 
@@ -38,19 +42,34 @@ func setup(t *testing.T) (context.Context, *runtime.Runtime) {
 	_, err = db.Exec(string(testDB))
 	require.NoError(t, err)
 
-	s3Client, err := NewS3Client(config)
-	require.NoError(t, err)
+	svc, err := s3x.NewService(config.AWSAccessKeyID, config.AWSSecretAccessKey, config.AWSRegion, config.S3Endpoint, config.S3Minio)
+	assert.NoError(t, err)
+
+	err = svc.Test(ctx, config.S3Bucket)
+	assert.ErrorContains(t, err, "NotFound")
+
+	_, err = svc.Client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(config.S3Bucket)})
+	assert.NoError(t, err)
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
 	CW, err := cwatch.NewService(config.AWSAccessKeyID, config.AWSSecretAccessKey, config.AWSRegion, config.CloudwatchNamespace, config.DeploymentID)
 	require.NoError(t, err)
 
-	return ctx, &runtime.Runtime{Config: config, DB: db, S3: s3Client, CW: CW}
+	return ctx, &runtime.Runtime{Config: config, DB: db, S3: svc, CW: CW}
+}
+
+func teardown(t *testing.T, ctx context.Context, rt *runtime.Runtime) {
+	err := rt.S3.EmptyBucket(ctx, rt.Config.S3Bucket)
+	assert.NoError(t, err)
+	_, err = rt.S3.Client.DeleteBucket(ctx, &s3.DeleteBucketInput{Bucket: aws.String(rt.Config.S3Bucket)})
+	assert.NoError(t, err)
+
 }
 
 func TestGetMissingDayArchives(t *testing.T) {
 	ctx, rt := setup(t)
+	defer teardown(t, ctx, rt)
 
 	orgs, err := GetActiveOrgs(ctx, rt)
 	assert.NoError(t, err)
@@ -97,6 +116,7 @@ func TestGetMissingDayArchives(t *testing.T) {
 
 func TestGetMissingMonthArchives(t *testing.T) {
 	ctx, rt := setup(t)
+	defer teardown(t, ctx, rt)
 
 	orgs, err := GetActiveOrgs(ctx, rt)
 	assert.NoError(t, err)
@@ -125,6 +145,7 @@ func TestGetMissingMonthArchives(t *testing.T) {
 
 func TestCreateMsgArchive(t *testing.T) {
 	ctx, rt := setup(t)
+	defer teardown(t, ctx, rt)
 
 	err := EnsureTempArchiveDirectory("/tmp")
 	assert.NoError(t, err)
@@ -200,6 +221,7 @@ func assertArchiveFile(t *testing.T, archive *Archive, truthName string) {
 
 func TestCreateRunArchive(t *testing.T) {
 	ctx, rt := setup(t)
+	defer teardown(t, ctx, rt)
 
 	err := EnsureTempArchiveDirectory("/tmp")
 	assert.NoError(t, err)
@@ -258,6 +280,7 @@ func TestCreateRunArchive(t *testing.T) {
 
 func TestWriteArchiveToDB(t *testing.T) {
 	ctx, rt := setup(t)
+	defer teardown(t, ctx, rt)
 
 	orgs, err := GetActiveOrgs(ctx, rt)
 	assert.NoError(t, err)
@@ -309,6 +332,7 @@ func getCountInRange(db *sqlx.DB, query string, orgID int, start time.Time, end 
 
 func TestArchiveOrgMessages(t *testing.T) {
 	ctx, rt := setup(t)
+	defer teardown(t, ctx, rt)
 
 	deleteTransactionSize = 1
 
@@ -417,6 +441,7 @@ func assertArchive(t *testing.T, a *Archive, startDate time.Time, period Archive
 
 func TestArchiveOrgRuns(t *testing.T) {
 	ctx, rt := setup(t)
+	defer teardown(t, ctx, rt)
 
 	orgs, err := GetActiveOrgs(ctx, rt)
 	assert.NoError(t, err)
@@ -494,7 +519,8 @@ func TestArchiveOrgRuns(t *testing.T) {
 }
 
 func TestArchiveActiveOrgs(t *testing.T) {
-	_, rt := setup(t)
+	ctx, rt := setup(t)
+	defer teardown(t, ctx, rt)
 
 	err := ArchiveActiveOrgs(rt)
 	assert.NoError(t, err)
