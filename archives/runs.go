@@ -37,18 +37,13 @@ FROM (
 				FROM (
 					SELECT node, time
 					FROM unnest(fr.path_nodes::text[] , fr.path_times::timestamptz[]) x(node, time) LIMIT 500)
-					as path_data)
-			ELSE (
-				SELECT coalesce(jsonb_agg(path_data), '[]'::jsonb)
-				FROM (
-					SELECT path_row ->> 'node_uuid' AS node, (path_row ->> 'arrived_on')::timestamptz as time
-					FROM jsonb_array_elements(fr.path::jsonb) AS path_row LIMIT 500)
-					as path_data)
-		END as path),
+					AS path_data)
+			ELSE '[]'::jsonb
+		END AS path),
 		(SELECT coalesce(jsonb_object_agg(values_data.key, values_data.value), '{}'::jsonb) from (
 			SELECT key, jsonb_build_object('name', value -> 'name', 'value', value -> 'value', 'input', value -> 'input', 'time', (value -> 'created_on')::text::timestamptz, 'category', value -> 'category', 'node', value -> 'node_uuid') as value
 			FROM jsonb_each(fr.results::jsonb)) AS values_data
-		) as values,
+		) AS values,
 		fr.created_on,
 		fr.modified_on,
 		fr.exited_on,
