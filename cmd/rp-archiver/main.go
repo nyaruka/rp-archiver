@@ -97,7 +97,7 @@ func main() {
 	}
 
 	if config.UploadToS3 {
-		rt.S3, err = archives.NewS3Client(config)
+		rt.S3, err = archives.NewS3Client(config, true)
 		if err != nil {
 			logger.Error("unable to initialize s3 client", "error", err)
 		} else {
