@@ -1,3 +1,9 @@
+v10.3.0 (2025-09-18)
+-------------------------
+ * Bump to go 1.25
+ * Update deps
+ * flowrun.path replaced by path_nodes and path_times
+
 v10.2.0 (2025-07-01)
 -------------------------
  * Update dependencies
