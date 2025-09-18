@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
@@ -18,7 +20,7 @@ import (
 )
 
 func setup(t *testing.T) (context.Context, *runtime.Runtime) {
-	ctx := context.Background()
+	ctx := t.Context()
 	config := runtime.NewDefaultConfig()
 	config.DB = "postgres://archiver_test:temba@localhost:5432/archiver_test?sslmode=disable&TimeZone=UTC"
 
@@ -38,13 +40,22 @@ func setup(t *testing.T) (context.Context, *runtime.Runtime) {
 	_, err = db.Exec(string(testDB))
 	require.NoError(t, err)
 
-	s3Client, err := NewS3Client(config)
+	s3Client, err := NewS3Client(config, false)
 	require.NoError(t, err)
+
+	if s3Client.Test(ctx, "temba-archives") != nil {
+		_, err = s3Client.Client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("temba-archives")})
+		require.NoError(t, err)
+	}
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
 	CW, err := cwatch.NewService(config.AWSAccessKeyID, config.AWSSecretAccessKey, config.AWSRegion, config.CloudwatchNamespace, config.DeploymentID)
 	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		s3Client.EmptyBucket(ctx, "temba-archives")
+	})
 
 	return ctx, &runtime.Runtime{Config: config, DB: db, S3: s3Client, CW: CW}
 }
