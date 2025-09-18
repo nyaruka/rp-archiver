@@ -30,16 +30,17 @@ const maxSingleUploadBytes = 5e9 // 5GB
 const chunkSizeBytes = 1e9 // 1GB
 
 // NewS3Client creates a new s3 service from the passed in config, testing it as necessary
-func NewS3Client(cfg *runtime.Config) (*s3x.Service, error) {
+func NewS3Client(cfg *runtime.Config, test bool) (*s3x.Service, error) {
 	svc, err := s3x.NewService(cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.AWSRegion, cfg.S3Endpoint, cfg.S3Minio)
 	if err != nil {
 		return nil, err
 	}
 
-	// test out our S3 credentials
-	if err := svc.Test(context.TODO(), cfg.S3Bucket); err != nil {
-		slog.Error("s3 bucket not reachable", "error", err)
-		return nil, err
+	if test {
+		if err := svc.Test(context.TODO(), cfg.S3Bucket); err != nil {
+			slog.Error("s3 bucket not reachable", "error", err)
+			return nil, err
+		}
 	}
 
 	return svc, nil
