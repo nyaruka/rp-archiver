@@ -48,7 +48,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 		END AS status,
 		CASE WHEN visibility = 'V' THEN 'visible' WHEN visibility = 'A' THEN 'archived' WHEN visibility = 'D' THEN 'deleted' WHEN visibility = 'X' THEN 'deleted' ELSE NULL END as visibility,
 		text,
-		(SELECT coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (SELECT attach_data.attachment[1] AS content_type, attach_data.attachment[2] AS url FROM (SELECT regexp_matches(unnest(attachments), '^(.*?):(.*)$') attachment) as attach_data) as attach_row) as attachments,
+		(SELECT coalesce(jsonb_agg(attach_row), '[]'::jsonb) FROM (SELECT attach_data.attachment[1] AS content_type, attach_data.attachment[2] AS url FROM (SELECT regexp_matches(unnest(attachments), '^(.*?):(.*)$') attachment) AS attach_data) AS attach_row) AS attachments,
 		labels_agg.data AS labels,
 		mm.created_on,
 		mm.sent_on,
