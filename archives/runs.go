@@ -25,8 +25,8 @@ const sqlLookupRuns = `
 SELECT rec.uuid, rec.exited_on, row_to_json(rec)
 FROM (
 	SELECT
-		fr.id as id,
-		fr.uuid as uuid,
+		fr.id,
+		fr.uuid,
 		row_to_json(flow_struct) AS flow,
 		row_to_json(contact_struct) AS contact,
 		fr.responded,
@@ -40,7 +40,7 @@ FROM (
 					AS path_data)
 			ELSE '[]'::jsonb
 		END AS path),
-		(SELECT coalesce(jsonb_object_agg(values_data.key, values_data.value), '{}'::jsonb) from (
+		(SELECT coalesce(jsonb_object_agg(values_data.key, values_data.value), '{}'::jsonb) FROM (
 			SELECT key, jsonb_build_object('name', value -> 'name', 'value', value -> 'value', 'input', value -> 'input', 'time', (value -> 'created_on')::text::timestamptz, 'category', value -> 'category', 'node', value -> 'node_uuid') as value
 			FROM jsonb_each(fr.results::jsonb)) AS values_data
 		) AS values,
@@ -53,7 +53,7 @@ FROM (
 			WHEN status = 'X' THEN 'expired'
 			WHEN status = 'F' THEN 'failed'
 			ELSE NULL
-		END as exit_type
+		END AS exit_type
 
 	FROM flows_flowrun fr
 	JOIN LATERAL (SELECT uuid, name FROM flows_flow WHERE flows_flow.id = fr.flow_id) AS flow_struct ON True
