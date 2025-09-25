@@ -133,7 +133,7 @@ CREATE TABLE msgs_msg (
     contact_urn_id integer REFERENCES contacts_contacturn(id) ON DELETE CASCADE,
     broadcast_id integer REFERENCES msgs_broadcast(id) ON DELETE CASCADE,
     flow_id integer REFERENCES flows_flow(id) ON DELETE CASCADE,
-    --ticket_id integer REFERENCES tickets_ticket(id) ON DELETE CASCADE,
+    ticket_uuid uuid NULL,
     created_by_id integer REFERENCES auth_user(id) ON DELETE CASCADE,
     text text NOT NULL,
     attachments character varying(255)[] NULL,
@@ -191,6 +191,7 @@ CREATE TABLE flows_flowrun (
     uuid uuid NOT NULL UNIQUE,
     org_id integer NOT NULL REFERENCES orgs_org(id),
     responded boolean NOT NULL,
+    session_uuid uuid NULL,
     contact_id integer NOT NULL REFERENCES contacts_contact(id),
     flow_id integer NOT NULL REFERENCES flows_flow(id),
     start_id integer NULL REFERENCES flows_flowstart(id),
@@ -283,15 +284,15 @@ INSERT INTO msgs_broadcast(id, org_id, translations, created_on, schedule_id, is
 (3, 2, '{"text": {"und": "not purged"}}', '2017-08-12 19:11:59.890662+02:00', NULL, TRUE),
 (4, 2, '{"text": {"und": "new"}}', '2019-08-12 19:11:59.890662+02:00', NULL, TRUE);
 
-INSERT INTO msgs_msg(id, uuid, org_id, broadcast_id, text, created_on, sent_on, modified_on, direction, status, visibility, msg_type, attachments, channel_id, contact_id, contact_urn_id, flow_id, msg_count, error_count, next_attempt) VALUES
-(1, '2f969340-704a-4aa2-a1bd-2f832a21d257', 2, NULL, 'message 1', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'V', 'T', NULL, 2, 6, 7, NULL, 1, 0, '2017-08-12 21:11:59.890662+00'),
-(2, 'abe87ac1-015c-4803-be29-1e89509fe682', 2, NULL, 'message 2', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'D', 'T', NULL, 2, 6, 7, NULL, 1, 0, '2017-08-12 21:11:59.890662+00'),
-(3, 'a7e83a22-a6ff-4e18-82d0-19545640ccba', 2, NULL, 'message 3', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'O', 'H', 'V', 'T', '{"image/png:https://foo.bar/image1.png", "image/png:https://foo.bar/image2.png"}', NULL, 6, 7, NULL, 1, 0, '2017-08-12 21:11:59.890662+00'),
-(4, '1cad36af-5581-4c8a-81cd-83708398f61e', 2, NULL, 'message 4', '2017-08-13 21:11:59.890662+00', '2017-08-13 21:11:59.890662+00', '2017-08-13 21:11:59.890662+00', 'I', 'H', 'V', 'T', NULL, 2, 6, 7, NULL, 1, 0, '2017-08-13 21:11:59.890662+00'),
-(5, 'f557972e-2eb5-42fa-9b87-902116d18787', 3, NULL, 'message 5', '2017-08-11 21:11:59.890662+02:00', '2017-08-11 21:11:59.890662+02:00', '2017-08-11 21:11:59.890662+02:00', 'I', 'H', 'V', 'T', NULL, 3, 7, 8, NULL, 1, 0, '2017-08-11 21:11:59.890662+02:00'),
-(6, '579d148c-0ab1-4afb-832f-afb1fe0e19b7', 2, 2, 'message 6', '2017-10-08 21:11:59.890662+00', '2017-10-08 21:11:59.890662+00', '2017-10-08 21:11:59.890662+00', 'I', 'H', 'V', 'T', NULL, 2, 6, 7, NULL, 1, 0, '2017-10-08 21:11:59.890662+00'),
-(7, '7aeca469-2593-444e-afe4-4702317534c9', 2, NULL, 'message 7', '2018-01-02 21:11:59.890662+00', '2018-01-02 21:11:59.890662+00', '2018-01-02 21:11:59.890662+00', 'I', 'H', 'X', 'T', NULL, 2, 6, 7, 2, 1, 0, '2018-01-02 21:11:59.890662+00'),
-(9, 'e14ab466-0d3b-436d-a0f7-5851fd7d9b7d', 2, NULL, 'message 9', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'O', 'S', 'V', 'T', NULL, NULL, 6, NULL, 3, 1, 0, '2017-08-12 21:11:59.890662+00');
+INSERT INTO msgs_msg(id, uuid, org_id, broadcast_id, text, created_on, sent_on, modified_on, direction, status, visibility, msg_type, attachments, channel_id, contact_id, contact_urn_id, flow_id, ticket_uuid, msg_count, error_count, next_attempt) VALUES
+(1, '2f969340-704a-4aa2-a1bd-2f832a21d257', 2, NULL, 'message 1', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'V', 'T', NULL, 2, 6, 7, NULL, NULL, 1, 0, '2017-08-12 21:11:59.890662+00'),
+(2, 'abe87ac1-015c-4803-be29-1e89509fe682', 2, NULL, 'message 2', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'I', 'H', 'D', 'T', NULL, 2, 6, 7, NULL, NULL, 1, 0, '2017-08-12 21:11:59.890662+00'),
+(3, 'a7e83a22-a6ff-4e18-82d0-19545640ccba', 2, NULL, 'message 3', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'O', 'H', 'V', 'T', '{"image/png:https://foo.bar/image1.png", "image/png:https://foo.bar/image2.png"}', NULL, 6, 7, NULL, '019981a4-db0b-7237-8114-c140b0b8a482', 1, 0, '2017-08-12 21:11:59.890662+00'),
+(4, '1cad36af-5581-4c8a-81cd-83708398f61e', 2, NULL, 'message 4', '2017-08-13 21:11:59.890662+00', '2017-08-13 21:11:59.890662+00', '2017-08-13 21:11:59.890662+00', 'I', 'H', 'V', 'T', NULL, 2, 6, 7, NULL, NULL, 1, 0, '2017-08-13 21:11:59.890662+00'),
+(5, 'f557972e-2eb5-42fa-9b87-902116d18787', 3, NULL, 'message 5', '2017-08-11 21:11:59.890662+02:00', '2017-08-11 21:11:59.890662+02:00', '2017-08-11 21:11:59.890662+02:00', 'I', 'H', 'V', 'T', NULL, 3, 7, 8, NULL, NULL, 1, 0, '2017-08-11 21:11:59.890662+02:00'),
+(6, '579d148c-0ab1-4afb-832f-afb1fe0e19b7', 2, 2, 'message 6', '2017-10-08 21:11:59.890662+00', '2017-10-08 21:11:59.890662+00', '2017-10-08 21:11:59.890662+00', 'I', 'H', 'V', 'T', NULL, 2, 6, 7, NULL, NULL, 1, 0, '2017-10-08 21:11:59.890662+00'),
+(7, '7aeca469-2593-444e-afe4-4702317534c9', 2, NULL, 'message 7', '2018-01-02 21:11:59.890662+00', '2018-01-02 21:11:59.890662+00', '2018-01-02 21:11:59.890662+00', 'I', 'H', 'X', 'T', NULL, 2, 6, 7, 2, NULL, 1, 0, '2018-01-02 21:11:59.890662+00'),
+(9, 'e14ab466-0d3b-436d-a0f7-5851fd7d9b7d', 2, NULL, 'message 9', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', '2017-08-12 21:11:59.890662+00', 'O', 'S', 'V', 'T', NULL, NULL, 6, NULL, 3, NULL, 1, 0, '2017-08-12 21:11:59.890662+00');
 
 INSERT INTO msgs_label(id, uuid, name) VALUES
 (1, '1d9e3188-b74b-4ae0-a166-0de31aedb34a', 'Label 1'),

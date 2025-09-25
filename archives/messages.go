@@ -26,6 +26,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 		CASE WHEN oo.is_anon = FALSE THEN ccu.identity ELSE NULL END AS urn,
 		row_to_json(channel) AS channel,
 		row_to_json(flow) AS flow,
+		mm.ticket_uuid,
 		CASE WHEN direction = 'I' THEN 'in' WHEN direction = 'O' THEN 'out' ELSE NULL END AS direction,
 		CASE 
 			WHEN msg_type = 'T' THEN 'text'
