@@ -59,7 +59,7 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 		LEFT JOIN contacts_contacturn ccu ON mm.contact_urn_id = ccu.id
 		LEFT JOIN LATERAL (SELECT uuid, name FROM channels_channel ch WHERE ch.id = mm.channel_id) AS channel ON True
 		LEFT JOIN LATERAL (SELECT uuid, name FROM flows_flow f WHERE f.id = mm.flow_id) AS flow ON True
-		LEFT JOIN LATERAL (SELECT coalesce(jsonb_agg(label_row), '[]'::jsonb) AS data FROM (SELECT uuid, name FROM msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) as label_row) as labels_agg ON True
+		LEFT JOIN LATERAL (SELECT coalesce(jsonb_agg(label_row), '[]'::jsonb) AS data FROM (SELECT uuid, name FROM msgs_label ml INNER JOIN msgs_msg_labels mml ON ml.id = mml.label_id AND mml.msg_id = mm.id) AS label_row) AS labels_agg ON True
 
 	WHERE mm.org_id = $1 AND mm.created_on >= $2 AND mm.created_on < $3
 ORDER BY created_on ASC, id ASC) rec;`
