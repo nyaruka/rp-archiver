@@ -8,13 +8,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.1
 	github.com/aws/smithy-go v1.23.0
 	github.com/getsentry/sentry-go v0.35.3
-	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/nyaruka/ezconf v0.4.1
-	github.com/nyaruka/gocommon v1.68.3
+	github.com/nyaruka/gocommon v1.69.0
 	github.com/samber/slog-multi v1.5.0
 	github.com/samber/slog-sentry/v2 v2.9.3
 	github.com/stretchr/testify v1.11.1
+	github.com/vinovest/sqlx v1.7.0
 )
 
 require (
@@ -37,10 +37,11 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/muir/sqltoken v0.1.0 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1 // indirect
 	github.com/nyaruka/null/v3 v3.0.0 // indirect
-	github.com/nyaruka/phonenumbers v1.6.5 // indirect
+	github.com/nyaruka/phonenumbers v1.6.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/samber/lo v1.51.0 // indirect
 	github.com/samber/slog-common v0.19.0 // indirect

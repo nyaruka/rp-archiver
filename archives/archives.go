@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
-	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/runtime"
+	"github.com/vinovest/sqlx"
 )
 
 // ArchiveType is the type for the archives

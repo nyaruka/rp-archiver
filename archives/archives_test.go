@@ -11,12 +11,12 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vinovest/sqlx"
 )
 
 func setup(t *testing.T) (context.Context, *runtime.Runtime) {

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
 	"github.com/nyaruka/gocommon/aws/cwatch"
@@ -18,6 +17,7 @@ import (
 	"github.com/nyaruka/rp-archiver/runtime"
 	slogmulti "github.com/samber/slog-multi"
 	slogsentry "github.com/samber/slog-sentry/v2"
+	"github.com/vinovest/sqlx"
 )
 
 var (
