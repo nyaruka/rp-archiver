@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/gocommon/dates"
 	"github.com/nyaruka/rp-archiver/runtime"
+	"github.com/vinovest/sqlx"
 )
 
 const (

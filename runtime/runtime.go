@@ -1,9 +1,9 @@
 package runtime
 
 import (
-	"github.com/jmoiron/sqlx"
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/aws/s3x"
+	"github.com/vinovest/sqlx"
 )
 
 type Runtime struct {
