@@ -1,3 +1,8 @@
+v10.3.2 (2025-10-10)
+-------------------------
+ * Update dependencies
+ * Switch to vinovest/sqlx fork of jmoiron/sqlx
+
 v10.3.1 (2025-09-25)
 -------------------------
  * Include msg.ticket_uuid
