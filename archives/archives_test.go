@@ -11,7 +11,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	_ "github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +33,7 @@ func setup(t *testing.T) (context.Context, *runtime.Runtime) {
 	testDB, err := os.ReadFile("../testdb.sql")
 	require.NoError(t, err)
 
-	db, err := sqlx.Open("postgres", config.DB)
+	db, err := sqlx.Open("pgx", config.DB)
 	require.NoError(t, err)
 
 	_, err = db.Exec(string(testDB))

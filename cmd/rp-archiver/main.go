@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	_ "github.com/lib/pq"
 	"github.com/nyaruka/ezconf"
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/dates"
@@ -88,7 +87,7 @@ func main() {
 		Config: config,
 	}
 
-	rt.DB, err = sqlx.Open("postgres", config.DB)
+	rt.DB, err = sqlx.Open("pgx", config.DB)
 	if err != nil {
 		logger.Error("error connecting to db", "error", err)
 	} else {

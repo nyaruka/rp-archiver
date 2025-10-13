@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	_ "github.com/jackc/pgx/v5/stdlib" // postgres driver
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/aws/s3x"
 	"github.com/vinovest/sqlx"
