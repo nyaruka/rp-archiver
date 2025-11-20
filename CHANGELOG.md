@@ -1,3 +1,8 @@
+v10.3.3 (2025-11-20)
+-------------------------
+ * Update deps
+ * Include message UUIDs in archives
+
 v10.3.2 (2025-10-10)
 -------------------------
  * Update dependencies
