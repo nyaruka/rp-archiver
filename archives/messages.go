@@ -20,6 +20,7 @@ const (
 const sqlLookupMsgs = `
 SELECT rec.visibility, row_to_json(rec) FROM (
 	SELECT
+		mm.uuid,
 		mm.id,
 		broadcast_id AS broadcast,
 		row_to_json(contact) AS contact,
