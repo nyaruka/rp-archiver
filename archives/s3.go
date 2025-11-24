@@ -54,6 +54,7 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 	}
 	defer f.Close()
 
+	location := fmt.Sprintf("%s:%s", bucket, path)
 	url := fmt.Sprintf(s3BucketURL, bucket, path)
 
 	// s3 wants a base64 encoded hash instead of our hex encoded
@@ -100,6 +101,7 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 	}
 
 	archive.URL = url
+	archive.Location = location
 	return nil
 }
 
