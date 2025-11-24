@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/url"
 	"os"
 	"strings"
 
@@ -20,8 +19,6 @@ import (
 	"github.com/nyaruka/gocommon/aws/s3x"
 	"github.com/nyaruka/rp-archiver/runtime"
 )
-
-const s3BucketURL = "https://%s.s3.amazonaws.com/%s"
 
 // any file over this needs to be uploaded in chunks
 const maxSingleUploadBytes = 5e9 // 5GB
@@ -55,7 +52,6 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 	defer f.Close()
 
 	location := fmt.Sprintf("%s:%s", bucket, path)
-	url := fmt.Sprintf(s3BucketURL, bucket, path)
 
 	// s3 wants a base64 encoded hash instead of our hex encoded
 	hashBytes, _ := hex.DecodeString(archive.Hash)
@@ -100,7 +96,6 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 		}
 	}
 
-	archive.URL = url
 	archive.Location = location
 	return nil
 }
@@ -114,15 +109,7 @@ func withAcceptEncoding(e string) func(o *s3.Options) {
 }
 
 // GetS3FileInfo returns the ETAG hash for the passed in file
-func GetS3FileInfo(ctx context.Context, s3Client *s3x.Service, fileURL string) (int64, string, error) {
-	u, err := url.Parse(fileURL)
-	if err != nil {
-		return 0, "", err
-	}
-
-	bucket := strings.Split(u.Host, ".")[0]
-	key := strings.TrimPrefix(u.Path, "/")
-
+func GetS3FileInfo(ctx context.Context, s3Client *s3x.Service, bucket, key string) (int64, string, error) {
 	head, err := s3Client.Client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
 	if err != nil {
 		return 0, "", fmt.Errorf("error looking up S3 object bucket=%s key=%s: %w", bucket, key, err)
@@ -139,15 +126,7 @@ func GetS3FileInfo(ctx context.Context, s3Client *s3x.Service, fileURL string) (
 }
 
 // GetS3File return an io.ReadCloser for the passed in bucket and path
-func GetS3File(ctx context.Context, s3Client *s3x.Service, fileURL string) (io.ReadCloser, error) {
-	u, err := url.Parse(fileURL)
-	if err != nil {
-		return nil, err
-	}
-
-	bucket := strings.Split(u.Host, ".")[0]
-	key := strings.TrimPrefix(u.Path, "/")
-
+func GetS3File(ctx context.Context, s3Client *s3x.Service, bucket, key string) (io.ReadCloser, error) {
 	output, err := s3Client.Client.GetObject(
 		ctx,
 		&s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)},

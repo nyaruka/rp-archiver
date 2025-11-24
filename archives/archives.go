@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
@@ -70,7 +71,6 @@ type Archive struct {
 	Size        int64  `db:"size"`
 	Hash        string `db:"hash"`
 	Location    string `db:"location"`
-	URL         string `db:"url"` // deprecated: replaced by Location
 	BuildTime   int    `db:"build_time"`
 
 	NeedsDeletion bool       `db:"needs_deletion"`
@@ -80,6 +80,12 @@ type Archive struct {
 	Org         Org
 	ArchiveFile string
 	Dailies     []*Archive
+}
+
+// returns location parsed into bucket and key
+func (a *Archive) location() (string, string) {
+	parts := strings.SplitN(a.Location, ":", 2)
+	return parts[0], parts[1]
 }
 
 func (a *Archive) endDate() time.Time {
@@ -123,7 +129,7 @@ func GetActiveOrgs(ctx context.Context, rt *runtime.Runtime) ([]Org, error) {
 }
 
 const sqlLookupOrgArchives = `
-  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, url, rollup_id, needs_deletion
+  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, rollup_id, needs_deletion
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 
 ORDER BY start_date ASC, period DESC`
@@ -143,7 +149,7 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 }
 
 const sqlLookupArchivesNeedingDeletion = `
-  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, url, rollup_id, needs_deletion 
+  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, rollup_id, needs_deletion 
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
 ORDER BY start_date ASC, period DESC`
@@ -184,7 +190,7 @@ func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveTy
 
 // between is inclusive on both sides
 const sqlLookupOrgDailyArchivesForDateRange = `
-  SELECT id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, url, rollup_id
+  SELECT id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, rollup_id
     FROM archives_archive
    WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND start_date BETWEEN $4 AND $5
 ORDER BY start_date ASC`
@@ -377,9 +383,10 @@ func BuildRollupArchive(ctx context.Context, rt *runtime.Runtime, monthlyArchive
 			continue
 		}
 
-		reader, err := GetS3File(ctx, rt.S3, daily.URL)
+		bucket, key := daily.location()
+		reader, err := GetS3File(ctx, rt.S3, bucket, key)
 		if err != nil {
-			return fmt.Errorf("error reading S3 URL: %s: %w", daily.URL, err)
+			return fmt.Errorf("error reading daily S3 object: %w", err)
 		}
 
 		// set up our reader to calculate our hash along the way
@@ -393,7 +400,7 @@ func BuildRollupArchive(ctx context.Context, rt *runtime.Runtime, monthlyArchive
 		// copy this daily file (uncompressed) to our new monthly file
 		_, err = io.Copy(writer, gzipReader)
 		if err != nil {
-			return fmt.Errorf("error copying from s3 to disk for URL: %s: %w", daily.URL, err)
+			return fmt.Errorf("error copying from S3 to disk %s:%s: %w", bucket, key, err)
 		}
 
 		reader.Close()
@@ -590,8 +597,8 @@ func UploadArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 }
 
 const sqlInsertArchive = `
-INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, location, url, needs_deletion, build_time, rollup_id)
-    VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :location, :url, :needs_deletion, :build_time, :rollup_id)
+INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, location, needs_deletion, build_time, rollup_id)
+    VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :location, :needs_deletion, :build_time, :rollup_id)
   RETURNING id`
 
 // WriteArchiveToDB write an archive to the Database
