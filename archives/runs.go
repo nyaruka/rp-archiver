@@ -98,7 +98,7 @@ func writeRunRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer 
 }
 
 const sqlSelectOrgRunsInRange = `
-   SELECT fr.id, fr.status
+   SELECT fr.id
      FROM flows_flowrun fr
 LEFT JOIN contacts_contact cc ON cc.id = fr.contact_id
     WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
@@ -149,22 +149,11 @@ func DeleteArchivedRuns(ctx context.Context, rt *runtime.Runtime, archive *Archi
 	defer rows.Close()
 
 	var runID int64
-	var status string
-	runCount := 0
 	runIDs := make([]int64, 0, archive.RecordCount)
 	for rows.Next() {
-		err = rows.Scan(&runID, &status)
-		if err != nil {
+		if err := rows.Scan(&runID); err != nil {
 			return err
 		}
-
-		// if this run is still active, something has gone wrong, throw an error
-		if status == RunStatusActive || status == RunStatusWaiting {
-			return fmt.Errorf("run #%d in archive hadn't exited", runID)
-		}
-
-		// increment our count
-		runCount++
 		runIDs = append(runIDs, runID)
 	}
 	rows.Close()
@@ -172,8 +161,8 @@ func DeleteArchivedRuns(ctx context.Context, rt *runtime.Runtime, archive *Archi
 	log.Debug("found runs", "run_count", len(runIDs))
 
 	// verify we don't see more runs than there are in our archive (fewer is ok)
-	if runCount > archive.RecordCount {
-		return fmt.Errorf("more runs in the database: %d than in archive: %d", runCount, archive.RecordCount)
+	if len(runIDs) > archive.RecordCount {
+		return fmt.Errorf("more runs in the database: %d than in archive: %d", len(runIDs), archive.RecordCount)
 	}
 
 	// ok, delete our runs in batches, we do this in transactions as it spans a few different queries
