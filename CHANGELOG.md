@@ -1,3 +1,7 @@
+v10.3.5 (2025-11-24)
+-------------------------
+ * Remove run status check
+
 v10.3.4 (2025-11-24)
 -------------------------
  * Start writing new archive.location field
