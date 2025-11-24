@@ -213,7 +213,8 @@ CREATE TABLE archives_archive (
     record_count integer NOT NULL, 
     size bigint NOT NULL, 
     hash text NOT NULL, 
-    url varchar(200) NOT NULL, 
+    location varchar(1088),
+    url varchar(200) NOT NULL, -- deprecated
     needs_deletion boolean NOT NULL, 
     deleted_on timestamp with time zone NULL,
     build_time integer NOT NULL, 
@@ -232,11 +233,11 @@ INSERT INTO channels_channel(id, uuid, org_id, name) VALUES
 (2, '60f2ed5b-05f2-4156-9ff0-e44e90da1b85', 2, 'Channel 2'),
 (3, 'b79e0054-068f-4928-a5f4-339d10a7ad5a', 3, 'Channel 3');
 
-INSERT INTO archives_archive(id, org_id, archive_type, created_on, start_date, period, record_count, size, hash, url, needs_deletion, build_time) VALUES 
-(NEXTVAL('archives_archive_id_seq'), 3, 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '', '', TRUE, 0),
-(NEXTVAL('archives_archive_id_seq'), 3, 'message', '2017-09-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '', '', TRUE, 0),
-(NEXTVAL('archives_archive_id_seq'), 3, 'message', '2017-09-02 00:00:00.000000+00', '2017-09-01 00:00:00.000000+00', 'M', 0, 0, '', '', TRUE, 0),
-(NEXTVAL('archives_archive_id_seq'), 2, 'message', '2017-10-08 00:00:00.000000+00', '2017-10-08 00:00:00.000000+00', 'D', 0, 0, '', '', TRUE, 0);
+INSERT INTO archives_archive(id, org_id, archive_type, created_on, start_date, period, record_count, size, hash, location, url, needs_deletion, build_time) VALUES 
+(NEXTVAL('archives_archive_id_seq'), 3, 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '2a80be2a47bfbb270ffe7ab5542351eb', 'tmba-archives:3/message_D20170810_2a80be2a47bfbb270ffe7ab5542351eb.jsonl.gz', 'https://temba-archives.s3.amazonaws.com/3/message_D20170810_2a80be2a47bfbb270ffe7ab5542351eb.jsonl.gz', TRUE, 0),
+(NEXTVAL('archives_archive_id_seq'), 3, 'message', '2017-09-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '', '', '', TRUE, 0),
+(NEXTVAL('archives_archive_id_seq'), 3, 'message', '2017-09-02 00:00:00.000000+00', '2017-09-01 00:00:00.000000+00', 'M', 0, 0, '', '', '', TRUE, 0),
+(NEXTVAL('archives_archive_id_seq'), 2, 'message', '2017-10-08 00:00:00.000000+00', '2017-10-08 00:00:00.000000+00', 'D', 0, 0, '', '', '', TRUE, 0);
 
 INSERT INTO contacts_contact(id, uuid, org_id, is_active, created_by_id, created_on, modified_by_id, modified_on, name, language) VALUES
 (1, 'c7a2dd87-a80e-420b-8431-ca48d422e924', 1, TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', NULL, 'eng'),

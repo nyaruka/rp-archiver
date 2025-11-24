@@ -69,7 +69,8 @@ type Archive struct {
 	RecordCount int    `db:"record_count"`
 	Size        int64  `db:"size"`
 	Hash        string `db:"hash"`
-	URL         string `db:"url"`
+	Location    string `db:"location"`
+	URL         string `db:"url"` // deprecated: replaced by Location
 	BuildTime   int    `db:"build_time"`
 
 	NeedsDeletion bool       `db:"needs_deletion"`
@@ -122,7 +123,7 @@ func GetActiveOrgs(ctx context.Context, rt *runtime.Runtime) ([]Org, error) {
 }
 
 const sqlLookupOrgArchives = `
-  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, size, record_count, url, rollup_id, needs_deletion
+  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, url, rollup_id, needs_deletion
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 
 ORDER BY start_date ASC, period DESC`
@@ -142,7 +143,7 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 }
 
 const sqlLookupArchivesNeedingDeletion = `
-  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, size, record_count, url, rollup_id, needs_deletion 
+  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, url, rollup_id, needs_deletion 
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
 ORDER BY start_date ASC, period DESC`
@@ -183,7 +184,7 @@ func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveTy
 
 // between is inclusive on both sides
 const sqlLookupOrgDailyArchivesForDateRange = `
-  SELECT id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, size, record_count, url, rollup_id
+  SELECT id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, url, rollup_id
     FROM archives_archive
    WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND start_date BETWEEN $4 AND $5
 ORDER BY start_date ASC`
@@ -581,7 +582,7 @@ func UploadArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 		"archive_type", archive.ArchiveType,
 		"start_date", archive.StartDate,
 		"period", archive.Period,
-		"url", archive.URL,
+		"location", archive.Location,
 		"file_size", archive.Size,
 		"file_hash", archive.Hash,
 	)
@@ -589,8 +590,8 @@ func UploadArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 }
 
 const sqlInsertArchive = `
-INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, url, needs_deletion, build_time, rollup_id)
-    VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :url, :needs_deletion, :build_time, :rollup_id)
+INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, location, url, needs_deletion, build_time, rollup_id)
+    VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :location, :url, :needs_deletion, :build_time, :rollup_id)
   RETURNING id`
 
 // WriteArchiveToDB write an archive to the Database
