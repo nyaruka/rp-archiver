@@ -1,3 +1,7 @@
+v10.3.4 (2025-11-24)
+-------------------------
+ * Start writing new archive.location field
+
 v10.3.3 (2025-11-20)
 -------------------------
  * Update deps
