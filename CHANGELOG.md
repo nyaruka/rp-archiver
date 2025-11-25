@@ -1,3 +1,7 @@
+v10.3.6 (2025-11-25)
+-------------------------
+ * Stop writing Archive.url field
+
 v10.3.5 (2025-11-24)
 -------------------------
  * Remove run status check
