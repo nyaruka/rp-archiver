@@ -127,7 +127,8 @@ func DeleteArchivedRuns(ctx context.Context, rt *runtime.Runtime, archive *Archi
 	log.Info("deleting runs")
 
 	// first things first, make sure our file is correct on S3
-	s3Size, s3Hash, err := GetS3FileInfo(outer, rt.S3, archive.URL)
+	bucket, key := archive.location()
+	s3Size, s3Hash, err := GetS3FileInfo(outer, rt.S3, bucket, key)
 	if err != nil {
 		return err
 	}
