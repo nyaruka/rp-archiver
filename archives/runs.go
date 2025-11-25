@@ -22,7 +22,7 @@ const (
 )
 
 const sqlLookupRuns = `
-SELECT rec.uuid, rec.exited_on, row_to_json(rec)
+SELECT rec.uuid, row_to_json(rec)
 FROM (
 	SELECT
 		fr.id,
@@ -74,19 +74,11 @@ func writeRunRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer 
 	recordCount := 0
 
 	var runUUID string
-	var runExitedOn *time.Time
 	var record string
 
 	for rows.Next() {
-		err = rows.Scan(&runUUID, &runExitedOn, &record)
-
-		if err != nil {
+		if err := rows.Scan(&runUUID, &record); err != nil {
 			return 0, fmt.Errorf("error scanning run record for org: %d: %w", archive.Org.ID, err)
-		}
-
-		// shouldn't be archiving an active run, that's an error
-		if runExitedOn == nil {
-			return 0, fmt.Errorf("run %s still active, cannot archive", runUUID)
 		}
 
 		writer.WriteString(record)
