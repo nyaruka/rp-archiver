@@ -640,7 +640,7 @@ func DeleteArchiveFile(archive *Archive) error {
 		return fmt.Errorf("error deleting temp archive file: %s: %w", archive.ArchiveFile, err)
 	}
 
-	slog.Debug("deleted temporary archive file", "org_id", archive.Org.ID, "archive_type", archive.ArchiveType, "start_date", archive.StartDate, "periond", archive.Period, "db_archive_id", archive.ID, "filename", archive.ArchiveFile)
+	slog.Debug("deleted temporary archive file", "org_id", archive.Org.ID, "archive_type", archive.ArchiveType, "start_date", archive.StartDate, "period", archive.Period, "db_archive_id", archive.ID, "filename", archive.ArchiveFile)
 
 	return nil
 }
