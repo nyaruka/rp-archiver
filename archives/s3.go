@@ -151,25 +151,37 @@ func DeleteS3Archive(ctx context.Context, s3Client *s3x.Service, archive *Archiv
 	return nil
 }
 
+// s3DeleteObjectsLimit is the maximum number of objects that can be deleted in a single S3 DeleteObjects request
+const s3DeleteObjectsLimit = 1000
+
 // DeleteS3Archives deletes multiple archive files from S3 in bulk
 func DeleteS3Archives(ctx context.Context, s3Client *s3x.Service, bucket string, archives []*Archive) error {
 	if len(archives) == 0 {
 		return nil
 	}
 
-	// build the list of objects to delete
-	objects := make([]types.ObjectIdentifier, len(archives))
-	for i, archive := range archives {
-		_, key := archive.location()
-		objects[i] = types.ObjectIdentifier{Key: aws.String(key)}
-	}
+	// process in chunks of 1000 (S3 DeleteObjects API limit)
+	for i := 0; i < len(archives); i += s3DeleteObjectsLimit {
+		end := i + s3DeleteObjectsLimit
+		if end > len(archives) {
+			end = len(archives)
+		}
+		chunk := archives[i:end]
 
-	_, err := s3Client.Client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
-		Bucket: aws.String(bucket),
-		Delete: &types.Delete{Objects: objects},
-	})
-	if err != nil {
-		return fmt.Errorf("error deleting S3 objects in bulk: %w", err)
+		// build the list of objects to delete
+		objects := make([]types.ObjectIdentifier, len(chunk))
+		for j, archive := range chunk {
+			_, key := archive.location()
+			objects[j] = types.ObjectIdentifier{Key: aws.String(key)}
+		}
+
+		_, err := s3Client.Client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucket),
+			Delete: &types.Delete{Objects: objects},
+		})
+		if err != nil {
+			return fmt.Errorf("error deleting S3 objects in bulk: %w", err)
+		}
 	}
 	return nil
 }
