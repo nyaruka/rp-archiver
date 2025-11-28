@@ -788,10 +788,8 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 		}
 
 		// delete the daily archives that were rolled up
-		if rt.Config.UploadToS3 {
-			if err := deleteDailyArchives(ctx, rt, archive.Dailies); err != nil {
-				log.Error("error deleting daily archives after rollup", "error", err)
-			}
+		if err := deleteDailyArchives(ctx, rt, archive.Dailies); err != nil {
+			log.Error("error deleting daily archives after rollup", "error", err)
 		}
 
 		log.Info("rollup created", "id", archive.ID, "record_count", archive.RecordCount, "elapsed", dates.Since(start))
@@ -804,9 +802,11 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 // deleteDailyArchives deletes the daily archives from S3 and the database after they've been rolled up
 func deleteDailyArchives(ctx context.Context, rt *runtime.Runtime, dailies []*Archive) error {
 	for _, daily := range dailies {
-		// delete from S3 first
-		if err := DeleteS3Archive(ctx, rt.S3, daily); err != nil {
-			return fmt.Errorf("error deleting daily archive from S3: %w", err)
+		// delete from S3 first (only if S3 is configured)
+		if rt.Config.UploadToS3 {
+			if err := DeleteS3Archive(ctx, rt.S3, daily); err != nil {
+				return fmt.Errorf("error deleting daily archive from S3: %w", err)
+			}
 		}
 
 		// then delete from database
