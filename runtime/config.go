@@ -15,8 +15,6 @@ type Config struct {
 	S3Minio    bool   `help:"S3 is actually Minio or other compatible service"`
 
 	TempDir       string `help:"directory where temporary archive files are written"`
-	KeepFiles     bool   `help:"whether we should keep local archive files after upload (default false)"`
-	UploadToS3    bool   `help:"whether we should upload archive to S3"`
 	CheckS3Hashes bool   `help:"whether to check S3 hashes of uploaded archives before deleting records"`
 
 	ArchiveMessages bool   `help:"whether we should archive messages"`
@@ -45,8 +43,6 @@ func NewDefaultConfig() *Config {
 		S3Minio:    false,
 
 		TempDir:       "/tmp",
-		KeepFiles:     false,
-		UploadToS3:    true,
 		CheckS3Hashes: true,
 
 		ArchiveMessages: true,
