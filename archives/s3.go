@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -136,4 +137,33 @@ func GetS3File(ctx context.Context, s3Client *s3x.Service, bucket, key string) (
 	}
 
 	return output.Body, nil
+}
+
+// s3DeleteObjectsLimit is the maximum number of objects that can be deleted in a single S3 DeleteObjects request
+const s3DeleteObjectsLimit = 1000
+
+// DeleteS3Archives deletes multiple archive files from S3 in bulk
+func DeleteS3Archives(ctx context.Context, s3Client *s3x.Service, bucket string, archives []*Archive) error {
+	if len(archives) == 0 {
+		return nil
+	}
+
+	// process in chunks of 1000 (S3 DeleteObjects API limit)
+	for chunk := range slices.Chunk(archives, s3DeleteObjectsLimit) {
+		// build the list of objects to delete
+		objects := make([]types.ObjectIdentifier, len(chunk))
+		for j, archive := range chunk {
+			_, key := archive.location()
+			objects[j] = types.ObjectIdentifier{Key: aws.String(key)}
+		}
+
+		_, err := s3Client.Client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucket),
+			Delete: &types.Delete{Objects: objects},
+		})
+		if err != nil {
+			return fmt.Errorf("error deleting S3 objects in bulk: %w", err)
+		}
+	}
+	return nil
 }

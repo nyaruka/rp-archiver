@@ -645,6 +645,26 @@ func DeleteArchiveTempFile(archive *Archive) error {
 	return nil
 }
 
+const sqlDeleteArchives = `DELETE FROM archives_archive WHERE id = ANY($1)`
+
+// DeleteArchives deletes archive records from the database in bulk
+func DeleteArchives(ctx context.Context, db *sqlx.DB, archives []*Archive) error {
+	if len(archives) == 0 {
+		return nil
+	}
+
+	ids := make([]int, len(archives))
+	for i, a := range archives {
+		ids[i] = a.ID
+	}
+
+	_, err := db.ExecContext(ctx, sqlDeleteArchives, pq.Array(ids))
+	if err != nil {
+		return fmt.Errorf("error deleting archives from database: %w", err)
+	}
+	return nil
+}
+
 // CreateOrgArchives builds all the missing archives for the passed in org
 func CreateOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, error) {
 	archiveCount, err := GetCurrentArchiveCount(ctx, rt.DB, org, archiveType)
@@ -738,6 +758,7 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 
 	created := make([]*Archive, 0, len(archives))
 	failed := make([]*Archive, 0, 1)
+	dailiesRolledUp := make([]*Archive, 0, len(archives)*30)
 
 	// build them from rollups
 	for _, archive := range archives {
@@ -769,9 +790,37 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 
 		log.Info("rollup created", "id", archive.ID, "record_count", archive.RecordCount, "elapsed", dates.Since(start))
 		created = append(created, archive)
+
+		// collect dailies for bulk deletion
+		dailiesRolledUp = append(dailiesRolledUp, archive.Dailies...)
+	}
+
+	// delete all the daily archives that were rolled up in bulk
+	if err := deleteDailyArchives(ctx, rt, dailiesRolledUp); err != nil {
+		log.Error("error deleting daily archives after rollup", "error", err)
 	}
 
 	return created, failed, nil
+}
+
+// deleteDailyArchives deletes the daily archives from S3 and the database after they've been rolled up
+func deleteDailyArchives(ctx context.Context, rt *runtime.Runtime, dailies []*Archive) error {
+	if len(dailies) == 0 {
+		return nil
+	}
+
+	// delete from S3 in bulk
+	if err := DeleteS3Archives(ctx, rt.S3, rt.Config.S3Bucket, dailies); err != nil {
+		return fmt.Errorf("error deleting daily archives from S3: %w", err)
+	}
+	slog.Debug("deleted daily archives from S3", "count", len(dailies))
+
+	// delete from database in bulk
+	if err := DeleteArchives(ctx, rt.DB, dailies); err != nil {
+		return fmt.Errorf("error deleting daily archives from database: %w", err)
+	}
+	slog.Debug("deleted daily archives from database", "count", len(dailies))
+	return nil
 }
 
 const sqlUpdateArchiveDeleted = `UPDATE archives_archive SET needs_deletion = FALSE, deleted_on = $2 WHERE id = $1`
