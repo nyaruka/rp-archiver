@@ -349,7 +349,9 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 	assert.Equal(t, 0, len(monthliesFailed))
 
-	assert.Equal(t, 63, len(deleted))
+	// after rollup, daily archives are deleted from DB, so only monthlies and non-rolled-up dailies remain
+	// 2 monthlies (Aug, Sept) + 9 Oct dailies (Oct 1-7, 9-10) = 11 (Oct 8 pre-existing archive fails)
+	assert.Equal(t, 11, len(deleted))
 	assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
 	assert.Equal(t, MonthPeriod, deleted[0].Period)
 

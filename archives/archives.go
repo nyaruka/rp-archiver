@@ -645,6 +645,17 @@ func DeleteArchiveFile(archive *Archive) error {
 	return nil
 }
 
+const sqlDeleteArchive = `DELETE FROM archives_archive WHERE id = $1`
+
+// DeleteArchive deletes an archive record from the database
+func DeleteArchive(ctx context.Context, db *sqlx.DB, archive *Archive) error {
+	_, err := db.ExecContext(ctx, sqlDeleteArchive, archive.ID)
+	if err != nil {
+		return fmt.Errorf("error deleting archive id=%d from database: %w", archive.ID, err)
+	}
+	return nil
+}
+
 // CreateOrgArchives builds all the missing archives for the passed in org
 func CreateOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, error) {
 	archiveCount, err := GetCurrentArchiveCount(ctx, rt.DB, org, archiveType)
@@ -776,11 +787,36 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 			}
 		}
 
+		// delete the daily archives that were rolled up
+		if rt.Config.UploadToS3 {
+			if err := deleteDailyArchives(ctx, rt, archive.Dailies); err != nil {
+				log.Error("error deleting daily archives after rollup", "error", err)
+			}
+		}
+
 		log.Info("rollup created", "id", archive.ID, "record_count", archive.RecordCount, "elapsed", dates.Since(start))
 		created = append(created, archive)
 	}
 
 	return created, failed, nil
+}
+
+// deleteDailyArchives deletes the daily archives from S3 and the database after they've been rolled up
+func deleteDailyArchives(ctx context.Context, rt *runtime.Runtime, dailies []*Archive) error {
+	for _, daily := range dailies {
+		// delete from S3 first
+		if err := DeleteS3Archive(ctx, rt.S3, daily); err != nil {
+			return fmt.Errorf("error deleting daily archive from S3: %w", err)
+		}
+
+		// then delete from database
+		if err := DeleteArchive(ctx, rt.DB, daily); err != nil {
+			return fmt.Errorf("error deleting daily archive from database: %w", err)
+		}
+
+		slog.Debug("deleted daily archive after rollup", "archive_id", daily.ID, "start_date", daily.StartDate)
+	}
+	return nil
 }
 
 const sqlUpdateArchiveDeleted = `UPDATE archives_archive SET needs_deletion = FALSE, deleted_on = $2 WHERE id = $1`
