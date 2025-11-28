@@ -809,13 +809,11 @@ func deleteDailyArchives(ctx context.Context, rt *runtime.Runtime, dailies []*Ar
 		return nil
 	}
 
-	// delete from S3 one at a time (S3 doesn't have a bulk delete for single objects in aws-sdk-go-v2)
-	for _, daily := range dailies {
-		if err := DeleteS3Archive(ctx, rt.S3, daily); err != nil {
-			return fmt.Errorf("error deleting daily archive from S3: %w", err)
-		}
-		slog.Debug("deleted daily archive from S3", "archive_id", daily.ID, "start_date", daily.StartDate)
+	// delete from S3 in bulk
+	if err := DeleteS3Archives(ctx, rt.S3, rt.Config.S3Bucket, dailies); err != nil {
+		return fmt.Errorf("error deleting daily archives from S3: %w", err)
 	}
+	slog.Debug("deleted daily archives from S3", "count", len(dailies))
 
 	// delete from database in bulk
 	if err := DeleteArchives(ctx, rt.DB, dailies); err != nil {
