@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -148,13 +149,7 @@ func DeleteS3Archives(ctx context.Context, s3Client *s3x.Service, bucket string,
 	}
 
 	// process in chunks of 1000 (S3 DeleteObjects API limit)
-	for i := 0; i < len(archives); i += s3DeleteObjectsLimit {
-		end := i + s3DeleteObjectsLimit
-		if end > len(archives) {
-			end = len(archives)
-		}
-		chunk := archives[i:end]
-
+	for chunk := range slices.Chunk(archives, s3DeleteObjectsLimit) {
 		// build the list of objects to delete
 		objects := make([]types.ObjectIdentifier, len(chunk))
 		for j, archive := range chunk {
