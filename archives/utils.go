@@ -16,8 +16,7 @@ func executeInQuery(ctx context.Context, tx *sqlx.Tx, query string, ids []int64)
 	}
 	q = tx.Rebind(q)
 
-	_, err = tx.ExecContext(ctx, q, vs...)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, q, vs...); err != nil {
 		tx.Rollback()
 	}
 	return err

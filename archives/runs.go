@@ -73,14 +73,12 @@ func writeRunRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer 
 
 	recordCount := 0
 
-	var runUUID string
-	var runExitedOn *time.Time
-	var record string
-
 	for rows.Next() {
-		err = rows.Scan(&runUUID, &runExitedOn, &record)
+		var runUUID string
+		var runExitedOn *time.Time
+		var record string
 
-		if err != nil {
+		if err := rows.Scan(&runUUID, &runExitedOn, &record); err != nil {
 			return 0, fmt.Errorf("error scanning run record for org: %d: %w", archive.Org.ID, err)
 		}
 
@@ -181,14 +179,12 @@ func DeleteArchivedRuns(ctx context.Context, rt *runtime.Runtime, archive *Archi
 		}
 
 		// delete our runs
-		err = executeInQuery(ctx, tx, sqlDeleteRuns, idBatch)
-		if err != nil {
+		if err := executeInQuery(ctx, tx, sqlDeleteRuns, idBatch); err != nil {
 			return fmt.Errorf("error deleting runs: %w", err)
 		}
 
 		// commit our transaction
-		err = tx.Commit()
-		if err != nil {
+		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("error committing run delete transaction: %w", err)
 		}
 
@@ -203,8 +199,7 @@ func DeleteArchivedRuns(ctx context.Context, rt *runtime.Runtime, archive *Archi
 	deletedOn := dates.Now()
 
 	// all went well! mark our archive as no longer needing deletion
-	_, err = rt.DB.ExecContext(outer, sqlUpdateArchiveDeleted, archive.ID, deletedOn)
-	if err != nil {
+	if _, err := rt.DB.ExecContext(outer, sqlUpdateArchiveDeleted, archive.ID, deletedOn); err != nil {
 		return fmt.Errorf("error setting archive as deleted: %w", err)
 	}
 	archive.NeedsDeletion = false
@@ -282,8 +277,7 @@ func DeleteFlowStarts(ctx context.Context, rt *runtime.Runtime, now time.Time, o
 			return fmt.Errorf("error deleting start: %d: %w", startID, err)
 		}
 
-		err = tx.Commit()
-		if err != nil {
+		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("error deleting start: %d: %w", startID, err)
 		}
 

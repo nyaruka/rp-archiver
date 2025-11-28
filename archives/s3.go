@@ -90,8 +90,7 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 			ACL:             types.ObjectCannedACLPrivate,
 		}
 
-		_, err = uploader.Upload(ctx, params)
-		if err != nil {
+		if _, err := uploader.Upload(ctx, params); err != nil {
 			return err
 		}
 	}
