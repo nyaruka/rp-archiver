@@ -138,19 +138,6 @@ func GetS3File(ctx context.Context, s3Client *s3x.Service, bucket, key string) (
 	return output.Body, nil
 }
 
-// DeleteS3Archive deletes an archive file from S3
-func DeleteS3Archive(ctx context.Context, s3Client *s3x.Service, archive *Archive) error {
-	bucket, key := archive.location()
-	_, err := s3Client.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return fmt.Errorf("error deleting S3 object bucket=%s key=%s: %w", bucket, key, err)
-	}
-	return nil
-}
-
 // s3DeleteObjectsLimit is the maximum number of objects that can be deleted in a single S3 DeleteObjects request
 const s3DeleteObjectsLimit = 1000
 
