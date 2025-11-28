@@ -31,10 +31,6 @@ func main() {
 	loader := ezconf.NewLoader(&config, "archiver", "Archives RapidPro runs and msgs to S3", []string{"archiver.toml"})
 	loader.MustLoad()
 
-	if config.KeepFiles && !config.UploadToS3 {
-		log.Fatal("cannot delete archives and also not upload to s3")
-	}
-
 	var level slog.Level
 	err := level.UnmarshalText([]byte(config.LogLevel))
 	if err != nil {
@@ -96,13 +92,11 @@ func main() {
 		logger.Info("db ok", "state", "starting")
 	}
 
-	if config.UploadToS3 {
-		rt.S3, err = archives.NewS3Client(config, true)
-		if err != nil {
-			logger.Error("unable to initialize s3 client", "error", err)
-		} else {
-			logger.Info("s3 bucket ok", "state", "starting")
-		}
+	rt.S3, err = archives.NewS3Client(config, true)
+	if err != nil {
+		logger.Error("unable to initialize s3 client", "error", err)
+	} else {
+		logger.Info("s3 bucket ok", "state", "starting")
 	}
 
 	wg := &sync.WaitGroup{}
