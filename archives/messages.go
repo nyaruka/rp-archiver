@@ -154,14 +154,15 @@ func DeleteArchivedMessages(ctx context.Context, rt *runtime.Runtime, archive *A
 	defer rows.Close()
 
 	visibleCount := 0
-	var msgID int64
-	var visibility string
 	msgIDs := make([]int64, 0, archive.RecordCount)
+
 	for rows.Next() {
-		err = rows.Scan(&msgID, &visibility)
-		if err != nil {
+		var msgID int64
+		var visibility string
+		if err := rows.Scan(&msgID, &visibility); err != nil {
 			return err
 		}
+
 		msgIDs = append(msgIDs, msgID)
 
 		// keep track of the number of visible messages, ie, not deleted
@@ -193,20 +194,17 @@ func DeleteArchivedMessages(ctx context.Context, rt *runtime.Runtime, archive *A
 		}
 
 		// first delete any labelings
-		err = executeInQuery(ctx, tx, sqlDeleteMessageLabels, idBatch)
-		if err != nil {
+		if err := executeInQuery(ctx, tx, sqlDeleteMessageLabels, idBatch); err != nil {
 			return fmt.Errorf("error removing message labels: %w", err)
 		}
 
 		// then delete the messages themselves
-		err = executeInQuery(ctx, tx, sqlDeleteMessages, idBatch)
-		if err != nil {
+		if err := executeInQuery(ctx, tx, sqlDeleteMessages, idBatch); err != nil {
 			return fmt.Errorf("error deleting messages: %w", err)
 		}
 
 		// commit our transaction
-		err = tx.Commit()
-		if err != nil {
+		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("error committing message delete transaction: %w", err)
 		}
 
@@ -221,8 +219,7 @@ func DeleteArchivedMessages(ctx context.Context, rt *runtime.Runtime, archive *A
 	deletedOn := dates.Now()
 
 	// all went well! mark our archive as no longer needing deletion
-	_, err = rt.DB.ExecContext(outer, sqlUpdateArchiveDeleted, archive.ID, deletedOn)
-	if err != nil {
+	if _, err := rt.DB.ExecContext(outer, sqlUpdateArchiveDeleted, archive.ID, deletedOn); err != nil {
 		return fmt.Errorf("error setting archive as deleted: %w", err)
 	}
 	archive.NeedsDeletion = false
@@ -301,8 +298,7 @@ func DeleteBroadcasts(ctx context.Context, rt *runtime.Runtime, now time.Time, o
 			return fmt.Errorf("error deleting broadcast: %d: %w", broadcastID, err)
 		}
 
-		err = tx.Commit()
-		if err != nil {
+		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("error deleting broadcast: %d: %w", broadcastID, err)
 		}
 

@@ -115,11 +115,11 @@ func GetActiveOrgs(ctx context.Context, rt *runtime.Runtime) ([]Org, error) {
 	}
 	defer rows.Close()
 
-	orgs := make([]Org, 0, 10)
+	orgs := make([]Org, 0, 100)
 	for rows.Next() {
 		org := Org{RetentionPeriod: rt.Config.RetentionPeriod}
-		err = rows.StructScan(&org)
-		if err != nil {
+
+		if err := rows.StructScan(&org); err != nil {
 			return nil, fmt.Errorf("error scanning active org: %w", err)
 		}
 		orgs = append(orgs, org)
@@ -180,8 +180,7 @@ func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveTy
 
 	var archiveCount int
 
-	err := db.GetContext(ctx, &archiveCount, sqlCountOrgArchives, org.ID, archiveType)
-	if err != nil {
+	if err := db.GetContext(ctx, &archiveCount, sqlCountOrgArchives, org.ID, archiveType); err != nil {
 		return 0, fmt.Errorf("error querying archive count for org: %d and type: %s: %w", org.ID, archiveType, err)
 	}
 
@@ -252,11 +251,9 @@ func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, start
 	}
 	defer rows.Close()
 
-	var missingDay time.Time
 	for rows.Next() {
-
-		err = rows.Scan(&missingDay)
-		if err != nil {
+		var missingDay time.Time
+		if err := rows.Scan(&missingDay); err != nil {
 			return nil, fmt.Errorf("error scanning missing daily archive for org: %d and type: %s: %w", org.ID, archiveType, err)
 		}
 		archive := Archive{
@@ -306,11 +303,9 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 	}
 	defer rows.Close()
 
-	var missingMonth time.Time
 	for rows.Next() {
-
-		err = rows.Scan(&missingMonth)
-		if err != nil {
+		var missingMonth time.Time
+		if err := rows.Scan(&missingMonth); err != nil {
 			return nil, fmt.Errorf("error scanning missing monthly archive for org: %d and type: %s: %w", org.ID, archiveType, err)
 		}
 		archive := Archive{
@@ -398,8 +393,7 @@ func BuildRollupArchive(ctx context.Context, rt *runtime.Runtime, monthlyArchive
 		}
 
 		// copy this daily file (uncompressed) to our new monthly file
-		_, err = io.Copy(writer, gzipReader)
-		if err != nil {
+		if _, err := io.Copy(writer, gzipReader); err != nil {
 			return fmt.Errorf("error copying from S3 to disk %s:%s: %w", bucket, key, err)
 		}
 
@@ -416,13 +410,11 @@ func BuildRollupArchive(ctx context.Context, rt *runtime.Runtime, monthlyArchive
 	}
 
 	monthlyArchive.ArchiveFile = file.Name()
-	err = writer.Flush()
-	if err != nil {
+
+	if err := writer.Flush(); err != nil {
 		return err
 	}
-
-	err = gzWriter.Close()
-	if err != nil {
+	if err := gzWriter.Close(); err != nil {
 		return err
 	}
 
@@ -479,13 +471,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 
 	start := dates.Now()
 
-	log := slog.With(
-		"org_id", archive.Org.ID,
-		"archive_type", archive.ArchiveType,
-		"start_date", archive.StartDate,
-		"end_date", archive.endDate(),
-		"period", archive.Period,
-	)
+	log := slog.With("org_id", archive.Org.ID, "archive_type", archive.ArchiveType, "start_date", archive.StartDate, "end_date", archive.endDate(), "period", archive.Period)
 
 	filename := fmt.Sprintf("%s_%d_%s%d%02d%02d_", archive.ArchiveType, archive.Org.ID, archive.Period, archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day())
 	file, err := os.CreateTemp(archivePath, filename)
@@ -524,13 +510,10 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		return fmt.Errorf("error writing archive: %w", err)
 	}
 
-	err = writer.Flush()
-	if err != nil {
+	if err := writer.Flush(); err != nil {
 		return fmt.Errorf("error flushing archive file: %w", err)
 	}
-
-	err = gzWriter.Close()
-	if err != nil {
+	if err := gzWriter.Close(); err != nil {
 		return fmt.Errorf("error closing archive gzip writer: %w", err)
 	}
 
@@ -546,13 +529,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	archive.RecordCount = recordCount
 	archive.BuildTime = int(dates.Since(start) / time.Millisecond)
 
-	log.Debug("completed writing archive file",
-		"record_count", recordCount,
-		"filename", file.Name(),
-		"file_size", archive.Size,
-		"file_hash", archive.Hash,
-		"elapsed", dates.Since(start),
-	)
+	log.Debug("completed writing archive file", "record_count", recordCount, "filename", file.Name(), "file_size", archive.Size, "file_hash", archive.Hash, "elapsed", dates.Since(start))
 
 	return nil
 }
@@ -577,22 +554,14 @@ func UploadArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 			archive.Hash)
 	}
 
-	err := UploadToS3(ctx, rt.S3, rt.Config.S3Bucket, archivePath, archive)
-	if err != nil {
+	if err := UploadToS3(ctx, rt.S3, rt.Config.S3Bucket, archivePath, archive); err != nil {
 		return fmt.Errorf("error uploading archive to S3: %w", err)
 	}
 
 	archive.NeedsDeletion = true
 
-	slog.Debug("completed uploading archive file",
-		"org_id", archive.Org.ID,
-		"archive_type", archive.ArchiveType,
-		"start_date", archive.StartDate,
-		"period", archive.Period,
-		"location", archive.Location,
-		"file_size", archive.Size,
-		"file_hash", archive.Hash,
-	)
+	slog.Debug("completed uploading archive file", "org_id", archive.Org.ID, "archive_type", archive.ArchiveType, "start_date", archive.StartDate, "period", archive.Period, "location", archive.Location, "file_size", archive.Size, "file_hash", archive.Hash)
+
 	return nil
 }
 
@@ -621,8 +590,8 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error 
 	}
 
 	rows.Next()
-	err = rows.Scan(&archive.ID)
-	if err != nil {
+
+	if err := rows.Scan(&archive.ID); err != nil {
 		tx.Rollback()
 		return fmt.Errorf("error reading new archive id: %w", err)
 	}
@@ -652,8 +621,7 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error 
 		}
 	}
 
-	err = tx.Commit()
-	if err != nil {
+	if err := tx.Commit(); err != nil {
 		tx.Rollback()
 		return fmt.Errorf("error committing new archive transaction: %w", err)
 	}
@@ -672,14 +640,8 @@ func DeleteArchiveFile(archive *Archive) error {
 		return fmt.Errorf("error deleting temp archive file: %s: %w", archive.ArchiveFile, err)
 	}
 
-	slog.Debug("deleted temporary archive file",
-		"org_id", archive.Org.ID,
-		"archive_type", archive.ArchiveType,
-		"start_date", archive.StartDate,
-		"periond", archive.Period,
-		"db_archive_id", archive.ID,
-		"filename", archive.ArchiveFile,
-	)
+	slog.Debug("deleted temporary archive file", "org_id", archive.Org.ID, "archive_type", archive.ArchiveType, "start_date", archive.StartDate, "period", archive.Period, "db_archive_id", archive.ID, "filename", archive.ArchiveFile)
+
 	return nil
 }
 
@@ -718,8 +680,7 @@ func CreateOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 }
 
 func createArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) error {
-	err := CreateArchiveFile(ctx, rt.DB, archive, rt.Config.TempDir)
-	if err != nil {
+	if err := CreateArchiveFile(ctx, rt.DB, archive, rt.Config.TempDir); err != nil {
 		return fmt.Errorf("error writing archive file: %w", err)
 	}
 
@@ -733,14 +694,12 @@ func createArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 	}()
 
 	if rt.Config.UploadToS3 {
-		err = UploadArchive(ctx, rt, archive)
-		if err != nil {
+		if err := UploadArchive(ctx, rt, archive); err != nil {
 			return fmt.Errorf("error writing archive to s3: %w", err)
 		}
 	}
 
-	err = WriteArchiveToDB(ctx, rt.DB, archive)
-	if err != nil {
+	if err := WriteArchiveToDB(ctx, rt.DB, archive); err != nil {
 		return fmt.Errorf("error writing record to db: %w", err)
 	}
 
@@ -757,8 +716,7 @@ func createArchives(ctx context.Context, rt *runtime.Runtime, org Org, archives 
 		log.With("start_date", archive.StartDate, "end_date", archive.endDate(), "period", archive.Period, "archive_type", archive.ArchiveType).Debug("starting archive")
 		start := dates.Now()
 
-		err := createArchive(ctx, rt, archive)
-		if err != nil {
+		if err := createArchive(ctx, rt, archive); err != nil {
 			log.Error("error creating archive", "error", err)
 			failed = append(failed, archive)
 		} else {
@@ -791,32 +749,28 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 		log := log.With("start_date", archive.StartDate)
 		start := dates.Now()
 
-		err = BuildRollupArchive(ctx, rt, archive, now, org, archiveType)
-		if err != nil {
+		if err := BuildRollupArchive(ctx, rt, archive, now, org, archiveType); err != nil {
 			log.Error("error building monthly archive", "error", err)
 			failed = append(failed, archive)
 			continue
 		}
 
 		if rt.Config.UploadToS3 {
-			err = UploadArchive(ctx, rt, archive)
-			if err != nil {
+			if err := UploadArchive(ctx, rt, archive); err != nil {
 				log.Error("error writing archive to s3", "error", err)
 				failed = append(failed, archive)
 				continue
 			}
 		}
 
-		err = WriteArchiveToDB(ctx, rt.DB, archive)
-		if err != nil {
+		if err := WriteArchiveToDB(ctx, rt.DB, archive); err != nil {
 			log.Error("error writing record to db", "error", err)
 			failed = append(failed, archive)
 			continue
 		}
 
 		if !rt.Config.KeepFiles {
-			err := DeleteArchiveFile(archive)
-			if err != nil {
+			if err := DeleteArchiveFile(archive); err != nil {
 				log.Error("error deleting temporary file", "error", err)
 				continue
 			}
@@ -844,14 +798,7 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 	// for each archive
 	deleted := make([]*Archive, 0, len(archives))
 	for _, a := range archives {
-		log := slog.With(
-			"archive_id", a.ID,
-			"org_id", a.OrgID,
-			"type", a.ArchiveType,
-			"count", a.RecordCount,
-			"start", a.StartDate,
-			"period", a.Period,
-		)
+		log := slog.With("archive_id", a.ID, "org_id", a.OrgID, "type", a.ArchiveType, "count", a.RecordCount, "start", a.StartDate, "period", a.Period)
 
 		start := dates.Now()
 
