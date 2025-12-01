@@ -15,14 +15,11 @@ type Config struct {
 	S3Minio    bool   `help:"S3 is actually Minio or other compatible service"`
 
 	TempDir       string `help:"directory where temporary archive files are written"`
-	KeepFiles     bool   `help:"whether we should keep local archive files after upload (default false)"`
-	UploadToS3    bool   `help:"whether we should upload archive to S3"`
 	CheckS3Hashes bool   `help:"whether to check S3 hashes of uploaded archives before deleting records"`
 
 	ArchiveMessages bool   `help:"whether we should archive messages"`
 	ArchiveRuns     bool   `help:"whether we should archive runs"`
 	RetentionPeriod int    `help:"the number of days to keep before archiving"`
-	Delete          bool   `help:"whether to delete messages and runs from the db after archival (default false)"`
 	StartTime       string `help:"what time archive jobs should run in UTC HH:MM "`
 	Once            bool   `help:"whether archiver should run once and exit (default false)"`
 
@@ -45,14 +42,11 @@ func NewDefaultConfig() *Config {
 		S3Minio:    false,
 
 		TempDir:       "/tmp",
-		KeepFiles:     false,
-		UploadToS3:    true,
 		CheckS3Hashes: true,
 
 		ArchiveMessages: true,
 		ArchiveRuns:     true,
 		RetentionPeriod: 90,
-		Delete:          false,
 		StartTime:       "00:01",
 		Once:            false,
 

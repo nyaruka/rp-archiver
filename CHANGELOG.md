@@ -1,3 +1,8 @@
+v10.3.7 (2025-12-01)
+-------------------------
+ * Remove delete config option
+ * Remove options to keep local temp files and not upload to S3
+
 v10.3.6 (2025-11-25)
 -------------------------
  * Stop writing Archive.url field

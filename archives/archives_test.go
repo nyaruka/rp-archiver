@@ -158,7 +158,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.Equal(t, int64(23), task.Size)
 	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", task.Hash)
 
-	DeleteArchiveFile(task)
+	DeleteArchiveTempFile(task)
 
 	// build our third task, should have two messages
 	task = tasks[2]
@@ -172,7 +172,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.Equal(t, "dd2b8dc865524ceb7080e26358fbda15", task.Hash)
 	assertArchiveFile(t, task, "messages1.jsonl")
 
-	DeleteArchiveFile(task)
+	DeleteArchiveTempFile(task)
 	_, err = os.Stat(task.ArchiveFile)
 	assert.True(t, os.IsNotExist(err))
 
@@ -191,7 +191,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.Equal(t, "ab7b71efd543c7309a39d2292cc975aa", task.Hash)
 	assertArchiveFile(t, task, "messages2.jsonl")
 
-	DeleteArchiveFile(task)
+	DeleteArchiveTempFile(task)
 }
 
 func assertArchiveFile(t *testing.T, archive *Archive, truthName string) {
@@ -232,7 +232,7 @@ func TestCreateRunArchive(t *testing.T) {
 	assert.Equal(t, int64(23), task.Size)
 	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", task.Hash)
 
-	DeleteArchiveFile(task)
+	DeleteArchiveTempFile(task)
 
 	task = tasks[2]
 	err = CreateArchiveFile(ctx, rt.DB, task, "/tmp")
@@ -244,7 +244,7 @@ func TestCreateRunArchive(t *testing.T) {
 	assert.Equal(t, "cd8ce82019986ac1f4ec1482aac7bca0", task.Hash)
 	assertArchiveFile(t, task, "runs1.jsonl")
 
-	DeleteArchiveFile(task)
+	DeleteArchiveTempFile(task)
 	_, err = os.Stat(task.ArchiveFile)
 	assert.True(t, os.IsNotExist(err))
 
@@ -264,7 +264,7 @@ func TestCreateRunArchive(t *testing.T) {
 	assert.Equal(t, "40abf2113ea7c25c5476ff3025d54b07", task.Hash)
 	assertArchiveFile(t, task, "runs2.jsonl")
 
-	DeleteArchiveFile(task)
+	DeleteArchiveTempFile(task)
 }
 
 func TestWriteArchiveToDB(t *testing.T) {
@@ -326,8 +326,6 @@ func TestArchiveOrgMessages(t *testing.T) {
 	orgs, err := GetActiveOrgs(ctx, rt)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
-
-	rt.Config.Delete = true
 
 	assertCount(t, rt.DB, 4, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
 
@@ -432,8 +430,6 @@ func TestArchiveOrgRuns(t *testing.T) {
 	orgs, err := GetActiveOrgs(ctx, rt)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
-
-	rt.Config.Delete = true
 
 	dailiesCreated, _, monthliesCreated, _, deleted, err := ArchiveOrg(ctx, rt, now, orgs[2], RunType)
 	assert.NoError(t, err)

@@ -628,8 +628,8 @@ func WriteArchiveToDB(ctx context.Context, db *sqlx.DB, archive *Archive) error 
 	return nil
 }
 
-// DeleteArchiveFile removes our own disk archive file
-func DeleteArchiveFile(archive *Archive) error {
+// DeleteArchiveTempFile removes our own disk archive file
+func DeleteArchiveTempFile(archive *Archive) error {
 	if archive.ArchiveFile == "" {
 		return nil
 	}
@@ -685,18 +685,13 @@ func createArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 	}
 
 	defer func() {
-		if !rt.Config.KeepFiles {
-			err := DeleteArchiveFile(archive)
-			if err != nil {
-				slog.Error("error deleting temporary archive file", "error", err)
-			}
+		if err := DeleteArchiveTempFile(archive); err != nil {
+			slog.Error("error deleting temporary archive file", "error", err)
 		}
 	}()
 
-	if rt.Config.UploadToS3 {
-		if err := UploadArchive(ctx, rt, archive); err != nil {
-			return fmt.Errorf("error writing archive to s3: %w", err)
-		}
+	if err := UploadArchive(ctx, rt, archive); err != nil {
+		return fmt.Errorf("error writing archive to s3: %w", err)
 	}
 
 	if err := WriteArchiveToDB(ctx, rt.DB, archive); err != nil {
@@ -755,12 +750,10 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 			continue
 		}
 
-		if rt.Config.UploadToS3 {
-			if err := UploadArchive(ctx, rt, archive); err != nil {
-				log.Error("error writing archive to s3", "error", err)
-				failed = append(failed, archive)
-				continue
-			}
+		if err := UploadArchive(ctx, rt, archive); err != nil {
+			log.Error("error writing archive to s3", "error", err)
+			failed = append(failed, archive)
+			continue
 		}
 
 		if err := WriteArchiveToDB(ctx, rt.DB, archive); err != nil {
@@ -769,11 +762,9 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 			continue
 		}
 
-		if !rt.Config.KeepFiles {
-			if err := DeleteArchiveFile(archive); err != nil {
-				log.Error("error deleting temporary file", "error", err)
-				continue
-			}
+		if err := DeleteArchiveTempFile(archive); err != nil {
+			log.Error("error deleting temporary file", "error", err)
+			continue
 		}
 
 		log.Info("rollup created", "id", archive.ID, "record_count", archive.RecordCount, "elapsed", dates.Since(start))
@@ -857,12 +848,9 @@ func ArchiveOrg(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org
 	monthliesFailed = removeDuplicates(monthliesFailed) // don't double report monthlies that fail being built from db and rolled up from dailies
 
 	// finally delete any archives not yet actually archived
-	var deleted []*Archive
-	if rt.Config.Delete {
-		deleted, err = DeleteArchivedOrgRecords(ctx, rt, now, org, archiveType)
-		if err != nil {
-			return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, fmt.Errorf("error deleting archived records: %w", err)
-		}
+	deleted, err := DeleteArchivedOrgRecords(ctx, rt, now, org, archiveType)
+	if err != nil {
+		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, fmt.Errorf("error deleting archived records: %w", err)
 	}
 
 	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, nil
