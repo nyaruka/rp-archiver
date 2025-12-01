@@ -327,8 +327,6 @@ func TestArchiveOrgMessages(t *testing.T) {
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
 
-	rt.Config.Delete = true
-
 	assertCount(t, rt.DB, 4, `SELECT count(*) from msgs_broadcast WHERE org_id = $1`, 2)
 
 	dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, err := ArchiveOrg(ctx, rt, now, orgs[1], MessageType)
@@ -432,8 +430,6 @@ func TestArchiveOrgRuns(t *testing.T) {
 	orgs, err := GetActiveOrgs(ctx, rt)
 	assert.NoError(t, err)
 	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
-
-	rt.Config.Delete = true
 
 	dailiesCreated, _, monthliesCreated, _, deleted, err := ArchiveOrg(ctx, rt, now, orgs[2], RunType)
 	assert.NoError(t, err)
