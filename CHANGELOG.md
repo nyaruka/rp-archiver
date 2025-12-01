@@ -1,3 +1,7 @@
+v10.3.8 (2025-12-01)
+-------------------------
+ * Remove another check on run status
+
 v10.3.7 (2025-12-01)
 -------------------------
  * Remove delete config option
