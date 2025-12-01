@@ -848,12 +848,9 @@ func ArchiveOrg(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org
 	monthliesFailed = removeDuplicates(monthliesFailed) // don't double report monthlies that fail being built from db and rolled up from dailies
 
 	// finally delete any archives not yet actually archived
-	var deleted []*Archive
-	if rt.Config.Delete {
-		deleted, err = DeleteArchivedOrgRecords(ctx, rt, now, org, archiveType)
-		if err != nil {
-			return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, fmt.Errorf("error deleting archived records: %w", err)
-		}
+	deleted, err := DeleteArchivedOrgRecords(ctx, rt, now, org, archiveType)
+	if err != nil {
+		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, fmt.Errorf("error deleting archived records: %w", err)
 	}
 
 	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, nil
