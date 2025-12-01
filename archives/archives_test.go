@@ -482,22 +482,18 @@ func TestArchiveOrgRuns(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, count)
 
-	// org 2 has a run that can't be archived because it's still active - as it has no existing archives
-	// this will manifest itself as a monthly which fails to save
+	// org 2 will create backfilled monthlies for 2017-08 and 2017-09.. and then only dailies for 2017-10-01 to 2017-10-10
 	dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, _, err := ArchiveOrg(ctx, rt, now, orgs[1], RunType)
 	assert.NoError(t, err)
 
-	assert.Equal(t, 31, len(dailiesCreated))
-	assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assert.Equal(t, 10, len(dailiesCreated))
+	assertArchive(t, dailiesCreated[0], time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
-	assert.Equal(t, 1, len(dailiesFailed))
-	assertArchive(t, dailiesFailed[0], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
+	assert.Equal(t, 2, len(monthliesCreated))
+	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 692, "98a8149eb3dbc1762368b78fcae86d24")
 
-	assert.Equal(t, 1, len(monthliesCreated))
-	assertArchive(t, monthliesCreated[0], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
-
-	assert.Equal(t, 1, len(monthliesFailed))
-	assertArchive(t, monthliesFailed[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 0, "")
+	assert.Equal(t, 0, len(dailiesFailed))
+	assert.Equal(t, 0, len(monthliesFailed))
 }
 
 func TestArchiveActiveOrgs(t *testing.T) {
