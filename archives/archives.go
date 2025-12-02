@@ -19,6 +19,8 @@ import (
 	"github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/dates"
+	"github.com/nyaruka/gocommon/uuids"
+	"github.com/nyaruka/null/v3"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/vinovest/sqlx"
 )
@@ -59,6 +61,7 @@ type Org struct {
 
 // Archive represents the model for an archive
 type Archive struct {
+	UUID        uuids.UUID  `db:"uuid"`
 	ID          int         `db:"id"`
 	ArchiveType ArchiveType `db:"archive_type"`
 	OrgID       int         `db:"org_id"`
@@ -67,11 +70,11 @@ type Archive struct {
 	StartDate time.Time     `db:"start_date"`
 	Period    ArchivePeriod `db:"period"`
 
-	RecordCount int    `db:"record_count"`
-	Size        int64  `db:"size"`
-	Hash        string `db:"hash"`
-	Location    string `db:"location"`
-	BuildTime   int    `db:"build_time"`
+	RecordCount int         `db:"record_count"`
+	Size        int64       `db:"size"`
+	Hash        null.String `db:"hash"`
+	Location    null.String `db:"location"`
+	BuildTime   int         `db:"build_time"`
 
 	NeedsDeletion bool       `db:"needs_deletion"`
 	DeletedOn     *time.Time `db:"deleted_date"`
@@ -84,8 +87,13 @@ type Archive struct {
 
 // returns location parsed into bucket and key
 func (a *Archive) location() (string, string) {
-	parts := strings.SplitN(a.Location, ":", 2)
+	parts := strings.SplitN(string(a.Location), ":", 2)
 	return parts[0], parts[1]
+}
+
+// isUploaded returns true if the archive was uploaded to S3
+func (a *Archive) isUploaded() bool {
+	return a.Location != ""
 }
 
 func (a *Archive) endDate() time.Time {
@@ -256,15 +264,15 @@ func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, start
 		if err := rows.Scan(&missingDay); err != nil {
 			return nil, fmt.Errorf("error scanning missing daily archive for org: %d and type: %s: %w", org.ID, archiveType, err)
 		}
-		archive := Archive{
+
+		missing = append(missing, &Archive{
+			UUID:        uuids.NewV7(),
 			Org:         org,
 			OrgID:       org.ID,
 			StartDate:   missingDay,
 			ArchiveType: archiveType,
 			Period:      DayPeriod,
-		}
-
-		missing = append(missing, &archive)
+		})
 	}
 
 	return missing, nil
@@ -308,15 +316,15 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 		if err := rows.Scan(&missingMonth); err != nil {
 			return nil, fmt.Errorf("error scanning missing monthly archive for org: %d and type: %s: %w", org.ID, archiveType, err)
 		}
-		archive := Archive{
+
+		missing = append(missing, &Archive{
+			UUID:        uuids.NewV7(),
 			Org:         org,
 			OrgID:       org.ID,
 			StartDate:   missingMonth,
 			ArchiveType: archiveType,
 			Period:      MonthPeriod,
-		}
-
-		missing = append(missing, &archive)
+		})
 	}
 
 	return missing, nil
@@ -402,7 +410,7 @@ func BuildRollupArchive(ctx context.Context, rt *runtime.Runtime, monthlyArchive
 
 		// check our hash that everything was written out
 		hash := hex.EncodeToString(readerHash.Sum(nil))
-		if hash != daily.Hash {
+		if hash != string(daily.Hash) {
 			return fmt.Errorf("daily hash mismatch. expected: %s, got %s", daily.Hash, hash)
 		}
 
@@ -419,7 +427,7 @@ func BuildRollupArchive(ctx context.Context, rt *runtime.Runtime, monthlyArchive
 	}
 
 	// calculate our size and hash
-	monthlyArchive.Hash = hex.EncodeToString(writerHash.Sum(nil))
+	monthlyArchive.Hash = null.String(hex.EncodeToString(writerHash.Sum(nil)))
 	stat, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("error statting file: %s: %w", file.Name(), err)
@@ -518,7 +526,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	}
 
 	// calculate our size and hash
-	archive.Hash = hex.EncodeToString(hash.Sum(nil))
+	archive.Hash = null.String(hex.EncodeToString(hash.Sum(nil)))
 	stat, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("error calculating archive hash: %w", err)
@@ -566,8 +574,8 @@ func UploadArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 }
 
 const sqlInsertArchive = `
-INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, location, needs_deletion, build_time, rollup_id)
-    VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :location, :needs_deletion, :build_time, :rollup_id)
+INSERT INTO archives_archive(uuid, archive_type, org_id, created_on, start_date, period, record_count, size, hash, location, needs_deletion, build_time, rollup_id)
+    VALUES(:uuid, :archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :location, :needs_deletion, :build_time, :rollup_id)
   RETURNING id`
 
 // WriteArchiveToDB write an archive to the Database
@@ -690,8 +698,11 @@ func createArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 		}
 	}()
 
-	if err := UploadArchive(ctx, rt, archive); err != nil {
-		return fmt.Errorf("error writing archive to s3: %w", err)
+	// only upload to S3 if there are records
+	if archive.RecordCount > 0 {
+		if err := UploadArchive(ctx, rt, archive); err != nil {
+			return fmt.Errorf("error writing archive to s3: %w", err)
+		}
 	}
 
 	if err := WriteArchiveToDB(ctx, rt.DB, archive); err != nil {
@@ -750,10 +761,13 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 			continue
 		}
 
-		if err := UploadArchive(ctx, rt, archive); err != nil {
-			log.Error("error writing archive to s3", "error", err)
-			failed = append(failed, archive)
-			continue
+		// only upload to S3 if there are records
+		if archive.RecordCount > 0 {
+			if err := UploadArchive(ctx, rt, archive); err != nil {
+				log.Error("error writing archive to s3", "error", err)
+				failed = append(failed, archive)
+				continue
+			}
 		}
 
 		if err := WriteArchiveToDB(ctx, rt.DB, archive); err != nil {

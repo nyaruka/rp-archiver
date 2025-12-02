@@ -18,6 +18,17 @@ require (
 )
 
 require (
+	github.com/gabriel-vasile/mimetype v1.4.11 // indirect
+	github.com/go-playground/locales v0.14.1 // indirect
+	github.com/go-playground/universal-translator v0.18.1 // indirect
+	github.com/go-playground/validator/v10 v10.28.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/shopspring/decimal v1.4.0 // indirect
+	golang.org/x/crypto v0.44.0 // indirect
+)
+
+require (
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.3 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.0 // indirect
@@ -41,7 +52,7 @@ require (
 	github.com/muir/sqltoken v0.2.0 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1 // indirect
-	github.com/nyaruka/null/v3 v3.0.0 // indirect
+	github.com/nyaruka/null/v3 v3.0.0
 	github.com/nyaruka/phonenumbers v1.6.7 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/samber/lo v1.52.0 // indirect

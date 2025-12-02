@@ -17,6 +17,7 @@ import (
 	"github.com/aws/smithy-go/middleware"
 	"github.com/aws/smithy-go/transport/http"
 	"github.com/nyaruka/gocommon/aws/s3x"
+	"github.com/nyaruka/null/v3"
 	"github.com/nyaruka/rp-archiver/runtime"
 )
 
@@ -54,7 +55,7 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 	location := fmt.Sprintf("%s:%s", bucket, path)
 
 	// s3 wants a base64 encoded hash instead of our hex encoded
-	hashBytes, _ := hex.DecodeString(archive.Hash)
+	hashBytes, _ := hex.DecodeString(string(archive.Hash))
 	md5 := base64.StdEncoding.EncodeToString(hashBytes)
 
 	// if this fits into a single part, upload that way
@@ -95,7 +96,7 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 		}
 	}
 
-	archive.Location = location
+	archive.Location = null.String(location)
 	return nil
 }
 

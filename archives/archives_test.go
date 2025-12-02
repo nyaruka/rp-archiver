@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
+	"github.com/nyaruka/gocommon/dbutil/assertdb"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -156,7 +157,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	// should have no records and be an empty gzip file
 	assert.Equal(t, 0, task.RecordCount)
 	assert.Equal(t, int64(23), task.Size)
-	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", task.Hash)
+	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", string(task.Hash))
 
 	DeleteArchiveTempFile(task)
 
@@ -169,7 +170,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.Equal(t, 3, task.RecordCount)
 	assert.Equal(t, int64(625), task.Size)
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
-	assert.Equal(t, "dd2b8dc865524ceb7080e26358fbda15", task.Hash)
+	assert.Equal(t, "dd2b8dc865524ceb7080e26358fbda15", string(task.Hash))
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -188,7 +189,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
 	assert.Equal(t, int64(328), task.Size)
-	assert.Equal(t, "ab7b71efd543c7309a39d2292cc975aa", task.Hash)
+	assert.Equal(t, "ab7b71efd543c7309a39d2292cc975aa", string(task.Hash))
 	assertArchiveFile(t, task, "messages2.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -230,7 +231,7 @@ func TestCreateRunArchive(t *testing.T) {
 	// should have no records and be an empty gzip file
 	assert.Equal(t, 0, task.RecordCount)
 	assert.Equal(t, int64(23), task.Size)
-	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", task.Hash)
+	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", string(task.Hash))
 
 	DeleteArchiveTempFile(task)
 
@@ -241,7 +242,7 @@ func TestCreateRunArchive(t *testing.T) {
 	// should have two record
 	assert.Equal(t, 3, task.RecordCount)
 	assert.Equal(t, int64(578), task.Size)
-	assert.Equal(t, "cd8ce82019986ac1f4ec1482aac7bca0", task.Hash)
+	assert.Equal(t, "cd8ce82019986ac1f4ec1482aac7bca0", string(task.Hash))
 	assertArchiveFile(t, task, "runs1.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -261,7 +262,7 @@ func TestCreateRunArchive(t *testing.T) {
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
 	assert.Equal(t, int64(465), task.Size)
-	assert.Equal(t, "40abf2113ea7c25c5476ff3025d54b07", task.Hash)
+	assert.Equal(t, "40abf2113ea7c25c5476ff3025d54b07", string(task.Hash))
 	assertArchiveFile(t, task, "runs2.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -339,15 +340,50 @@ func TestArchiveOrgMessages(t *testing.T) {
 	assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 346, "1cb0a61e6484e2dbda89b8baab452b8c")
 	assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
+	// empty archives should not have location set (not uploaded to S3)
+	assert.Empty(t, dailiesCreated[0].Location)
+	assert.Empty(t, dailiesCreated[1].Location)
+	// non-empty archives should have location set
+	assert.NotEmpty(t, dailiesCreated[2].Location)
+	assert.NotEmpty(t, dailiesCreated[3].Location)
+	// empty archive again
+	assert.Empty(t, dailiesCreated[4].Location)
+
 	assert.Equal(t, 0, len(dailiesFailed))
 
 	assert.Equal(t, 2, len(monthliesCreated))
 	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 669, "bb5126c95df1f6927a16dad976775fa3")
 	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
+	// non-empty monthly should have location, empty monthly should not
+	assert.NotEmpty(t, monthliesCreated[0].Location)
+	assert.Empty(t, monthliesCreated[1].Location)
+
 	assert.Equal(t, 0, len(monthliesFailed))
 
-	assert.Equal(t, 63, len(deleted))
+	// empty archives don't need deletion (nothing uploaded to S3)
+	assert.False(t, dailiesCreated[0].NeedsDeletion)
+	assert.False(t, dailiesCreated[1].NeedsDeletion)
+	// non-empty archives need deletion
+	assert.True(t, dailiesCreated[2].NeedsDeletion)
+	assert.True(t, dailiesCreated[3].NeedsDeletion)
+	// empty archive again
+	assert.False(t, dailiesCreated[4].NeedsDeletion)
+
+	// only non-empty archives need deletion, so deleted count should be less than total created
+	// count non-empty archives that need deletion
+	nonEmptyCount := 0
+	for _, a := range dailiesCreated {
+		if a.RecordCount > 0 {
+			nonEmptyCount++
+		}
+	}
+	for _, a := range monthliesCreated {
+		if a.RecordCount > 0 {
+			nonEmptyCount++
+		}
+	}
+	assert.Equal(t, nonEmptyCount, len(deleted))
 	assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
 	assert.Equal(t, MonthPeriod, deleted[0].Period)
 
@@ -417,11 +453,11 @@ func assertCount(t *testing.T, db *sqlx.DB, expected int, query string, args ...
 }
 
 func assertArchive(t *testing.T, a *Archive, startDate time.Time, period ArchivePeriod, recordCount int, size int64, hash string) {
-	assert.Equal(t, startDate, a.StartDate)
-	assert.Equal(t, period, a.Period)
-	assert.Equal(t, recordCount, a.RecordCount)
-	assert.Equal(t, size, a.Size)
-	assert.Equal(t, hash, a.Hash)
+	assert.Equal(t, startDate, a.StartDate, "start date mismatch for archive")
+	assert.Equal(t, period, a.Period, "period mismatch for archive")
+	assert.Equal(t, recordCount, a.RecordCount, "record count mismatch for archive")
+	assert.Equal(t, size, a.Size, "size mismatch for archive")
+	assert.Equal(t, hash, string(a.Hash), "hash mismatch for archive")
 }
 
 func TestArchiveOrgRuns(t *testing.T) {
@@ -442,7 +478,13 @@ func TestArchiveOrgRuns(t *testing.T) {
 	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 1, 465, "40abf2113ea7c25c5476ff3025d54b07")
 	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
-	assert.Equal(t, 12, len(deleted))
+	// only non-empty archives need deletion, so deleted count should be less than total created
+	assert.Equal(t, 2, len(deleted))
+	assert.Equal(t, monthliesCreated[0].ID, deleted[0].ID)
+	assert.Equal(t, dailiesCreated[9].ID, deleted[1].ID)
+
+	assertdb.Query(t, rt.DB, "SELECT count(*) FROM archives_archive WHERE location IS NOT NULL").Returns(6) // 2 new, 4 existing
+	assertdb.Query(t, rt.DB, "SELECT count(*) FROM archives_archive WHERE location IS NULL").Returns(10)
 
 	// no runs remaining
 	for _, d := range deleted {
