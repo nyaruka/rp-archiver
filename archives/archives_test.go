@@ -339,15 +339,50 @@ func TestArchiveOrgMessages(t *testing.T) {
 	assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 346, "1cb0a61e6484e2dbda89b8baab452b8c")
 	assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
+	// empty archives should not have location set (not uploaded to S3)
+	assert.Empty(t, dailiesCreated[0].Location)
+	assert.Empty(t, dailiesCreated[1].Location)
+	// non-empty archives should have location set
+	assert.NotEmpty(t, dailiesCreated[2].Location)
+	assert.NotEmpty(t, dailiesCreated[3].Location)
+	// empty archive again
+	assert.Empty(t, dailiesCreated[4].Location)
+
 	assert.Equal(t, 0, len(dailiesFailed))
 
 	assert.Equal(t, 2, len(monthliesCreated))
 	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 669, "bb5126c95df1f6927a16dad976775fa3")
 	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
+	// non-empty monthly should have location, empty monthly should not
+	assert.NotEmpty(t, monthliesCreated[0].Location)
+	assert.Empty(t, monthliesCreated[1].Location)
+
 	assert.Equal(t, 0, len(monthliesFailed))
 
-	assert.Equal(t, 63, len(deleted))
+	// empty archives don't need deletion (nothing uploaded to S3)
+	assert.False(t, dailiesCreated[0].NeedsDeletion)
+	assert.False(t, dailiesCreated[1].NeedsDeletion)
+	// non-empty archives need deletion
+	assert.True(t, dailiesCreated[2].NeedsDeletion)
+	assert.True(t, dailiesCreated[3].NeedsDeletion)
+	// empty archive again
+	assert.False(t, dailiesCreated[4].NeedsDeletion)
+
+	// only non-empty archives need deletion, so deleted count should be less than total created
+	// count non-empty archives that need deletion
+	nonEmptyCount := 0
+	for _, a := range dailiesCreated {
+		if a.RecordCount > 0 {
+			nonEmptyCount++
+		}
+	}
+	for _, a := range monthliesCreated {
+		if a.RecordCount > 0 {
+			nonEmptyCount++
+		}
+	}
+	assert.Equal(t, nonEmptyCount, len(deleted))
 	assert.Equal(t, time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), deleted[0].StartDate)
 	assert.Equal(t, MonthPeriod, deleted[0].Period)
 

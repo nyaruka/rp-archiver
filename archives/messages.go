@@ -130,20 +130,23 @@ func DeleteArchivedMessages(ctx context.Context, rt *runtime.Runtime, archive *A
 	)
 	log.Info("deleting messages")
 
-	// first things first, make sure our file is correct on S3
-	bucket, key := archive.location()
-	s3Size, s3Hash, err := GetS3FileInfo(outer, rt.S3, bucket, key)
-	if err != nil {
-		return err
-	}
+	// only verify S3 file if archive has a location (non-empty archives)
+	if archive.Location != "" {
+		// first things first, make sure our file is correct on S3
+		bucket, key := archive.location()
+		s3Size, s3Hash, err := GetS3FileInfo(outer, rt.S3, bucket, key)
+		if err != nil {
+			return err
+		}
 
-	if s3Size != archive.Size {
-		return fmt.Errorf("archive size: %d and s3 size: %d do not match", archive.Size, s3Size)
-	}
+		if s3Size != archive.Size {
+			return fmt.Errorf("archive size: %d and s3 size: %d do not match", archive.Size, s3Size)
+		}
 
-	// if S3 hash is MD5 then check against archive hash
-	if rt.Config.CheckS3Hashes && archive.Size <= maxSingleUploadBytes && s3Hash != archive.Hash {
-		return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, s3Hash)
+		// if S3 hash is MD5 then check against archive hash
+		if rt.Config.CheckS3Hashes && archive.Size <= maxSingleUploadBytes && s3Hash != archive.Hash {
+			return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, s3Hash)
+		}
 	}
 
 	// ok, archive file looks good, let's build up our list of message ids, this may be big but we are int64s so shouldn't be too big

@@ -690,8 +690,11 @@ func createArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 		}
 	}()
 
-	if err := UploadArchive(ctx, rt, archive); err != nil {
-		return fmt.Errorf("error writing archive to s3: %w", err)
+	// only upload to S3 if there are records
+	if archive.RecordCount > 0 {
+		if err := UploadArchive(ctx, rt, archive); err != nil {
+			return fmt.Errorf("error writing archive to s3: %w", err)
+		}
 	}
 
 	if err := WriteArchiveToDB(ctx, rt.DB, archive); err != nil {
@@ -750,10 +753,13 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 			continue
 		}
 
-		if err := UploadArchive(ctx, rt, archive); err != nil {
-			log.Error("error writing archive to s3", "error", err)
-			failed = append(failed, archive)
-			continue
+		// only upload to S3 if there are records
+		if archive.RecordCount > 0 {
+			if err := UploadArchive(ctx, rt, archive); err != nil {
+				log.Error("error writing archive to s3", "error", err)
+				failed = append(failed, archive)
+				continue
+			}
 		}
 
 		if err := WriteArchiveToDB(ctx, rt.DB, archive); err != nil {
