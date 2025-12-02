@@ -88,6 +88,11 @@ func (a *Archive) location() (string, string) {
 	return parts[0], parts[1]
 }
 
+// isUploaded returns true if the archive was uploaded to S3
+func (a *Archive) isUploaded() bool {
+	return a.Location != ""
+}
+
 func (a *Archive) endDate() time.Time {
 	endDate := a.StartDate
 	if a.Period == DayPeriod {

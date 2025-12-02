@@ -118,8 +118,8 @@ func DeleteArchivedRuns(ctx context.Context, rt *runtime.Runtime, archive *Archi
 	)
 	log.Info("deleting runs")
 
-	// only verify S3 file if archive has a location (non-empty archives)
-	if archive.Location != "" {
+	// only verify S3 file if archive was uploaded (non-empty archives)
+	if archive.isUploaded() {
 		// first things first, make sure our file is correct on S3
 		bucket, key := archive.location()
 		s3Size, s3Hash, err := GetS3FileInfo(outer, rt.S3, bucket, key)
