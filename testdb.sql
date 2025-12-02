@@ -206,6 +206,7 @@ CREATE TABLE flows_flowrun (
 
 CREATE TABLE archives_archive (
     id serial primary key,
+    uuid uuid NOT NULL,
     archive_type varchar(16) NOT NULL, 
     created_on timestamp with time zone NOT NULL, 
     start_date date NOT NULL, 
@@ -232,11 +233,11 @@ INSERT INTO channels_channel(id, uuid, org_id, name) VALUES
 (2, '60f2ed5b-05f2-4156-9ff0-e44e90da1b85', 2, 'Channel 2'),
 (3, 'b79e0054-068f-4928-a5f4-339d10a7ad5a', 3, 'Channel 3');
 
-INSERT INTO archives_archive(id, org_id, archive_type, created_on, start_date, period, record_count, size, hash, location, needs_deletion, build_time) VALUES 
-(NEXTVAL('archives_archive_id_seq'), 3, 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '2a80be2a47bfbb270ffe7ab5542351eb', 'temba-archives:3/message_D20170810_2a80be2a47bfbb270ffe7ab5542351eb.jsonl.gz', TRUE, 0),
-(NEXTVAL('archives_archive_id_seq'), 3, 'message', '2017-09-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '4a1664b669fb496596113623a22e677f', 'temba-archives:3/message_D20170910_4a1664b669fb496596113623a22e677f.jsonl.gz', TRUE, 0),
-(NEXTVAL('archives_archive_id_seq'), 3, 'message', '2017-09-02 00:00:00.000000+00', '2017-09-01 00:00:00.000000+00', 'M', 0, 0, 'eba9aadcd2334b21ad6d58e5d82707a0', 'temba-archives:3/message_M20170902_eba9aadcd2334b21ad6d58e5d82707a0.jsonl.gz', TRUE, 0),
-(NEXTVAL('archives_archive_id_seq'), 2, 'message', '2017-10-08 00:00:00.000000+00', '2017-10-08 00:00:00.000000+00', 'D', 0, 0, '76869d6fe752447c83d1e5cc884b7cd8', 'temba-archives:2/message_D20171008_76869d6fe752447c83d1e5cc884b7cd8.jsonl.gz', TRUE, 0);
+INSERT INTO archives_archive(id, uuid, org_id, archive_type, created_on, start_date, period, record_count, size, hash, location, needs_deletion, build_time) VALUES 
+(NEXTVAL('archives_archive_id_seq'), '019ae060-bfdf-723c-b2d1-d5234266bf03', 3, 'message', '2017-08-10 00:00:00.000000+00', '2017-08-10 00:00:00.000000+00', 'D', 0, 0, '2a80be2a47bfbb270ffe7ab5542351eb', 'temba-archives:3/message_D20170810_2a80be2a47bfbb270ffe7ab5542351eb.jsonl.gz', TRUE, 0),
+(NEXTVAL('archives_archive_id_seq'), '019ae060-bfdf-76a4-84d1-9305a7340401', 3, 'message', '2017-09-10 00:00:00.000000+00', '2017-09-10 00:00:00.000000+00', 'D', 0, 0, '4a1664b669fb496596113623a22e677f', 'temba-archives:3/message_D20170910_4a1664b669fb496596113623a22e677f.jsonl.gz', TRUE, 0),
+(NEXTVAL('archives_archive_id_seq'), '019ae060-bfdf-7b5a-8180-b510d7380fd8', 3, 'message', '2017-09-02 00:00:00.000000+00', '2017-09-01 00:00:00.000000+00', 'M', 0, 0, 'eba9aadcd2334b21ad6d58e5d82707a0', 'temba-archives:3/message_M20170902_eba9aadcd2334b21ad6d58e5d82707a0.jsonl.gz', TRUE, 0),
+(NEXTVAL('archives_archive_id_seq'), '019ae060-bfdf-7376-a03c-3469201c709e', 2, 'message', '2017-10-08 00:00:00.000000+00', '2017-10-08 00:00:00.000000+00', 'D', 0, 0, '76869d6fe752447c83d1e5cc884b7cd8', 'temba-archives:2/message_D20171008_76869d6fe752447c83d1e5cc884b7cd8.jsonl.gz', TRUE, 0);
 
 INSERT INTO contacts_contact(id, uuid, org_id, is_active, created_by_id, created_on, modified_by_id, modified_on, name, language) VALUES
 (1, 'c7a2dd87-a80e-420b-8431-ca48d422e924', 1, TRUE, -1, '2017-11-10 21:11:59.890662+00', -1, '2017-11-10 21:11:59.890662+00', NULL, 'eng'),

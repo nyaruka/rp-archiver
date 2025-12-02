@@ -65,6 +65,8 @@ github.com/go-sql-driver/mysql v1.9.0 h1:Y0zIbQXhQKmQgTp44Y1dp3wTXcn804QoTptLZT1
 github.com/go-sql-driver/mysql v1.9.0/go.mod h1:pDetrLJeA3oMujJuvXc8RJoasr589B6A9fwzD3QMrqw=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
@@ -107,6 +109,8 @@ github.com/samber/slog-multi v1.6.0 h1:i1uBY+aaln6ljwdf7Nrt4Sys8Kk6htuYuXDHWJsHt
 github.com/samber/slog-multi v1.6.0/go.mod h1:qTqzmKdPpT0h4PFsTN5rYRgLwom1v+fNGuIrl1Xnnts=
 github.com/samber/slog-sentry/v2 v2.10.1 h1:sQqYuUgmbyNK3+ju1Az4i8piuWM8YegtkQSWwBbpK9M=
 github.com/samber/slog-sentry/v2 v2.10.1/go.mod h1:JdBp4+O7i5nmrAVuvehbm9uMzYuTyEC4P0fCbKq3kKw=
+github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
+github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/vinovest/sqlx v1.7.0 h1:Xxq3WqdsZLp/g+gVXpW2fE/IJdmpobwDodWL6zo87Zs=

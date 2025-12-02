@@ -19,6 +19,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/dates"
+	"github.com/nyaruka/gocommon/uuids"
 	"github.com/nyaruka/null/v3"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/vinovest/sqlx"
@@ -60,6 +61,7 @@ type Org struct {
 
 // Archive represents the model for an archive
 type Archive struct {
+	UUID        uuids.UUID  `db:"uuid"`
 	ID          int         `db:"id"`
 	ArchiveType ArchiveType `db:"archive_type"`
 	OrgID       int         `db:"org_id"`
@@ -262,15 +264,15 @@ func GetMissingDailyArchivesForDateRange(ctx context.Context, db *sqlx.DB, start
 		if err := rows.Scan(&missingDay); err != nil {
 			return nil, fmt.Errorf("error scanning missing daily archive for org: %d and type: %s: %w", org.ID, archiveType, err)
 		}
-		archive := Archive{
+
+		missing = append(missing, &Archive{
+			UUID:        uuids.NewV7(),
 			Org:         org,
 			OrgID:       org.ID,
 			StartDate:   missingDay,
 			ArchiveType: archiveType,
 			Period:      DayPeriod,
-		}
-
-		missing = append(missing, &archive)
+		})
 	}
 
 	return missing, nil
@@ -314,15 +316,15 @@ func GetMissingMonthlyArchives(ctx context.Context, db *sqlx.DB, now time.Time, 
 		if err := rows.Scan(&missingMonth); err != nil {
 			return nil, fmt.Errorf("error scanning missing monthly archive for org: %d and type: %s: %w", org.ID, archiveType, err)
 		}
-		archive := Archive{
+
+		missing = append(missing, &Archive{
+			UUID:        uuids.NewV7(),
 			Org:         org,
 			OrgID:       org.ID,
 			StartDate:   missingMonth,
 			ArchiveType: archiveType,
 			Period:      MonthPeriod,
-		}
-
-		missing = append(missing, &archive)
+		})
 	}
 
 	return missing, nil
@@ -572,8 +574,8 @@ func UploadArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 }
 
 const sqlInsertArchive = `
-INSERT INTO archives_archive(archive_type, org_id, created_on, start_date, period, record_count, size, hash, location, needs_deletion, build_time, rollup_id)
-    VALUES(:archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :location, :needs_deletion, :build_time, :rollup_id)
+INSERT INTO archives_archive(uuid, archive_type, org_id, created_on, start_date, period, record_count, size, hash, location, needs_deletion, build_time, rollup_id)
+    VALUES(:uuid, :archive_type, :org_id, :created_on, :start_date, :period, :record_count, :size, :hash, :location, :needs_deletion, :build_time, :rollup_id)
   RETURNING id`
 
 // WriteArchiveToDB write an archive to the Database
