@@ -213,7 +213,7 @@ CREATE TABLE archives_archive (
     record_count integer NOT NULL, 
     size bigint NOT NULL, 
     hash text NOT NULL, 
-    location varchar(1088) NOT NULL,
+    location varchar(1088) NULL,
     needs_deletion boolean NOT NULL, 
     deleted_on timestamp with time zone NULL,
     build_time integer NOT NULL, 

@@ -19,6 +19,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
 	"github.com/nyaruka/gocommon/dates"
+	"github.com/nyaruka/null/v3"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/vinovest/sqlx"
 )
@@ -67,11 +68,11 @@ type Archive struct {
 	StartDate time.Time     `db:"start_date"`
 	Period    ArchivePeriod `db:"period"`
 
-	RecordCount int    `db:"record_count"`
-	Size        int64  `db:"size"`
-	Hash        string `db:"hash"`
-	Location    string `db:"location"`
-	BuildTime   int    `db:"build_time"`
+	RecordCount int         `db:"record_count"`
+	Size        int64       `db:"size"`
+	Hash        string      `db:"hash"`
+	Location    null.String `db:"location"`
+	BuildTime   int         `db:"build_time"`
 
 	NeedsDeletion bool       `db:"needs_deletion"`
 	DeletedOn     *time.Time `db:"deleted_date"`
@@ -84,7 +85,7 @@ type Archive struct {
 
 // returns location parsed into bucket and key
 func (a *Archive) location() (string, string) {
-	parts := strings.SplitN(a.Location, ":", 2)
+	parts := strings.SplitN(string(a.Location), ":", 2)
 	return parts[0], parts[1]
 }
 

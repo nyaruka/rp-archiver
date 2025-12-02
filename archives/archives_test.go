@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	_ "github.com/lib/pq"
 	"github.com/nyaruka/gocommon/aws/cwatch"
+	"github.com/nyaruka/gocommon/dbutil/assertdb"
 	"github.com/nyaruka/rp-archiver/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -478,19 +479,12 @@ func TestArchiveOrgRuns(t *testing.T) {
 	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
 
 	// only non-empty archives need deletion, so deleted count should be less than total created
-	// count non-empty archives that need deletion
-	nonEmptyCount := 0
-	for _, a := range dailiesCreated {
-		if a.RecordCount > 0 {
-			nonEmptyCount++
-		}
-	}
-	for _, a := range monthliesCreated {
-		if a.RecordCount > 0 {
-			nonEmptyCount++
-		}
-	}
-	assert.Equal(t, nonEmptyCount, len(deleted))
+	assert.Equal(t, 2, len(deleted))
+	assert.Equal(t, monthliesCreated[0].ID, deleted[0].ID)
+	assert.Equal(t, dailiesCreated[9].ID, deleted[1].ID)
+
+	assertdb.Query(t, rt.DB, "SELECT count(*) FROM archives_archive WHERE location IS NOT NULL").Returns(6) // 2 new, 4 existing
+	assertdb.Query(t, rt.DB, "SELECT count(*) FROM archives_archive WHERE location IS NULL").Returns(10)
 
 	// no runs remaining
 	for _, d := range deleted {
