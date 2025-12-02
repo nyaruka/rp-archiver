@@ -1,3 +1,8 @@
+v10.3.9 (2025-12-02)
+-------------------------
+ * Start writing Archive.uuid
+ * Don't upload empty archives to S3
+
 v10.3.8 (2025-12-01)
 -------------------------
  * Remove another check on run status
