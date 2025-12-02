@@ -72,7 +72,7 @@ type Archive struct {
 
 	RecordCount int         `db:"record_count"`
 	Size        int64       `db:"size"`
-	Hash        string      `db:"hash"`
+	Hash        null.String `db:"hash"`
 	Location    null.String `db:"location"`
 	BuildTime   int         `db:"build_time"`
 
@@ -410,7 +410,7 @@ func BuildRollupArchive(ctx context.Context, rt *runtime.Runtime, monthlyArchive
 
 		// check our hash that everything was written out
 		hash := hex.EncodeToString(readerHash.Sum(nil))
-		if hash != daily.Hash {
+		if hash != string(daily.Hash) {
 			return fmt.Errorf("daily hash mismatch. expected: %s, got %s", daily.Hash, hash)
 		}
 
@@ -427,7 +427,7 @@ func BuildRollupArchive(ctx context.Context, rt *runtime.Runtime, monthlyArchive
 	}
 
 	// calculate our size and hash
-	monthlyArchive.Hash = hex.EncodeToString(writerHash.Sum(nil))
+	monthlyArchive.Hash = null.String(hex.EncodeToString(writerHash.Sum(nil)))
 	stat, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("error statting file: %s: %w", file.Name(), err)
@@ -526,7 +526,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	}
 
 	// calculate our size and hash
-	archive.Hash = hex.EncodeToString(hash.Sum(nil))
+	archive.Hash = null.String(hex.EncodeToString(hash.Sum(nil)))
 	stat, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("error calculating archive hash: %w", err)

@@ -157,7 +157,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	// should have no records and be an empty gzip file
 	assert.Equal(t, 0, task.RecordCount)
 	assert.Equal(t, int64(23), task.Size)
-	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", task.Hash)
+	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", string(task.Hash))
 
 	DeleteArchiveTempFile(task)
 
@@ -170,7 +170,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	assert.Equal(t, 3, task.RecordCount)
 	assert.Equal(t, int64(625), task.Size)
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
-	assert.Equal(t, "dd2b8dc865524ceb7080e26358fbda15", task.Hash)
+	assert.Equal(t, "dd2b8dc865524ceb7080e26358fbda15", string(task.Hash))
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -189,7 +189,7 @@ func TestCreateMsgArchive(t *testing.T) {
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
 	assert.Equal(t, int64(328), task.Size)
-	assert.Equal(t, "ab7b71efd543c7309a39d2292cc975aa", task.Hash)
+	assert.Equal(t, "ab7b71efd543c7309a39d2292cc975aa", string(task.Hash))
 	assertArchiveFile(t, task, "messages2.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -231,7 +231,7 @@ func TestCreateRunArchive(t *testing.T) {
 	// should have no records and be an empty gzip file
 	assert.Equal(t, 0, task.RecordCount)
 	assert.Equal(t, int64(23), task.Size)
-	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", task.Hash)
+	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", string(task.Hash))
 
 	DeleteArchiveTempFile(task)
 
@@ -242,7 +242,7 @@ func TestCreateRunArchive(t *testing.T) {
 	// should have two record
 	assert.Equal(t, 3, task.RecordCount)
 	assert.Equal(t, int64(578), task.Size)
-	assert.Equal(t, "cd8ce82019986ac1f4ec1482aac7bca0", task.Hash)
+	assert.Equal(t, "cd8ce82019986ac1f4ec1482aac7bca0", string(task.Hash))
 	assertArchiveFile(t, task, "runs1.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -262,7 +262,7 @@ func TestCreateRunArchive(t *testing.T) {
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
 	assert.Equal(t, int64(465), task.Size)
-	assert.Equal(t, "40abf2113ea7c25c5476ff3025d54b07", task.Hash)
+	assert.Equal(t, "40abf2113ea7c25c5476ff3025d54b07", string(task.Hash))
 	assertArchiveFile(t, task, "runs2.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -453,11 +453,11 @@ func assertCount(t *testing.T, db *sqlx.DB, expected int, query string, args ...
 }
 
 func assertArchive(t *testing.T, a *Archive, startDate time.Time, period ArchivePeriod, recordCount int, size int64, hash string) {
-	assert.Equal(t, startDate, a.StartDate)
-	assert.Equal(t, period, a.Period)
-	assert.Equal(t, recordCount, a.RecordCount)
-	assert.Equal(t, size, a.Size)
-	assert.Equal(t, hash, a.Hash)
+	assert.Equal(t, startDate, a.StartDate, "start date mismatch for archive")
+	assert.Equal(t, period, a.Period, "period mismatch for archive")
+	assert.Equal(t, recordCount, a.RecordCount, "record count mismatch for archive")
+	assert.Equal(t, size, a.Size, "size mismatch for archive")
+	assert.Equal(t, hash, string(a.Hash), "hash mismatch for archive")
 }
 
 func TestArchiveOrgRuns(t *testing.T) {

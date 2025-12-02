@@ -144,7 +144,7 @@ func DeleteArchivedMessages(ctx context.Context, rt *runtime.Runtime, archive *A
 		}
 
 		// if S3 hash is MD5 then check against archive hash
-		if rt.Config.CheckS3Hashes && archive.Size <= maxSingleUploadBytes && s3Hash != archive.Hash {
+		if rt.Config.CheckS3Hashes && archive.Size <= maxSingleUploadBytes && s3Hash != string(archive.Hash) {
 			return fmt.Errorf("archive md5: %s and s3 etag: %s do not match", archive.Hash, s3Hash)
 		}
 	}

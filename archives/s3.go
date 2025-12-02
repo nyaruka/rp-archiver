@@ -55,7 +55,7 @@ func UploadToS3(ctx context.Context, s3Client *s3x.Service, bucket string, path 
 	location := fmt.Sprintf("%s:%s", bucket, path)
 
 	// s3 wants a base64 encoded hash instead of our hex encoded
-	hashBytes, _ := hex.DecodeString(archive.Hash)
+	hashBytes, _ := hex.DecodeString(string(archive.Hash))
 	md5 := base64.StdEncoding.EncodeToString(hashBytes)
 
 	// if this fits into a single part, upload that way
