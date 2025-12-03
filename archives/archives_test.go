@@ -156,8 +156,8 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have no records and be an empty gzip file
 	assert.Equal(t, 0, task.RecordCount)
-	assert.Equal(t, int64(23), task.Size)
-	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", string(task.Hash))
+	assert.Equal(t, int64(0), task.Size)
+	assert.Equal(t, "", string(task.Hash))
 
 	DeleteArchiveTempFile(task)
 
@@ -230,8 +230,8 @@ func TestCreateRunArchive(t *testing.T) {
 
 	// should have no records and be an empty gzip file
 	assert.Equal(t, 0, task.RecordCount)
-	assert.Equal(t, int64(23), task.Size)
-	assert.Equal(t, "f0d79988b7772c003d04a28bd7417a62", string(task.Hash))
+	assert.Equal(t, int64(0), task.Size)
+	assert.Equal(t, "", string(task.Hash))
 
 	DeleteArchiveTempFile(task)
 
@@ -334,11 +334,11 @@ func TestArchiveOrgMessages(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, 61, len(dailiesCreated))
-	assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
-	assertArchive(t, dailiesCreated[1], time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
+	assertArchive(t, dailiesCreated[1], time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
 	assertArchive(t, dailiesCreated[2], time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), DayPeriod, 3, 625, "dd2b8dc865524ceb7080e26358fbda15")
 	assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 346, "1cb0a61e6484e2dbda89b8baab452b8c")
-	assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
 
 	// empty archives should not have location set (not uploaded to S3)
 	assert.Empty(t, dailiesCreated[0].Location)
@@ -353,7 +353,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 
 	assert.Equal(t, 2, len(monthliesCreated))
 	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 669, "bb5126c95df1f6927a16dad976775fa3")
-	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 0, "")
 
 	// non-empty monthly should have location, empty monthly should not
 	assert.NotEmpty(t, monthliesCreated[0].Location)
@@ -471,20 +471,21 @@ func TestArchiveOrgRuns(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, 10, len(dailiesCreated))
-	assertArchive(t, dailiesCreated[0], time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assertArchive(t, dailiesCreated[0], time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
 	assertArchive(t, dailiesCreated[9], time.Date(2017, 10, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 2, 1953, "95475b968ceff15f2f90d539e1bd3d20")
 
 	assert.Equal(t, 2, len(monthliesCreated))
 	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 1, 465, "40abf2113ea7c25c5476ff3025d54b07")
-	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 0, "")
 
 	// only non-empty archives need deletion, so deleted count should be less than total created
 	assert.Equal(t, 2, len(deleted))
 	assert.Equal(t, monthliesCreated[0].ID, deleted[0].ID)
 	assert.Equal(t, dailiesCreated[9].ID, deleted[1].ID)
 
-	assertdb.Query(t, rt.DB, "SELECT count(*) FROM archives_archive WHERE location IS NOT NULL").Returns(6) // 2 new, 4 existing
-	assertdb.Query(t, rt.DB, "SELECT count(*) FROM archives_archive WHERE location IS NULL").Returns(10)
+	assertdb.Query(t, rt.DB, "SELECT count(*) FROM archives_archive").Returns(16)
+	assertdb.Query(t, rt.DB, "SELECT count(*) FROM archives_archive WHERE location IS NOT NULL AND hash IS NOT NULL AND size > 0").Returns(6) // 2 new, 4 existing
+	assertdb.Query(t, rt.DB, "SELECT count(*) FROM archives_archive WHERE location IS NULL AND hash IS NULL AND size = 0").Returns(10)
 
 	// no runs remaining
 	for _, d := range deleted {
@@ -529,7 +530,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, 10, len(dailiesCreated))
-	assertArchive(t, dailiesCreated[0], time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 23, "f0d79988b7772c003d04a28bd7417a62")
+	assertArchive(t, dailiesCreated[0], time.Date(2017, 10, 1, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
 
 	assert.Equal(t, 2, len(monthliesCreated))
 	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 692, "98a8149eb3dbc1762368b78fcae86d24")
