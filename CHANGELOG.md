@@ -1,3 +1,8 @@
+v10.3.10 (2025-12-03)
+-------------------------
+ * Update deps
+ * Don't set hash or size for empty archives
+
 v10.3.9 (2025-12-02)
 -------------------------
  * Start writing Archive.uuid
