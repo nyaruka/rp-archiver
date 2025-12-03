@@ -29,7 +29,7 @@ const chunkSizeBytes = 1e9 // 1GB
 
 // NewS3Client creates a new s3 service from the passed in config, testing it as necessary
 func NewS3Client(cfg *runtime.Config, test bool) (*s3x.Service, error) {
-	svc, err := s3x.NewService(cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.AWSRegion, cfg.S3Endpoint, cfg.S3Minio)
+	svc, err := s3x.NewService(cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.AWSRegion, cfg.S3Endpoint, cfg.S3PathStyle)
 	if err != nil {
 		return nil, err
 	}

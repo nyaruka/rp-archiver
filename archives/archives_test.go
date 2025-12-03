@@ -25,11 +25,11 @@ func setup(t *testing.T) (context.Context, *runtime.Runtime) {
 	config := runtime.NewDefaultConfig()
 	config.DB = "postgres://archiver_test:temba@localhost:5432/archiver_test?sslmode=disable&TimeZone=UTC"
 
-	// configure S3 to use a local minio instance
+	// configure S3 to use a localstack instance
 	config.AWSAccessKeyID = "root"
 	config.AWSSecretAccessKey = "tembatemba"
-	config.S3Endpoint = "http://localhost:9000"
-	config.S3Minio = true
+	config.S3Endpoint = "http://localhost:4566"
+	config.S3PathStyle = true
 	config.DeploymentID = "test"
 
 	testDB, err := os.ReadFile("../testdb.sql")
