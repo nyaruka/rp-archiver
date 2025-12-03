@@ -426,13 +426,17 @@ func BuildRollupArchive(ctx context.Context, rt *runtime.Runtime, monthlyArchive
 		return err
 	}
 
-	// calculate our size and hash
-	monthlyArchive.Hash = null.String(hex.EncodeToString(writerHash.Sum(nil)))
-	stat, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("error statting file: %s: %w", file.Name(), err)
+	if recordCount > 0 {
+		// calculate our size and hash
+		monthlyArchive.Hash = null.String(hex.EncodeToString(writerHash.Sum(nil)))
+		stat, err := file.Stat()
+		if err != nil {
+			return fmt.Errorf("error statting file: %s: %w", file.Name(), err)
+		}
+
+		monthlyArchive.Size = stat.Size()
 	}
-	monthlyArchive.Size = stat.Size()
+
 	monthlyArchive.RecordCount = recordCount
 	monthlyArchive.BuildTime = int(dates.Since(start) / time.Millisecond)
 	monthlyArchive.Dailies = dailies
@@ -490,8 +494,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	defer func() {
 		// we only set the archive filename when we succeed
 		if archive.ArchiveFile == "" {
-			err = os.Remove(file.Name())
-			if err != nil {
+			if err := os.Remove(file.Name()); err != nil {
 				log.Error("error cleaning up archive file", "error", err, "filename", file.Name())
 			}
 		}
@@ -525,15 +528,18 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 		return fmt.Errorf("error closing archive gzip writer: %w", err)
 	}
 
-	// calculate our size and hash
-	archive.Hash = null.String(hex.EncodeToString(hash.Sum(nil)))
-	stat, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("error calculating archive hash: %w", err)
+	if recordCount > 0 {
+		// calculate our size and hash
+		archive.Hash = null.String(hex.EncodeToString(hash.Sum(nil)))
+		stat, err := file.Stat()
+		if err != nil {
+			return fmt.Errorf("error calculating archive hash: %w", err)
+		}
+
+		archive.Size = stat.Size()
 	}
 
 	archive.ArchiveFile = file.Name()
-	archive.Size = stat.Size()
 	archive.RecordCount = recordCount
 	archive.BuildTime = int(dates.Since(start) / time.Millisecond)
 
