@@ -794,8 +794,6 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 	return created, failed, nil
 }
 
-const sqlUpdateArchiveDeleted = `UPDATE archives_archive SET needs_deletion = FALSE, deleted_on = $2 WHERE id = $1`
-
 var deleteTransactionSize = 100
 
 // DeleteArchivedOrgRecords deletes all the records for the given org based on archives already created
@@ -819,24 +817,30 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 			if err == nil {
 				err = DeleteBroadcasts(ctx, rt, now, org)
 			}
-
 		case RunType:
 			err = DeleteArchivedRuns(ctx, rt, a)
 			if err == nil {
 				err = DeleteFlowStarts(ctx, rt, now, org)
 			}
-
 		default:
 			err = fmt.Errorf("unknown archive type: %s", a.ArchiveType)
 		}
-
 		if err != nil {
-			log.Error("error deleting archive", "error", err)
+			log.Error("error deleting archive records from database", "error", err)
 			continue
 		}
 
+		deletedOn := dates.Now()
+
+		// mark archive as no longer needing deletion
+		if _, err := rt.DB.ExecContext(ctx, `UPDATE archives_archive SET needs_deletion = FALSE, deleted_on = $2 WHERE id = $1`, a.ID, deletedOn); err != nil {
+			return nil, fmt.Errorf("error setting archive as deleted: %w", err)
+		}
+		a.NeedsDeletion = false
+		a.DeletedOn = &deletedOn
+
 		deleted = append(deleted, a)
-		log.Info("deleted archive records", "elapsed", dates.Since(start))
+		log.Debug("deleted archive records", "elapsed", dates.Since(start))
 	}
 
 	return deleted, nil

@@ -190,18 +190,6 @@ func DeleteArchivedRuns(ctx context.Context, rt *runtime.Runtime, archive *Archi
 		cancel()
 	}
 
-	outer, cancel = context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-
-	deletedOn := dates.Now()
-
-	// all went well! mark our archive as no longer needing deletion
-	if _, err := rt.DB.ExecContext(outer, sqlUpdateArchiveDeleted, archive.ID, deletedOn); err != nil {
-		return fmt.Errorf("error setting archive as deleted: %w", err)
-	}
-	archive.NeedsDeletion = false
-	archive.DeletedOn = &deletedOn
-
 	slog.Info("completed deleting runs", "elapsed", dates.Since(start))
 
 	return nil
