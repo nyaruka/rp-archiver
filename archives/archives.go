@@ -137,7 +137,7 @@ func GetActiveOrgs(ctx context.Context, rt *runtime.Runtime) ([]Org, error) {
 }
 
 const sqlLookupOrgArchives = `
-  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, rollup_id, needs_deletion
+  SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 
 ORDER BY start_date ASC, period DESC`
@@ -157,10 +157,10 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 }
 
 const sqlLookupArchivesNeedingDeletion = `
-  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, rollup_id, needs_deletion 
+  SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
-ORDER BY start_date ASC, period DESC`
+ORDER BY start_date ASC`
 
 // GetArchivesNeedingDeletion returns all the archives which need to be deleted
 func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
@@ -197,7 +197,7 @@ func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveTy
 
 // between is inclusive on both sides
 const sqlLookupOrgDailyArchivesForDateRange = `
-  SELECT id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, rollup_id
+  SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive
    WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND start_date BETWEEN $4 AND $5
 ORDER BY start_date ASC`
@@ -794,8 +794,6 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 	return created, failed, nil
 }
 
-const sqlUpdateArchiveDeleted = `UPDATE archives_archive SET needs_deletion = FALSE, deleted_on = $2 WHERE id = $1`
-
 var deleteTransactionSize = 100
 
 // DeleteArchivedOrgRecords deletes all the records for the given org based on archives already created
@@ -819,24 +817,30 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 			if err == nil {
 				err = DeleteBroadcasts(ctx, rt, now, org)
 			}
-
 		case RunType:
 			err = DeleteArchivedRuns(ctx, rt, a)
 			if err == nil {
 				err = DeleteFlowStarts(ctx, rt, now, org)
 			}
-
 		default:
 			err = fmt.Errorf("unknown archive type: %s", a.ArchiveType)
 		}
-
 		if err != nil {
-			log.Error("error deleting archive", "error", err)
+			log.Error("error deleting archive records from database", "error", err)
 			continue
 		}
 
+		deletedOn := dates.Now()
+
+		// mark archive as no longer needing deletion
+		if _, err := rt.DB.ExecContext(ctx, `UPDATE archives_archive SET needs_deletion = FALSE, deleted_on = $2 WHERE id = $1`, a.ID, deletedOn); err != nil {
+			return nil, fmt.Errorf("error setting archive as deleted: %w", err)
+		}
+		a.NeedsDeletion = false
+		a.DeletedOn = &deletedOn
+
 		deleted = append(deleted, a)
-		log.Info("deleted archive records", "elapsed", dates.Since(start))
+		log.Debug("deleted archive records", "elapsed", dates.Since(start))
 	}
 
 	return deleted, nil
