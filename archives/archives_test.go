@@ -598,4 +598,3 @@ func TestDeleteRolledUpDailyArchives(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Greater(t, countMonthly, 0, "monthly archives should still exist")
 }
-
