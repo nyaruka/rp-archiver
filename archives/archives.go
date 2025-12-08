@@ -851,7 +851,9 @@ const sqlSelectDailyArchivesForDeletion = `
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
 
-const sqlDeleteArchive = `DELETE FROM archives_archive WHERE id = $1`
+const sqlDeleteRolledUpDailyArchives = `
+DELETE FROM archives_archive 
+ WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
 
 // DeleteRolledUpDailyArchives deletes daily archives that have been rolled up into monthlies and had their records deleted
 func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org Org, archiveType ArchiveType) (int, error) {
@@ -860,33 +862,22 @@ func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org O
 
 	log := slog.With("org_id", org.ID, "org_name", org.Name, "archive_type", archiveType)
 
-	// find all daily archives that have been rolled up and deleted
-	var archiveIDs []int
-	err := rt.DB.SelectContext(ctx, &archiveIDs, sqlSelectDailyArchivesForDeletion, org.ID, archiveType, DayPeriod)
+	// delete all daily archives that have been rolled up and deleted in a single query
+	result, err := rt.DB.ExecContext(ctx, sqlDeleteRolledUpDailyArchives, org.ID, archiveType, DayPeriod)
 	if err != nil {
-		return 0, fmt.Errorf("error selecting daily archives for deletion: %w", err)
+		return 0, fmt.Errorf("error deleting rolled up daily archives: %w", err)
 	}
 
-	if len(archiveIDs) == 0 {
-		return 0, nil
-	}
-
-	// delete each archive
-	deletedCount := 0
-	for _, id := range archiveIDs {
-		_, err := rt.DB.ExecContext(ctx, sqlDeleteArchive, id)
-		if err != nil {
-			log.Error("error deleting rolled up daily archive", "archive_id", id, "error", err)
-			continue
-		}
-		deletedCount++
+	deletedCount, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("error getting deleted rows count: %w", err)
 	}
 
 	if deletedCount > 0 {
 		log.Info("deleted rolled up daily archives", "count", deletedCount)
 	}
 
-	return deletedCount, nil
+	return int(deletedCount), nil
 }
 
 // ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
