@@ -846,6 +846,11 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 	return deleted, nil
 }
 
+const sqlSelectRolledUpDailyArchives = `
+  SELECT id, location
+    FROM archives_archive 
+   WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
+
 const sqlDeleteRolledUpDailyArchives = `
 DELETE FROM archives_archive 
  WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
@@ -857,7 +862,41 @@ func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org O
 
 	log := slog.With("org_id", org.ID, "org_name", org.Name, "archive_type", archiveType)
 
-	// delete all daily archives that have been rolled up and deleted in a single query
+	// first, get the archives to delete so we can clean up their S3 files
+	type archiveToDelete struct {
+		ID       int         `db:"id"`
+		Location null.String `db:"location"`
+	}
+	var archivesToDelete []archiveToDelete
+	err := rt.DB.SelectContext(ctx, &archivesToDelete, sqlSelectRolledUpDailyArchives, org.ID, archiveType, DayPeriod)
+	if err != nil {
+		return 0, fmt.Errorf("error selecting rolled up daily archives: %w", err)
+	}
+
+	if len(archivesToDelete) == 0 {
+		return 0, nil
+	}
+
+	// delete S3 files for archives that were uploaded
+	s3DeletedCount := 0
+	for _, archive := range archivesToDelete {
+		if archive.Location != "" {
+			// parse bucket:key from location
+			parts := strings.SplitN(string(archive.Location), ":", 2)
+			if len(parts) == 2 {
+				bucket, key := parts[0], parts[1]
+				err := DeleteS3File(ctx, rt.S3, bucket, key)
+				if err != nil {
+					log.Error("error deleting S3 file for rolled up daily archive", "archive_id", archive.ID, "bucket", bucket, "key", key, "error", err)
+					// continue to try deleting other files and the database records
+				} else {
+					s3DeletedCount++
+				}
+			}
+		}
+	}
+
+	// delete all daily archives from database
 	result, err := rt.DB.ExecContext(ctx, sqlDeleteRolledUpDailyArchives, org.ID, archiveType, DayPeriod)
 	if err != nil {
 		return 0, fmt.Errorf("error deleting rolled up daily archives: %w", err)
@@ -869,7 +908,7 @@ func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org O
 	}
 
 	if deletedCount > 0 {
-		log.Info("deleted rolled up daily archives", "count", deletedCount)
+		log.Info("deleted rolled up daily archives", "count", deletedCount, "s3_files_deleted", s3DeletedCount)
 	}
 
 	return int(deletedCount), nil

@@ -138,3 +138,17 @@ func GetS3File(ctx context.Context, s3Client *s3x.Service, bucket, key string) (
 
 	return output.Body, nil
 }
+
+// DeleteS3File deletes a file from S3
+func DeleteS3File(ctx context.Context, s3Client *s3x.Service, bucket, key string) error {
+	_, err := s3Client.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return fmt.Errorf("error deleting S3 object bucket=%s key=%s: %w", bucket, key, err)
+	}
+
+	slog.Debug("deleted S3 file", "bucket", bucket, "key", key)
+	return nil
+}
