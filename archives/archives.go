@@ -160,7 +160,7 @@ const sqlLookupArchivesNeedingDeletion = `
   SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
-ORDER BY start_date ASC`
+ORDER BY start_date ASC, period DESC`
 
 // GetArchivesNeedingDeletion returns all the archives which need to be deleted
 func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
@@ -572,7 +572,7 @@ func UploadArchive(ctx context.Context, rt *runtime.Runtime, archive *Archive) e
 		return fmt.Errorf("error uploading archive to S3: %w", err)
 	}
 
-	archive.NeedsDeletion = true
+	archive.NeedsDeletion = archive.RecordCount > 0
 
 	slog.Debug("completed uploading archive file", "org_id", archive.Org.ID, "archive_type", archive.ArchiveType, "start_date", archive.StartDate, "period", archive.Period, "location", archive.Location, "file_size", archive.Size, "file_hash", archive.Hash)
 
@@ -871,11 +871,13 @@ func ArchiveOrg(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org
 	monthliesFailed = append(monthliesFailed, rollupsFailed...)
 	monthliesFailed = removeDuplicates(monthliesFailed) // don't double report monthlies that fail being built from db and rolled up from dailies
 
-	// finally delete any archives not yet actually archived
+	// delete records from the database for dailies that still need it
 	deleted, err := DeleteArchivedOrgRecords(ctx, rt, now, org, archiveType)
 	if err != nil {
 		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, fmt.Errorf("error deleting archived records: %w", err)
 	}
+
+	// TODO get rid of any dailies which have been deleted and rolled up
 
 	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, nil
 }
