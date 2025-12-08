@@ -881,7 +881,7 @@ func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org O
 	s3DeletedCount := 0
 	for _, archive := range archivesToDelete {
 		if archive.Location != "" {
-			// parse bucket:key from location
+			// parse bucket:key from location (format is "bucket:key")
 			parts := strings.SplitN(string(archive.Location), ":", 2)
 			if len(parts) == 2 {
 				bucket, key := parts[0], parts[1]
