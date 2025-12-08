@@ -137,7 +137,7 @@ func GetActiveOrgs(ctx context.Context, rt *runtime.Runtime) ([]Org, error) {
 }
 
 const sqlLookupOrgArchives = `
-  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, rollup_id, needs_deletion
+  SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 
 ORDER BY start_date ASC, period DESC`
@@ -157,10 +157,10 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 }
 
 const sqlLookupArchivesNeedingDeletion = `
-  SELECT id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, rollup_id, needs_deletion 
+  SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
-ORDER BY start_date ASC, period DESC`
+ORDER BY start_date ASC`
 
 // GetArchivesNeedingDeletion returns all the archives which need to be deleted
 func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
@@ -197,7 +197,7 @@ func GetCurrentArchiveCount(ctx context.Context, db *sqlx.DB, org Org, archiveTy
 
 // between is inclusive on both sides
 const sqlLookupOrgDailyArchivesForDateRange = `
-  SELECT id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, rollup_id
+  SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive
    WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND start_date BETWEEN $4 AND $5
 ORDER BY start_date ASC`
