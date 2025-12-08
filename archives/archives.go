@@ -846,6 +846,49 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 	return deleted, nil
 }
 
+const sqlSelectDailyArchivesForDeletion = `
+  SELECT id
+    FROM archives_archive 
+   WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
+
+const sqlDeleteArchive = `DELETE FROM archives_archive WHERE id = $1`
+
+// DeleteRolledUpDailyArchives deletes daily archives that have been rolled up into monthlies and had their records deleted
+func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org Org, archiveType ArchiveType) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+	defer cancel()
+
+	log := slog.With("org_id", org.ID, "org_name", org.Name, "archive_type", archiveType)
+
+	// find all daily archives that have been rolled up and deleted
+	var archiveIDs []int
+	err := rt.DB.SelectContext(ctx, &archiveIDs, sqlSelectDailyArchivesForDeletion, org.ID, archiveType, DayPeriod)
+	if err != nil {
+		return 0, fmt.Errorf("error selecting daily archives for deletion: %w", err)
+	}
+
+	if len(archiveIDs) == 0 {
+		return 0, nil
+	}
+
+	// delete each archive
+	deletedCount := 0
+	for _, id := range archiveIDs {
+		_, err := rt.DB.ExecContext(ctx, sqlDeleteArchive, id)
+		if err != nil {
+			log.Error("error deleting rolled up daily archive", "archive_id", id, "error", err)
+			continue
+		}
+		deletedCount++
+	}
+
+	if deletedCount > 0 {
+		log.Info("deleted rolled up daily archives", "count", deletedCount)
+	}
+
+	return deletedCount, nil
+}
+
 // ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
 func ArchiveOrg(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, []*Archive, error) {
 	log := slog.With("org_id", org.ID, "org_name", org.Name)
@@ -877,7 +920,11 @@ func ArchiveOrg(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org
 		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, fmt.Errorf("error deleting archived records: %w", err)
 	}
 
-	// TODO get rid of any dailies which have been deleted and rolled up
+	// delete daily archives that have been rolled up into monthlies and had their records deleted
+	_, err = DeleteRolledUpDailyArchives(ctx, rt, org, archiveType)
+	if err != nil {
+		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, fmt.Errorf("error deleting rolled up daily archives: %w", err)
+	}
 
 	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, nil
 }
