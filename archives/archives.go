@@ -846,11 +846,6 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 	return deleted, nil
 }
 
-const sqlSelectDailyArchivesForDeletion = `
-  SELECT id
-    FROM archives_archive 
-   WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
-
 const sqlDeleteRolledUpDailyArchives = `
 DELETE FROM archives_archive 
  WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
