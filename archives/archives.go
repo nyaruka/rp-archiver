@@ -846,6 +846,74 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 	return deleted, nil
 }
 
+const sqlSelectRolledUpDailyArchives = `
+  SELECT id, location
+    FROM archives_archive 
+   WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
+
+const sqlDeleteRolledUpDailyArchives = `
+DELETE FROM archives_archive 
+ WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
+
+// DeleteRolledUpDailyArchives deletes daily archives that have been rolled up into monthlies and had their records deleted
+func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org Org, archiveType ArchiveType) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+	defer cancel()
+
+	log := slog.With("org_id", org.ID, "org_name", org.Name, "archive_type", archiveType)
+
+	// first, get the archives to delete so we can clean up their S3 files
+	type archiveToDelete struct {
+		ID       int         `db:"id"`
+		Location null.String `db:"location"`
+	}
+	var archivesToDelete []archiveToDelete
+	err := rt.DB.SelectContext(ctx, &archivesToDelete, sqlSelectRolledUpDailyArchives, org.ID, archiveType, DayPeriod)
+	if err != nil {
+		return 0, fmt.Errorf("error selecting rolled up daily archives: %w", err)
+	}
+
+	if len(archivesToDelete) == 0 {
+		return 0, nil
+	}
+
+	// delete S3 files for archives that were uploaded
+	s3DeletedCount := 0
+	for _, archive := range archivesToDelete {
+		if archive.Location != "" {
+			// parse bucket:key from location (format is "bucket:key")
+			parts := strings.SplitN(string(archive.Location), ":", 2)
+			if len(parts) == 2 {
+				bucket, key := parts[0], parts[1]
+				err := DeleteS3File(ctx, rt.S3, bucket, key)
+				if err != nil {
+					log.Error("error deleting S3 file for rolled up daily archive", "archive_id", archive.ID, "bucket", bucket, "key", key, "error", err)
+					// continue to try deleting other files and the database records
+				} else {
+					s3DeletedCount++
+				}
+			}
+		}
+	}
+
+	// delete all daily archives from database
+	result, err := rt.DB.ExecContext(ctx, sqlDeleteRolledUpDailyArchives, org.ID, archiveType, DayPeriod)
+	if err != nil {
+		return 0, fmt.Errorf("error deleting rolled up daily archives: %w", err)
+	}
+
+	deletedCount, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("error getting deleted rows count: %w", err)
+	}
+
+	if deletedCount > 0 {
+		log.Info("deleted rolled up daily archives", "count", deletedCount, "s3_files_deleted", s3DeletedCount)
+	}
+
+	return int(deletedCount), nil
+}
+
 // ArchiveOrg looks for any missing archives for the passed in org, creating and uploading them as necessary, returning the created archives
 func ArchiveOrg(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, []*Archive, []*Archive, []*Archive, []*Archive, error) {
 	log := slog.With("org_id", org.ID, "org_name", org.Name)
@@ -877,7 +945,11 @@ func ArchiveOrg(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org
 		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, fmt.Errorf("error deleting archived records: %w", err)
 	}
 
-	// TODO get rid of any dailies which have been deleted and rolled up
+	// delete daily archives that have been rolled up into monthlies and had their records deleted
+	_, err = DeleteRolledUpDailyArchives(ctx, rt, org, archiveType)
+	if err != nil {
+		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, fmt.Errorf("error deleting rolled up daily archives: %w", err)
+	}
 
 	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, nil
 }
