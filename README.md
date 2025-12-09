@@ -51,25 +51,3 @@ If using a different encryption type or service that produces non-MD5 ETags:
  * `ARCHIVER_DEPLOYMENT_ID`: used for metrics reporting
  * `ARCHIVER_SENTRY_DSN`: DSN to use when logging errors to Sentry
  * `ARCHIVER_LOG_LEVEL`: logging level to use (default is `info`)
-
-## Development
-
-Once you've checked out the code, you can build the service with:
-
-```
-go build github.com/nyaruka/rp-archiver/cmd/rp-archiver
-```
-
-This will create a new executable in $GOPATH/bin called `rp-archiver`.
-
-To run the tests you need to create the test database:
-
-```
-$ createdb archiver_test
-```
-
-To run all of the tests:
-
-```
-go test -p=1 ./...
-```
