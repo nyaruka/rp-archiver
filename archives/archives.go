@@ -846,10 +846,10 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 	return deleted, nil
 }
 
-const sqlSelectRolledUpDailyArchives = `
+const sqlSelectDeletableArchives = `
   SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive 
-   WHERE org_id = $1 AND archive_type = $2 AND period = 'D' AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
+   WHERE org_id = $1 AND archive_type = $2 AND period = 'D' AND rollup_id IS NOT NULL AND NOT needs_deletion`
 
 // DeleteRolledUpDailyArchives deletes daily archives that have been rolled up into monthlies and had their records deleted
 func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org Org, archiveType ArchiveType) (int, error) {
@@ -859,7 +859,7 @@ func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org O
 	log := slog.With("org_id", org.ID, "org_name", org.Name, "archive_type", archiveType)
 
 	var toDelete []*Archive
-	if err := rt.DB.SelectContext(ctx, &toDelete, sqlSelectRolledUpDailyArchives, org.ID, archiveType); err != nil {
+	if err := rt.DB.SelectContext(ctx, &toDelete, sqlSelectDeletableArchives, org.ID, archiveType); err != nil {
 		return 0, fmt.Errorf("error selecting rolled up daily archives: %w", err)
 	}
 
