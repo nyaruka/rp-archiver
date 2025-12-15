@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -139,16 +140,45 @@ func GetS3File(ctx context.Context, s3Client *s3x.Service, bucket, key string) (
 	return output.Body, nil
 }
 
-// DeleteS3File deletes a file from S3
-func DeleteS3File(ctx context.Context, s3Client *s3x.Service, bucket, key string) error {
-	_, err := s3Client.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return fmt.Errorf("error deleting S3 object bucket=%s key=%s: %w", bucket, key, err)
+// DeleteS3Files deletes multiple files from S3, automatically batching into requests of 1000 keys
+func DeleteS3Files(ctx context.Context, s3Client *s3x.Service, bucket string, keys []string) (int, error) {
+	if len(keys) == 0 {
+		return 0, nil
 	}
 
-	slog.Debug("deleted S3 file", "bucket", bucket, "key", key)
-	return nil
+	totalDeleted := 0
+	var lastErr error
+
+	for batch := range slices.Chunk(keys, 1000) {
+		objects := make([]types.ObjectIdentifier, len(batch))
+		for i, key := range batch {
+			objects[i] = types.ObjectIdentifier{Key: aws.String(key)}
+		}
+
+		output, err := s3Client.Client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucket),
+			Delete: &types.Delete{Objects: objects, Quiet: aws.Bool(true)},
+		})
+		if err != nil {
+			lastErr = fmt.Errorf("error batch deleting S3 objects bucket=%s: %w", bucket, err)
+			continue
+		}
+
+		// check for individual errors
+		if len(output.Errors) > 0 {
+			for _, e := range output.Errors {
+				slog.Error("error deleting S3 object in batch", "bucket", bucket, "key", *e.Key, "error", *e.Message)
+			}
+			totalDeleted += len(batch) - len(output.Errors)
+			lastErr = fmt.Errorf("%d errors deleting S3 objects", len(output.Errors))
+		} else {
+			totalDeleted += len(batch)
+		}
+	}
+
+	if totalDeleted > 0 {
+		slog.Debug("deleted S3 files", "bucket", bucket, "count", totalDeleted)
+	}
+
+	return totalDeleted, lastErr
 }

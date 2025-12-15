@@ -847,9 +847,9 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 }
 
 const sqlSelectRolledUpDailyArchives = `
-  SELECT id, location
+  SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive 
-   WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
+   WHERE org_id = $1 AND archive_type = $2 AND period = 'D' AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
 
 // DeleteRolledUpDailyArchives deletes daily archives that have been rolled up into monthlies and had their records deleted
 func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org Org, archiveType ArchiveType) (int, error) {
@@ -858,39 +858,34 @@ func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org O
 
 	log := slog.With("org_id", org.ID, "org_name", org.Name, "archive_type", archiveType)
 
-	// first, get the archives to delete so we can clean up their S3 files
-	type archiveToDelete struct {
-		ID       int         `db:"id"`
-		Location null.String `db:"location"`
-	}
-	var archivesToDelete []archiveToDelete
-	err := rt.DB.SelectContext(ctx, &archivesToDelete, sqlSelectRolledUpDailyArchives, org.ID, archiveType, DayPeriod)
-	if err != nil {
+	var toDelete []*Archive
+	if err := rt.DB.SelectContext(ctx, &toDelete, sqlSelectRolledUpDailyArchives, org.ID, archiveType); err != nil {
 		return 0, fmt.Errorf("error selecting rolled up daily archives: %w", err)
 	}
 
-	if len(archivesToDelete) == 0 {
+	if len(toDelete) == 0 {
 		return 0, nil
 	}
 
-	// collect IDs and delete S3 files for archives that were uploaded
-	ids := make([]int, 0, len(archivesToDelete))
-	s3DeletedCount := 0
-	for _, archive := range archivesToDelete {
-		ids = append(ids, archive.ID)
+	// collect IDs and S3 keys grouped by bucket
+	ids := make([]int, 0, len(toDelete))
+	keysByBucket := make(map[string][]string)
+	for _, a := range toDelete {
+		ids = append(ids, a.ID)
+		if a.isUploaded() {
+			bucket, key := a.location()
+			keysByBucket[bucket] = append(keysByBucket[bucket], key)
+		}
+	}
 
-		if archive.Location != "" {
-			// parse bucket:key from location (format is "bucket:key")
-			parts := strings.SplitN(string(archive.Location), ":", 2)
-			if len(parts) == 2 {
-				bucket, key := parts[0], parts[1]
-				if err := DeleteS3File(ctx, rt.S3, bucket, key); err != nil {
-					log.Error("error deleting S3 file for rolled up daily archive", "archive_id", archive.ID, "bucket", bucket, "key", key, "error", err)
-					// continue to try deleting other files and the database records
-				} else {
-					s3DeletedCount++
-				}
-			}
+	// delete S3 files
+	s3DeletedCount := 0
+	for bucket, keys := range keysByBucket {
+		deleted, err := DeleteS3Files(ctx, rt.S3, bucket, keys)
+		s3DeletedCount += deleted
+		if err != nil {
+			log.Error("error deleting S3 files for rolled up daily archives", "bucket", bucket, "error", err)
+			// continue to try deleting database records
 		}
 	}
 
