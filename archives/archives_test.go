@@ -23,12 +23,12 @@ import (
 func setup(t *testing.T) (context.Context, *runtime.Runtime) {
 	ctx := t.Context()
 	config := runtime.NewDefaultConfig()
-	config.DB = "postgres://archiver_test:temba@localhost:5432/archiver_test?sslmode=disable&TimeZone=UTC"
+	config.DB = "postgres://archiver_test:temba@postgres:5432/archiver_test?sslmode=disable&TimeZone=UTC"
 
 	// configure S3 to use a localstack instance
 	config.AWSAccessKeyID = "root"
 	config.AWSSecretAccessKey = "tembatemba"
-	config.S3Endpoint = "http://localhost:4566"
+	config.S3Endpoint = "http://localstack:4566"
 	config.S3PathStyle = true
 	config.DeploymentID = "test"
 
