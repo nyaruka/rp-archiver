@@ -851,10 +851,6 @@ const sqlSelectRolledUpDailyArchives = `
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
 
-const sqlDeleteRolledUpDailyArchives = `
-DELETE FROM archives_archive 
- WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND deleted_on IS NOT NULL`
-
 // DeleteRolledUpDailyArchives deletes daily archives that have been rolled up into monthlies and had their records deleted
 func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org Org, archiveType ArchiveType) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
@@ -877,16 +873,18 @@ func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org O
 		return 0, nil
 	}
 
-	// delete S3 files for archives that were uploaded
+	// collect IDs and delete S3 files for archives that were uploaded
+	ids := make([]int, 0, len(archivesToDelete))
 	s3DeletedCount := 0
 	for _, archive := range archivesToDelete {
+		ids = append(ids, archive.ID)
+
 		if archive.Location != "" {
 			// parse bucket:key from location (format is "bucket:key")
 			parts := strings.SplitN(string(archive.Location), ":", 2)
 			if len(parts) == 2 {
 				bucket, key := parts[0], parts[1]
-				err := DeleteS3File(ctx, rt.S3, bucket, key)
-				if err != nil {
+				if err := DeleteS3File(ctx, rt.S3, bucket, key); err != nil {
 					log.Error("error deleting S3 file for rolled up daily archive", "archive_id", archive.ID, "bucket", bucket, "key", key, "error", err)
 					// continue to try deleting other files and the database records
 				} else {
@@ -896,8 +894,8 @@ func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org O
 		}
 	}
 
-	// delete all daily archives from database
-	result, err := rt.DB.ExecContext(ctx, sqlDeleteRolledUpDailyArchives, org.ID, archiveType, DayPeriod)
+	// delete archives from database by their IDs
+	result, err := rt.DB.ExecContext(ctx, `DELETE FROM archives_archive WHERE id = ANY($1)`, pq.Array(ids))
 	if err != nil {
 		return 0, fmt.Errorf("error deleting rolled up daily archives: %w", err)
 	}
