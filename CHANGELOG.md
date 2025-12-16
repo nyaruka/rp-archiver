@@ -1,3 +1,8 @@
+v10.3.11 (2025-12-16)
+-------------------------
+ * Delete rolled up and purged archives
+ * Use localstack for CI and local dev
+
 v10.3.10 (2025-12-03)
 -------------------------
  * Update deps
