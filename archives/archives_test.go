@@ -546,3 +546,61 @@ func TestArchiveActiveOrgs(t *testing.T) {
 	assert.NoError(t, err)
 
 }
+
+func TestDeleteRolledUpDailyArchives(t *testing.T) {
+	ctx, rt := setup(t)
+
+	orgs, err := GetActiveOrgs(ctx, rt)
+	assert.NoError(t, err)
+	now := time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)
+
+	org := orgs[1]
+
+	// Step 1: Create daily archives (monthlies are created via RollupOrgArchives, not CreateOrgArchives unless it's a backfill)
+	dailiesCreated, _, _, _, err := CreateOrgArchives(ctx, rt, now, org, MessageType)
+	assert.NoError(t, err)
+	assert.Greater(t, len(dailiesCreated), 0, "should have created daily archives")
+
+	// Step 2: Roll up daily archives into monthlies
+	rollupsCreated, _, err := RollupOrgArchives(ctx, rt, now, org, MessageType)
+	assert.NoError(t, err)
+	assert.Greater(t, len(rollupsCreated), 0, "should have created rollup archives")
+
+	// Step 3: Delete archived records (this sets deleted_on on archives)
+	deleted, err := DeleteArchivedOrgRecords(ctx, rt, now, org, MessageType)
+	assert.NoError(t, err)
+	assert.Greater(t, len(deleted), 0, "should have deleted some archived records")
+
+	// Count total archives before deletion
+	var countBefore int
+	err = rt.DB.Get(&countBefore, "SELECT count(*) FROM archives_archive WHERE org_id = $1 AND archive_type = $2", org.ID, MessageType)
+	assert.NoError(t, err)
+
+	// Count daily archives that have been rolled up and are ready for cleanup (needs_deletion = false means records have been deleted or archive was empty)
+	var countRolledUp int
+	err = rt.DB.Get(&countRolledUp, "SELECT count(*) FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND needs_deletion = FALSE", org.ID, MessageType, DayPeriod)
+	assert.NoError(t, err)
+	assert.Greater(t, countRolledUp, 0, "should have some daily archives that were rolled up and ready for cleanup")
+
+	// Now call the function explicitly to delete rolled up dailies
+	deletedCount, err := DeleteRolledUpDailyArchives(ctx, rt, org, MessageType)
+	assert.NoError(t, err)
+	assert.Equal(t, countRolledUp, deletedCount, "should delete all rolled up daily archives")
+
+	// After deletion, count should be reduced
+	var countAfter int
+	err = rt.DB.Get(&countAfter, "SELECT count(*) FROM archives_archive WHERE org_id = $1 AND archive_type = $2", org.ID, MessageType)
+	assert.NoError(t, err)
+	assert.Equal(t, countBefore-countRolledUp, countAfter, "archive count should be reduced by deleted count")
+
+	// No more rolled up daily archives ready for cleanup should exist
+	err = rt.DB.Get(&countRolledUp, "SELECT count(*) FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND period = $3 AND rollup_id IS NOT NULL AND needs_deletion = FALSE", org.ID, MessageType, DayPeriod)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, countRolledUp, "no rolled up daily archives should remain")
+
+	// Monthly archives should still exist
+	var countMonthly int
+	err = rt.DB.Get(&countMonthly, "SELECT count(*) FROM archives_archive WHERE org_id = $1 AND archive_type = $2 AND period = $3", org.ID, MessageType, MonthPeriod)
+	assert.NoError(t, err)
+	assert.Greater(t, countMonthly, 0, "monthly archives should still exist")
+}
