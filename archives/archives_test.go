@@ -567,7 +567,7 @@ func TestDeleteRolledUpDailyArchives(t *testing.T) {
 	assert.Greater(t, len(rollupsCreated), 0, "should have created rollup archives")
 
 	// Step 3: Delete archived records (this sets deleted_on on archives)
-	deleted, err := DeleteArchivedOrgRecords(ctx, rt, now, org, MessageType)
+	deleted, err := PurgeArchivedRecords(ctx, rt, now, org, MessageType)
 	assert.NoError(t, err)
 	assert.Greater(t, len(deleted), 0, "should have deleted some archived records")
 

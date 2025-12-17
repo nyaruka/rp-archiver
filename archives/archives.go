@@ -156,21 +156,21 @@ func GetCurrentArchives(ctx context.Context, db *sqlx.DB, org Org, archiveType A
 	return archives, nil
 }
 
-const sqlLookupArchivesNeedingDeletion = `
+const sqlLookupArchivesToPurge = `
   SELECT uuid, id, org_id, start_date::timestamp with time zone AS start_date, period, archive_type, hash, location, size, record_count, needs_deletion, rollup_id
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 AND needs_deletion = TRUE
 ORDER BY start_date ASC, period DESC`
 
-// GetArchivesNeedingDeletion returns all the archives which need to be deleted
-func GetArchivesNeedingDeletion(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
+// GetArchivesToPurge returns all the archives whose records can be purged
+func GetArchivesToPurge(ctx context.Context, db *sqlx.DB, org Org, archiveType ArchiveType) ([]*Archive, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
 	archives := make([]*Archive, 0, 1)
-	err := db.SelectContext(ctx, &archives, sqlLookupArchivesNeedingDeletion, org.ID, archiveType)
+	err := db.SelectContext(ctx, &archives, sqlLookupArchivesToPurge, org.ID, archiveType)
 	if err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("error selecting archives needing deletion for org: %d and type: %s: %w", org.ID, archiveType, err)
+		return nil, fmt.Errorf("error selecting archives to purge for org: %d and type: %s: %w", org.ID, archiveType, err)
 	}
 
 	return archives, nil
@@ -796,16 +796,15 @@ func RollupOrgArchives(ctx context.Context, rt *runtime.Runtime, now time.Time, 
 
 var deleteTransactionSize = 100
 
-// DeleteArchivedOrgRecords deletes all the records for the given org based on archives already created
-func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
-	// get all the archives that haven't yet been deleted
-	archives, err := GetArchivesNeedingDeletion(ctx, rt.DB, org, archiveType)
+// PurgeArchivedRecords deletes all the database records for the given org based on archives already created
+func PurgeArchivedRecords(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org, archiveType ArchiveType) ([]*Archive, error) {
+	// get all the archives that haven't yet been purged
+	archives, err := GetArchivesToPurge(ctx, rt.DB, org, archiveType)
 	if err != nil {
-		return nil, fmt.Errorf("error finding archives needing deletion '%s'", archiveType)
+		return nil, fmt.Errorf("error finding archives needing purging '%s'", archiveType)
 	}
 
-	// for each archive
-	deleted := make([]*Archive, 0, len(archives))
+	purged := make([]*Archive, 0, len(archives))
 	for _, a := range archives {
 		log := slog.With("archive_id", a.ID, "org_id", a.OrgID, "type", a.ArchiveType, "count", a.RecordCount, "start", a.StartDate, "period", a.Period)
 
@@ -830,20 +829,20 @@ func DeleteArchivedOrgRecords(ctx context.Context, rt *runtime.Runtime, now time
 			continue
 		}
 
-		deletedOn := dates.Now()
+		purgedOn := dates.Now()
 
-		// mark archive as no longer needing deletion
-		if _, err := rt.DB.ExecContext(ctx, `UPDATE archives_archive SET needs_deletion = FALSE, deleted_on = $2 WHERE id = $1`, a.ID, deletedOn); err != nil {
-			return nil, fmt.Errorf("error setting archive as deleted: %w", err)
+		// mark archive as no longer needing purging
+		if _, err := rt.DB.ExecContext(ctx, `UPDATE archives_archive SET needs_deletion = FALSE, deleted_on = $2 WHERE id = $1`, a.ID, purgedOn); err != nil {
+			return nil, fmt.Errorf("error setting archive as purged: %w", err)
 		}
 		a.NeedsDeletion = false
-		a.DeletedOn = &deletedOn
+		a.DeletedOn = &purgedOn
 
-		deleted = append(deleted, a)
-		log.Debug("deleted archive records", "elapsed", dates.Since(start))
+		purged = append(purged, a)
+		log.Debug("purged archive records", "elapsed", dates.Since(start))
 	}
 
-	return deleted, nil
+	return purged, nil
 }
 
 const sqlSelectDeletableArchives = `
@@ -851,7 +850,7 @@ const sqlSelectDeletableArchives = `
     FROM archives_archive 
    WHERE org_id = $1 AND archive_type = $2 AND period = 'D' AND rollup_id IS NOT NULL AND NOT needs_deletion`
 
-// DeleteRolledUpDailyArchives deletes daily archives that have been rolled up into monthlies and had their records deleted
+// DeleteRolledUpDailyArchives deletes daily archives that have been rolled up into monthlies and had their records purged
 func DeleteRolledUpDailyArchives(ctx context.Context, rt *runtime.Runtime, org Org, archiveType ArchiveType) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
 	defer cancel()
@@ -932,19 +931,19 @@ func ArchiveOrg(ctx context.Context, rt *runtime.Runtime, now time.Time, org Org
 	monthliesFailed = append(monthliesFailed, rollupsFailed...)
 	monthliesFailed = removeDuplicates(monthliesFailed) // don't double report monthlies that fail being built from db and rolled up from dailies
 
-	// delete records from the database for dailies that still need it
-	deleted, err := DeleteArchivedOrgRecords(ctx, rt, now, org, archiveType)
+	// purge records from the database for dailies that still need it
+	dailiesPurged, err := PurgeArchivedRecords(ctx, rt, now, org, archiveType)
 	if err != nil {
-		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, fmt.Errorf("error deleting archived records: %w", err)
+		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, nil, fmt.Errorf("error purging archived records: %w", err)
 	}
 
-	// delete daily archives that have been rolled up into monthlies and had their records deleted
+	// delete daily archives that have been rolled up into monthlies and had their records purged
 	_, err = DeleteRolledUpDailyArchives(ctx, rt, org, archiveType)
 	if err != nil {
-		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, fmt.Errorf("error deleting rolled up daily archives: %w", err)
+		return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, dailiesPurged, fmt.Errorf("error deleting rolled up daily archives: %w", err)
 	}
 
-	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, deleted, nil
+	return dailiesCreated, dailiesFailed, monthliesCreated, monthliesFailed, dailiesPurged, nil
 }
 
 // ArchiveActiveOrgs fetches active orgs and archives messages and runs
