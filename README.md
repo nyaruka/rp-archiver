@@ -6,14 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/nyaruka/rp-archiver)](https://goreportcard.com/report/github.com/nyaruka/rp-archiver) 
 
 Service for archiving old RapidPro/TextIt runs and messages. It interacts directly with the database 
-and writes archive files to an S3 compatible endpoint.
-
-## Deploying
-
-As it is a Go application, it compiles to a binary and that binary along with the config file is all
-you need to run it on your server. You can find bundles for each platform in the
-[releases directory](https://github.com/nyaruka/rp-archiver/releases). You should only run a single
-instance for a deployment.
+and writes archive files to S3.
 
 ## Configuration
 
@@ -29,7 +22,6 @@ environment variables and parameters and for more details on each option.
 
  * `ARCHIVER_DB`: URL describing how to connect to the database
  * `ARCHIVER_TEMP_DIR`: The directory that temporary archives will be written before upload
- * `ARCHIVER_DELETE`: Whether to delete messages and runs after they are archived, we recommend setting this to true for large installations
 
 ### AWS services:
 
@@ -37,7 +29,7 @@ environment variables and parameters and for more details on each option.
  * `ARCHIVER_AWS_SECRET_ACCESS_KEY`: AWS secret access key used to authenticate to AWS
  * `ARCHIVER_AWS_REGION`: AWS region (e.g. `eu-west-1`)
  
-For writing of archives, Archiver needs access to a storage bucket on an S3 compatible service. For AWS we recommend that 
+For writing of archives, Archiver needs access to a storage bucket on an S3 compatible service. We recommend that 
 you choose SSE-S3 encryption as this is the only type that supports validation of upload ETags.
 
  * `ARCHIVER_S3_BUCKET`: name of your S3 bucket (e.g. `dl-archiver-test"`)
