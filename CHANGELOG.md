@@ -1,3 +1,7 @@
+v26.0.0 (2026-01-05)
+-------------------------
+ * Use 'purge' terminology for removal of archived records to avoid confusion with deletion of archives
+
 v10.3.11 (2025-12-16)
 -------------------------
  * Delete rolled up and purged archives
