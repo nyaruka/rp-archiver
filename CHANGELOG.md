@@ -1,3 +1,8 @@
+v26.0.1 (2026-04-08)
+-------------------------
+ * Update to go 1.26
+ * Update dependencies
+
 v26.0.0 (2026-01-05)
 -------------------------
  * Use 'purge' terminology for removal of archived records to avoid confusion with deletion of archives
