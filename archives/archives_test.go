@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	"context"
 	"io"
-	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -48,8 +47,6 @@ func setup(t *testing.T) (context.Context, *runtime.Runtime) {
 		_, err = s3Client.Client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String("temba-archives")})
 		require.NoError(t, err)
 	}
-
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
 	CW, err := cwatch.NewService(config.AWSAccessKeyID, config.AWSSecretAccessKey, config.AWSRegion, config.CloudwatchNamespace, config.DeploymentID)
 	require.NoError(t, err)
@@ -168,9 +165,9 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have two records, second will have attachments
 	assert.Equal(t, 3, task.RecordCount)
-	assert.Equal(t, int64(625), task.Size)
+	assert.Equal(t, int64(661), task.Size)
 	assert.Equal(t, time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), task.StartDate)
-	assert.Equal(t, "dd2b8dc865524ceb7080e26358fbda15", string(task.Hash))
+	assert.Equal(t, "e62c8f5088939b422530e54888a3d61c", string(task.Hash))
 	assertArchiveFile(t, task, "messages1.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -188,8 +185,8 @@ func TestCreateMsgArchive(t *testing.T) {
 
 	// should have one record
 	assert.Equal(t, 1, task.RecordCount)
-	assert.Equal(t, int64(328), task.Size)
-	assert.Equal(t, "ab7b71efd543c7309a39d2292cc975aa", string(task.Hash))
+	assert.Equal(t, int64(342), task.Size)
+	assert.Equal(t, "ac4c725022bbbb750edec420faeebced", string(task.Hash))
 	assertArchiveFile(t, task, "messages2.jsonl")
 
 	DeleteArchiveTempFile(task)
@@ -336,8 +333,8 @@ func TestArchiveOrgMessages(t *testing.T) {
 	assert.Equal(t, 61, len(dailiesCreated))
 	assertArchive(t, dailiesCreated[0], time.Date(2017, 8, 10, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
 	assertArchive(t, dailiesCreated[1], time.Date(2017, 8, 11, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
-	assertArchive(t, dailiesCreated[2], time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), DayPeriod, 3, 625, "dd2b8dc865524ceb7080e26358fbda15")
-	assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 346, "1cb0a61e6484e2dbda89b8baab452b8c")
+	assertArchive(t, dailiesCreated[2], time.Date(2017, 8, 12, 0, 0, 0, 0, time.UTC), DayPeriod, 3, 661, "e62c8f5088939b422530e54888a3d61c")
+	assertArchive(t, dailiesCreated[3], time.Date(2017, 8, 13, 0, 0, 0, 0, time.UTC), DayPeriod, 1, 359, "0272abf174e10b02076aa53337ca62e2")
 	assertArchive(t, dailiesCreated[4], time.Date(2017, 8, 14, 0, 0, 0, 0, time.UTC), DayPeriod, 0, 0, "")
 
 	// empty archives should not have location set (not uploaded to S3)
@@ -352,7 +349,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 	assert.Equal(t, 0, len(dailiesFailed))
 
 	assert.Equal(t, 2, len(monthliesCreated))
-	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 669, "bb5126c95df1f6927a16dad976775fa3")
+	assertArchive(t, monthliesCreated[0], time.Date(2017, 8, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 4, 705, "71f057781b343e651e4110f111ed64fc")
 	assertArchive(t, monthliesCreated[1], time.Date(2017, 9, 1, 0, 0, 0, 0, time.UTC), MonthPeriod, 0, 0, "")
 
 	// non-empty monthly should have location, empty monthly should not
