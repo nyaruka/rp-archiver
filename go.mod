@@ -17,8 +17,6 @@ require (
 	github.com/vinovest/sqlx v1.7.2
 )
 
-require github.com/muir/list v1.2.1 // indirect
-
 require (
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.14 // indirect
@@ -46,6 +44,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/muir/list v1.2.1 // indirect
 	github.com/muir/sqltoken v0.4.0 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1 // indirect
