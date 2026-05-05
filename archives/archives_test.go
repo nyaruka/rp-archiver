@@ -3,7 +3,7 @@ package archives
 import (
 	"compress/gzip"
 	"context"
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -18,7 +18,7 @@ import (
 )
 
 func setup(t *testing.T) *sqlx.DB {
-	testDB, err := ioutil.ReadFile("../testdb.sql")
+	testDB, err := os.ReadFile("../testdb.sql")
 	assert.NoError(t, err)
 
 	db, err := sqlx.Open("postgres", "postgres://temba:temba@localhost:5432/archiver_test?sslmode=disable&TimeZone=UTC")
@@ -37,6 +37,7 @@ func TestGetMissingDayArchives(t *testing.T) {
 	// get the tasks for our org
 	ctx := context.Background()
 	config := NewDefaultConfig()
+
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
@@ -85,6 +86,7 @@ func TestGetMissingMonthArchives(t *testing.T) {
 	// get the tasks for our org
 	ctx := context.Background()
 	config := NewDefaultConfig()
+
 	orgs, err := GetActiveOrgs(ctx, db, config)
 	assert.NoError(t, err)
 
@@ -178,10 +180,10 @@ func assertArchiveFile(t *testing.T, archive *Archive, truthName string) {
 
 	zTestReader, err := gzip.NewReader(testFile)
 	assert.NoError(t, err)
-	test, err := ioutil.ReadAll(zTestReader)
+	test, err := io.ReadAll(zTestReader)
 	assert.NoError(t, err)
 
-	truth, err := ioutil.ReadFile("./testdata/" + truthName)
+	truth, err := os.ReadFile("./testdata/" + truthName)
 	assert.NoError(t, err)
 
 	assert.Equal(t, truth, test)
@@ -318,7 +320,7 @@ func TestArchiveOrgMessages(t *testing.T) {
 	config.Delete = true
 
 	// AWS S3 config in the environment needed to download from S3
-	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
+	if config.AWSAccessKeyID != "" && config.AWSSecretAccessKey != "" {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
@@ -437,7 +439,7 @@ func TestArchiveOrgRuns(t *testing.T) {
 	config.Delete = true
 
 	// AWS S3 config in the environment needed to download from S3
-	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
+	if config.AWSAccessKeyID != "" && config.AWSSecretAccessKey != "" {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 
@@ -526,7 +528,7 @@ func TestArchiveActiveOrgs(t *testing.T) {
 	dates.SetNowSource(dates.NewSequentialNowSource(time.Date(2018, 1, 8, 12, 30, 0, 0, time.UTC)))
 	defer dates.SetNowSource(dates.DefaultNowSource)
 
-	if config.AWSAccessKeyID != "missing_aws_access_key_id" && config.AWSSecretAccessKey != "missing_aws_secret_access_key" {
+	if config.AWSAccessKeyID != "" && config.AWSSecretAccessKey != "" {
 		s3Client, err := NewS3Client(config)
 		assert.NoError(t, err)
 

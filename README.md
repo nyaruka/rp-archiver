@@ -1,37 +1,36 @@
-# RapidPro Archiver
+# Archiver
 
 [![Build Status](https://github.com/nyaruka/rp-archiver/workflows/CI/badge.svg)](https://github.com/nyaruka/rp-archiver/actions?query=workflow%3ACI) 
 [![codecov](https://codecov.io/gh/nyaruka/rp-archiver/branch/main/graph/badge.svg)](https://codecov.io/gh/nyaruka/rp-archiver) 
 [![Go Report Card](https://goreportcard.com/badge/github.com/nyaruka/rp-archiver)](https://goreportcard.com/report/github.com/nyaruka/rp-archiver) 
 
-RP-Archiver is the [RapidPro](https://github.com/rapidpro/rapidpro) component responsible for the archiving of
-old runs and messages. It interacts directly with the RapidPro database and writes archive files to an 
-S3 compatible endpoint.
+Service for archiving old RapidPro/TextIt runs and messages. It interacts directly with the database 
+and writes archive files to an S3 compatible endpoint.
 
 ## Deploying
 
-As Archiver is a Go application, it compiles to a binary and that binary along with the config file is all
+As it is a Go application, it compiles to a binary and that binary along with the config file is all
 you need to run it on your server. You can find bundles for each platform in the
-[releases directory](https://github.com/nyaruka/rp-archiver/releases). You should only run a single archiver
+[releases directory](https://github.com/nyaruka/rp-archiver/releases). You should only run a single
 instance for a deployment.
 
 ## Configuration
 
-Archiver uses a tiered configuration system, each option takes precendence over the ones above it:
+The service uses a tiered configuration system, each option takes precendence over the ones above it:
 
  1. The configuration file
  2. Environment variables starting with `ARCHIVER_` 
  3. Command line parameters
 
-We recommend running Archiver with no changes to the configuration and no parameters, using only
+We recommend running it with no changes to the configuration and no parameters, using only
 environment variables to configure it. You can use `% rp-archiver --help` to see a list of the
 environment variables and parameters and for more details on each option.
 
-### RapidPro Configuration
+### RapidPro
 
 For use with RapidPro, you will want to configure these settings:
 
- * `ARCHIVER_DB`: URL describing how to connect to the RapidPro database (default "postgres://temba:temba@localhost/temba?sslmode=disable")
+ * `ARCHIVER_DB`: URL describing how to connect to the database (default "postgres://temba:temba@localhost/temba?sslmode=disable")
  * `ARCHIVER_TEMP_DIR`: The directory that temporary archives will be written before upload (default "/tmp")
  * `ARCHIVER_DELETE`: Whether to delete messages and runs after they are archived, we recommend setting this to true for large installations (default false)
  
@@ -47,33 +46,11 @@ Recommended settings for error reporting:
 
  * `ARCHIVER_SENTRY_DSN`: The DSN to use when logging errors to Sentry
 
-## Development
-
-Once you've checked out the code, you can build Archiver with:
-
-```
-go build github.com/nyaruka/rp-archiver/cmd/rp-archiver
-```
-
-This will create a new executable in $GOPATH/bin called `rp-archiver`.
-
-To run the tests you need to create the test database:
-
-```
-$ createdb archiver_test
-```
-
-To run all of the tests:
-
-```
-go test -p=1 ./...
-```
-
-## Reference
+### Reference
 
 These are the configuration options that can be provided as parameters or environment variables. If using environment 
-varibles, convert to uppercase, replace dashes with underscores and prefix the name with `ARCHIVER_`, e.g. `-archive-messages` 
-becomes `ARCHIVER_ARCHIVE_MESSAGES`.
+varibles, convert to uppercase, replace dashes with underscores and prefix the name with `ARCHIVER_`, e.g. `-log-level` 
+becomes `ARCHIVER_LOG_LEVEL`.
 
 ```
   -archive-messages
@@ -81,9 +58,9 @@ becomes `ARCHIVER_ARCHIVE_MESSAGES`.
   -archive-runs
       whether we should archive runs (default true)
   -aws-access-key-id string
-      the access key id to use when authenticating S3 (default "missing_aws_access_key_id")
+      the access key id to use when authenticating S3 (default none)
   -aws-secret-access-key string
-      the secret access key id to use when authenticating S3 (default "missing_aws_secret_access_key")
+      the secret access key id to use when authenticating S3 (default none)
   -db string
       the connection string for our database (default "postgres://localhost/archiver_test?sslmode=disable")
   -debug-conf
@@ -120,4 +97,26 @@ becomes `ARCHIVER_ARCHIVE_MESSAGES`.
       directory where temporary archive files are written (default "/tmp")
   -upload-to-s3
       whether we should upload archive to S3 (default true)
+```
+
+## Development
+
+Once you've checked out the code, you can build the service with:
+
+```
+go build github.com/nyaruka/rp-archiver/cmd/rp-archiver
+```
+
+This will create a new executable in $GOPATH/bin called `rp-archiver`.
+
+To run the tests you need to create the test database:
+
+```
+$ createdb archiver_test
+```
+
+To run all of the tests:
+
+```
+go test -p=1 ./...
 ```

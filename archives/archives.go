@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -346,7 +345,7 @@ func BuildRollupArchive(ctx context.Context, db *sqlx.DB, conf *Config, s3Client
 
 	// great, we have all the dailies we need, download them
 	filename := fmt.Sprintf("%s_%d_%s_%d_%02d_", monthlyArchive.ArchiveType, monthlyArchive.Org.ID, monthlyArchive.Period, monthlyArchive.StartDate.Year(), monthlyArchive.StartDate.Month())
-	file, err := ioutil.TempFile(conf.TempDir, filename)
+	file, err := os.CreateTemp(conf.TempDir, filename)
 	if err != nil {
 		return errors.Wrapf(err, "error creating temp file: %s", filename)
 	}
@@ -479,7 +478,7 @@ func CreateArchiveFile(ctx context.Context, db *sqlx.DB, archive *Archive, archi
 	})
 
 	filename := fmt.Sprintf("%s_%d_%s%d%02d%02d_", archive.ArchiveType, archive.Org.ID, archive.Period, archive.StartDate.Year(), archive.StartDate.Month(), archive.StartDate.Day())
-	file, err := ioutil.TempFile(archivePath, filename)
+	file, err := os.CreateTemp(archivePath, filename)
 	if err != nil {
 		return errors.Wrapf(err, "error creating temp file: %s", filename)
 	}

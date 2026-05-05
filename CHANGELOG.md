@@ -1,3 +1,15 @@
+v8.0.0 (2023-01-09)
+-------------------------
+ * Only fetch broadcasts which don't have messages
+ * Remove use of deprecated ioutil package
+ * Update testdb.sql to reflect schema changes and cleanup sql variables
+ * Test against postgres 14
+
+v7.5.0
+----------
+ * Use go 1.19
+ * Allow AWS Cred Chain
+
 v7.4.0
 ----------
  * Include rollups in monthlies failed metric as well as monthlies created from scratch

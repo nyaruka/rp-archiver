@@ -22,7 +22,7 @@ const (
 	RunStatusFailed      = "F"
 )
 
-const lookupFlowRuns = `
+const sqlLookupRuns = `
 SELECT rec.uuid, rec.exited_on, row_to_json(rec)
 FROM (
    SELECT
@@ -58,13 +58,12 @@ FROM (
    
    WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
    ORDER BY fr.modified_on ASC, id ASC
-) as rec;
-`
+) as rec;`
 
 // writeRunRecords writes the runs in the archive's date range to the passed in writer
 func writeRunRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer *bufio.Writer) (int, error) {
 	var rows *sqlx.Rows
-	rows, err := db.QueryxContext(ctx, lookupFlowRuns, archive.Org.ID, archive.StartDate, archive.endDate())
+	rows, err := db.QueryxContext(ctx, sqlLookupRuns, archive.Org.ID, archive.StartDate, archive.endDate())
 	if err != nil {
 		return 0, errors.Wrapf(err, "error querying run records for org: %d", archive.Org.ID)
 	}
@@ -96,18 +95,15 @@ func writeRunRecords(ctx context.Context, db *sqlx.DB, archive *Archive, writer 
 	return recordCount, nil
 }
 
-const selectOrgRunsInRange = `
-SELECT fr.id, fr.status
-FROM flows_flowrun fr
+const sqlSelectOrgRunsInRange = `
+   SELECT fr.id, fr.status
+     FROM flows_flowrun fr
 LEFT JOIN contacts_contact cc ON cc.id = fr.contact_id
-WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
-ORDER BY fr.modified_on ASC, fr.id ASC
-`
+    WHERE fr.org_id = $1 AND fr.modified_on >= $2 AND fr.modified_on < $3
+ ORDER BY fr.modified_on ASC, fr.id ASC`
 
-const deleteRuns = `
-DELETE FROM flows_flowrun
-WHERE id IN(?)
-`
+const sqlDeleteRuns = `
+DELETE FROM flows_flowrun WHERE id IN(?)`
 
 // DeleteArchivedRuns takes the passed in archive, verifies the S3 file is still present (and correct), then selects
 // all the runs in the archive date range, and if equal or fewer than the number archived, deletes them 100 at a time
@@ -140,7 +136,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 	}
 
 	// ok, archive file looks good, let's build up our list of run ids, this may be big but we are int64s so shouldn't be too big
-	rows, err := db.QueryxContext(outer, selectOrgRunsInRange, archive.OrgID, archive.StartDate, archive.endDate())
+	rows, err := db.QueryxContext(outer, sqlSelectOrgRunsInRange, archive.OrgID, archive.StartDate, archive.endDate())
 	if err != nil {
 		return err
 	}
@@ -189,7 +185,7 @@ func DeleteArchivedRuns(ctx context.Context, config *Config, db *sqlx.DB, s3Clie
 		}
 
 		// delete our runs
-		err = executeInQuery(ctx, tx, deleteRuns, idBatch)
+		err = executeInQuery(ctx, tx, sqlDeleteRuns, idBatch)
 		if err != nil {
 			return errors.Wrap(err, "error deleting runs")
 		}
