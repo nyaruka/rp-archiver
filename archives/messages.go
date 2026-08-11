@@ -54,7 +54,8 @@ SELECT rec.visibility, row_to_json(rec) FROM (
 		labels_agg.data AS labels,
 		mm.created_on,
 		mm.sent_on,
-		mm.modified_on
+		mm.modified_on,
+		CASE WHEN mm.external_identifier IS NOT NULL THEN ARRAY[mm.external_identifier]::text[] ELSE ARRAY[]::text[] END AS external_identifiers
 	FROM msgs_msg mm 
 		JOIN orgs_org oo ON mm.org_id = oo.id
 		JOIN LATERAL (SELECT uuid, name FROM contacts_contact cc WHERE cc.id = mm.contact_id) AS contact ON True
